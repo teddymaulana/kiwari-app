@@ -2,8 +2,12 @@
 
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
+import { getCurrentUser } from "@/lib/auth";
 
 export async function addHousehold(formData: FormData) {
+  const user = await getCurrentUser();
+  if (user?.role !== "pengurus") return;
+
   const unit_no = String(formData.get("unit_no") || "").trim();
   const name = String(formData.get("name") || "").trim();
   const phone = String(formData.get("phone") || "").trim();
@@ -11,9 +15,6 @@ export async function addHousehold(formData: FormData) {
   if (!unit_no || !name) return;
 
   const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
 
   await supabase.from("households").insert({
     unit_no,
@@ -22,7 +23,7 @@ export async function addHousehold(formData: FormData) {
   });
 
   await supabase.from("activity_log").insert({
-    actor_email: user?.email,
+    actor_email: user.email,
     action: "household.create",
     detail: `${unit_no} - ${name}`,
   });
@@ -31,10 +32,10 @@ export async function addHousehold(formData: FormData) {
 }
 
 export async function toggleHouseholdActive(id: string, isActive: boolean) {
+  const user = await getCurrentUser();
+  if (user?.role !== "pengurus") return;
+
   const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
 
   await supabase
     .from("households")
@@ -42,7 +43,7 @@ export async function toggleHouseholdActive(id: string, isActive: boolean) {
     .eq("id", id);
 
   await supabase.from("activity_log").insert({
-    actor_email: user?.email,
+    actor_email: user.email,
     action: "household.toggle_active",
     detail: `${id} -> ${!isActive}`,
   });

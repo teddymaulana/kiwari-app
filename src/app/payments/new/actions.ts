@@ -2,8 +2,12 @@
 
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { getCurrentUser } from "@/lib/auth";
 
 export async function recordPayment(formData: FormData) {
+  const user = await getCurrentUser();
+  if (user?.role !== "pengurus") redirect("/dashboard");
+
   const household_id = String(formData.get("household_id") || "");
   const period_year = Number(formData.get("period_year"));
   const period_month = Number(formData.get("period_month"));
@@ -16,9 +20,6 @@ export async function recordPayment(formData: FormData) {
   }
 
   const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
 
   const { error } = await supabase.from("payments").insert({
     household_id,
@@ -27,7 +28,7 @@ export async function recordPayment(formData: FormData) {
     amount,
     paid_date: paid_date || undefined,
     note: note || null,
-    recorded_by: user?.email,
+    recorded_by: user.email,
   });
 
   if (error) {

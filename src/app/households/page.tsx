@@ -1,8 +1,13 @@
+import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { getCurrentUser } from "@/lib/auth";
 import { addHousehold, toggleHouseholdActive } from "./actions";
 import type { Household } from "@/lib/types";
 
 export default async function HouseholdsPage() {
+  const user = await getCurrentUser();
+  if (user?.role !== "pengurus") redirect("/dashboard");
+
   const supabase = await createClient();
   const { data: households } = await supabase
     .from("households")

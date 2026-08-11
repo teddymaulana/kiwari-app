@@ -11,7 +11,7 @@ export default async function LoginPage({
     <div className="min-h-screen flex items-center justify-center bg-gray-50 px-4">
       <div className="w-full max-w-sm bg-white p-8 rounded-lg shadow-sm border border-gray-200">
         <h1 className="text-xl font-semibold text-gray-900 mb-1">
-          Kas Warga
+          Kiwari App
         </h1>
         <p className="text-sm text-gray-500 mb-6">
           Login pengurus untuk mengelola iuran warga.

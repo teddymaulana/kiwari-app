@@ -1,22 +1,33 @@
 import Link from "next/link";
 import { signOut } from "@/app/login/actions";
+import type { Role } from "@/lib/auth";
 
 const links = [
   { href: "/dashboard", label: "Dashboard" },
-  { href: "/payments/new", label: "Catat Pembayaran" },
-  { href: "/households", label: "Warga" },
+  { href: "/payments/new", label: "Catat Pembayaran", pengurusOnly: true },
+  { href: "/households", label: "Warga", pengurusOnly: true },
   { href: "/report", label: "Laporan" },
-  { href: "/settings", label: "Pengaturan" },
+  { href: "/settings", label: "Pengaturan", pengurusOnly: true },
 ];
 
-export default function NavBar({ email }: { email: string }) {
+export default function NavBar({
+  email,
+  role,
+}: {
+  email: string;
+  role: Role;
+}) {
+  const visibleLinks = links.filter(
+    (l) => !l.pengurusOnly || role === "pengurus"
+  );
+
   return (
     <header className="border-b border-gray-200 bg-white">
       <div className="max-w-5xl mx-auto px-4 py-3 flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-6">
-          <span className="font-semibold text-gray-900">Kas Warga</span>
+          <span className="font-semibold text-gray-900">Kiwari App</span>
           <nav className="flex gap-4 text-sm text-gray-600">
-            {links.map((l) => (
+            {visibleLinks.map((l) => (
               <Link
                 key={l.href}
                 href={l.href}

@@ -1,4 +1,6 @@
+import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { getCurrentUser } from "@/lib/auth";
 import { recordPayment } from "./actions";
 import type { Household, Settings } from "@/lib/types";
 import { MONTH_NAMES } from "@/lib/types";
@@ -8,6 +10,9 @@ export default async function NewPaymentPage({
 }: {
   searchParams: Promise<{ error?: string }>;
 }) {
+  const user = await getCurrentUser();
+  if (user?.role !== "pengurus") redirect("/dashboard");
+
   const { error } = await searchParams;
   const supabase = await createClient();
 
