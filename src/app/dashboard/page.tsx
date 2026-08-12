@@ -36,6 +36,7 @@ export default async function DashboardPage({
       .select("*")
       .eq("period_year", year)
       .eq("period_month", month)
+      .eq("status", "confirmed")
       .returns<Payment[]>(),
     supabase.from("settings").select("*").eq("id", 1).single<Settings>(),
     user?.householdId
@@ -53,7 +54,10 @@ export default async function DashboardPage({
   const myHousehold = user?.householdId
     ? (households ?? []).find((h) => h.id === user.householdId) ?? null
     : null;
-  const myPayment = myHousehold ? paidByHousehold.get(myHousehold.id) : null;
+  const myCurrentPeriodPayment =
+    (myHistory ?? []).find(
+      (p) => p.period_year === year && p.period_month === month
+    ) ?? null;
   const totalHouseholds = households?.length ?? 0;
   const paidCount = (households ?? []).filter((h) =>
     paidByHousehold.has(h.id)
@@ -103,33 +107,48 @@ export default async function DashboardPage({
       {!isPengurus && (
         <div className="grid sm:grid-cols-3 gap-4 mb-8">
           {myHousehold ? (
-            <div
-              className={`rounded-lg border p-4 ${
-                myPayment
-                  ? "bg-green-50 border-green-200"
-                  : "bg-red-50 border-red-200"
-              }`}
-            >
-              <p
-                className={`text-xs mb-1 ${
-                  myPayment ? "text-green-600" : "text-red-600"
-                }`}
-              >
-                IPL Bulan Ini
-              </p>
-              <p
-                className={`text-2xl font-semibold ${
-                  myPayment ? "text-green-700" : "text-red-700"
-                }`}
-              >
-                {myPayment ? "Lunas" : "Belum Bayar"}
-              </p>
-              <p className="text-xs text-gray-500 mt-1">
-                {myHousehold.unit_no} - {myHousehold.name}
-                {myPayment &&
-                  ` · ${formatRupiah(Number(myPayment.amount))}`}
-              </p>
-            </div>
+            (() => {
+              const status = myCurrentPeriodPayment?.status;
+              const theme =
+                status === "confirmed"
+                  ? {
+                      box: "bg-green-50 border-green-200",
+                      label: "text-green-600",
+                      text: "text-green-700",
+                    }
+                  : status === "pending"
+                    ? {
+                        box: "bg-yellow-50 border-yellow-200",
+                        label: "text-yellow-600",
+                        text: "text-yellow-700",
+                      }
+                    : {
+                        box: "bg-red-50 border-red-200",
+                        label: "text-red-600",
+                        text: "text-red-700",
+                      };
+              const label =
+                status === "confirmed"
+                  ? "Lunas"
+                  : status === "pending"
+                    ? "Menunggu Verifikasi"
+                    : "Belum Bayar";
+              return (
+                <div className={`rounded-lg border p-4 ${theme.box}`}>
+                  <p className={`text-xs mb-1 ${theme.label}`}>
+                    IPL Bulan Ini
+                  </p>
+                  <p className={`text-2xl font-semibold ${theme.text}`}>
+                    {label}
+                  </p>
+                  <p className="text-xs text-gray-500 mt-1">
+                    {myHousehold.unit_no} - {myHousehold.name}
+                    {myCurrentPeriodPayment &&
+                      ` · ${formatRupiah(Number(myCurrentPeriodPayment.amount))}`}
+                  </p>
+                </div>
+              );
+            })()
           ) : (
             <div className="rounded-lg border border-gray-200 bg-gray-50 p-4">
               <p className="text-xs text-gray-500 mb-1">IPL Bulan Ini</p>
@@ -151,6 +170,7 @@ export default async function DashboardPage({
               <thead className="bg-gray-50 text-gray-500 text-left">
                 <tr>
                   <th className="px-4 py-2 font-medium">Periode</th>
+                  <th className="px-4 py-2 font-medium">Status</th>
                   <th className="px-4 py-2 font-medium">Tanggal Bayar</th>
                   <th className="px-4 py-2 font-medium">Jumlah</th>
                   <th className="px-4 py-2 font-medium">Catatan</th>
@@ -161,6 +181,19 @@ export default async function DashboardPage({
                   <tr key={p.id}>
                     <td className="px-4 py-2">
                       {MONTH_NAMES[p.period_month - 1]} {p.period_year}
+                    </td>
+                    <td className="px-4 py-2">
+                      <span
+                        className={`inline-block rounded-full px-2 py-0.5 text-xs ${
+                          p.status === "confirmed"
+                            ? "bg-green-100 text-green-700"
+                            : "bg-yellow-100 text-yellow-700"
+                        }`}
+                      >
+                        {p.status === "confirmed"
+                          ? "Lunas"
+                          : "Menunggu Verifikasi"}
+                      </span>
                     </td>
                     <td className="px-4 py-2 text-gray-500">
                       {new Date(p.paid_date).toLocaleDateString("id-ID")}
@@ -176,7 +209,7 @@ export default async function DashboardPage({
                 {(myHistory ?? []).length === 0 && (
                   <tr>
                     <td
-                      colSpan={4}
+                      colSpan={5}
                       className="px-4 py-6 text-center text-gray-400"
                     >
                       Belum ada riwayat pembayaran.

@@ -75,3 +75,63 @@ export async function createWargaUser(formData: FormData) {
   revalidatePath("/settings");
   redirect("/settings?success=1");
 }
+
+// Approves a payment claim submitted anonymously via the public "Bayar IPL"
+// form on /login — flips it from "pending" to "confirmed" so it starts
+// counting as Lunas everywhere (dashboard, report, CSV export).
+export async function confirmPaymentClaim(id: string) {
+  const user = await getCurrentUser();
+  if (user?.role !== "pengurus") return;
+
+  const supabase = await createClient();
+
+  const { data: claim } = await supabase
+    .from("payments")
+    .update({
+      status: "confirmed",
+      recorded_by: user.email,
+      paid_date: new Date().toISOString().slice(0, 10),
+    })
+    .eq("id", id)
+    .eq("status", "pending")
+    .select("household_id, period_year, period_month, amount")
+    .single();
+
+  if (claim) {
+    await supabase.from("activity_log").insert({
+      actor_email: user.email,
+      action: "payment.confirm_claim",
+      detail: `household ${claim.household_id} - ${claim.period_month}/${claim.period_year} - ${claim.amount}`,
+    });
+  }
+
+  revalidatePath("/settings");
+}
+
+// Rejects a pending claim by deleting it — this frees up that period so
+// the household can submit a corrected claim (the unique constraint on
+// household_id+period_year+period_month would otherwise block a retry).
+export async function rejectPaymentClaim(id: string) {
+  const user = await getCurrentUser();
+  if (user?.role !== "pengurus") return;
+
+  const supabase = await createClient();
+
+  const { data: claim } = await supabase
+    .from("payments")
+    .delete()
+    .eq("id", id)
+    .eq("status", "pending")
+    .select("household_id, period_year, period_month, amount")
+    .single();
+
+  if (claim) {
+    await supabase.from("activity_log").insert({
+      actor_email: user.email,
+      action: "payment.reject_claim",
+      detail: `household ${claim.household_id} - ${claim.period_month}/${claim.period_year} - ${claim.amount}`,
+    });
+  }
+
+  revalidatePath("/settings");
+}

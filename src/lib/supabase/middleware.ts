@@ -32,8 +32,11 @@ export async function updateSession(request: NextRequest) {
   } = await supabase.auth.getUser();
 
   const isLoginPage = request.nextUrl.pathname.startsWith("/login");
+  const isPublicApi = request.nextUrl.pathname.startsWith(
+    "/api/extract-receipt"
+  );
 
-  if (!user && !isLoginPage) {
+  if (!user && !isLoginPage && !isPublicApi) {
     const url = request.nextUrl.clone();
     url.pathname = "/login";
     return NextResponse.redirect(url);

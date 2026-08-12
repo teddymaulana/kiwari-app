@@ -11,18 +11,33 @@ Fitur:
   warga lihat status bayar rumahnya sendiri saja
 - Catat pembayaran per warga per bulan (pengurus)
 - Kelola data warga (tambah, aktif/nonaktifkan) (pengurus)
-- Laporan tahunan (grid 12 bulan) + export CSV — pengurus lihat semua warga,
-  warga hanya lihat riwayat rumahnya sendiri
+- Laporan tahunan (grid 12 bulan) — pengurus lihat nama semua warga, warga
+  lihat status semua unit tapi hanya no. rumah (tanpa nama, lewat view
+  `households_public`/`payments_public` — data pribadi tidak pernah
+  terbuka lewat halaman ini)
+- **Bayar IPL tanpa login**: di halaman Login ada form terpisah untuk klaim
+  pembayaran — pilih rumah, isi bulan/tahun/jumlah, opsional upload bukti
+  transfer. Berstatus "menunggu verifikasi", belum terhitung Lunas sampai
+  dikonfirmasi pengurus
+- Upload bukti transfer otomatis dibaca (OCR, gratis, tanpa API berbayar) —
+  kalau nama pengirim di foto cocok dengan salah satu warga, rumahnya
+  otomatis terpilih di form; warga tetap bisa mengubahnya kalau salah
+- Verifikasi klaim pembayaran di halaman Pengaturan (pengurus) — lihat bukti
+  transfer (kalau ada), konfirmasi, atau tolak
 - Nominal iuran bisa diubah di halaman Pengaturan (pengurus)
+- **Pengeluaran**: catat pengeluaran kas (keamanan, kebersihan, perbaikan,
+  dst) — hanya pengurus yang bisa input, tapi riwayatnya bisa dilihat warga
+  juga (transparansi pemakaian dana)
 - Log aktivitas (siapa mencatat apa, kapan) — jejak audit sederhana (pengurus)
 
 ## 1. Buat project Supabase
 
 1. Daftar/login di [supabase.com](https://supabase.com) → buat project baru (free tier cukup).
 2. Buka **SQL Editor** → jalankan seluruh isi file `supabase/schema.sql` di repo ini.
-   Ini akan membuat tabel `households`, `payments`, `settings`, `activity_log`,
-   `profiles` (role), beserta Row Level Security-nya. File ini aman dijalankan
-   ulang kalau kamu update schema-nya nanti (idempotent).
+   Ini akan membuat tabel `households`, `payments`, `expenses`, `settings`,
+   `activity_log`, `profiles` (role), bucket Storage `bukti-transfer`
+   (privat, untuk foto transfer), beserta Row Level Security-nya. File ini
+   aman dijalankan ulang kalau kamu update schema-nya nanti (idempotent).
 3. Buka **Project Settings → API** → salin `Project URL` dan `anon public` key.
 4. Buat akun pengurus di **Authentication → Users → Add user** (isi email +
    password langsung, tidak perlu proses konfirmasi email untuk 1-2 admin).
@@ -64,7 +79,8 @@ cp .env.local.example .env.local
 # isi juga SUPABASE_SERVICE_ROLE_KEY dari Project Settings > API > service_role
 # (secret, JANGAN pakai prefix NEXT_PUBLIC_, dan jangan commit ke git — key
 # ini bisa bypass semua RLS, hanya dipakai server-side untuk fitur "Tambah
-# User Warga" di halaman Pengaturan)
+# User Warga" di halaman Pengaturan, dan untuk form "Bayar IPL" tanpa login
+# di halaman Login)
 npm run dev
 ```
 
@@ -87,13 +103,27 @@ detik saja). Tidak masalah untuk pemakaian bulanan seperti ini.
 
 ## Struktur data (ringkas)
 
-- `households` — daftar rumah/warga (no. rumah, nama, no. HP, status aktif)
+- `households` — daftar rumah/warga (no. rumah, nama, no. HP, status aktif).
+  Kolom `alt_names`: nama lain yang bisa jadi pengirim transfer untuk unit
+  itu (mis. istri/suami), dipisah koma — dipakai OCR bukti transfer di
+  halaman Login supaya tetap cocok walau yang transfer bukan kepala
+  keluarga yang terdaftar
 - `payments` — satu baris = satu warga bayar untuk satu bulan/tahun tertentu
-  (unique per warga+bulan+tahun, jadi tidak bisa double-input)
+  (unique per warga+bulan+tahun, jadi tidak bisa double-input). Kolom
+  `status`: `pending` (klaim mandiri dari halaman Login, belum diverifikasi)
+  atau `confirmed` (dicatat pengurus, atau klaim yang sudah dikonfirmasi) —
+  hanya `confirmed` yang terhitung Lunas di Dashboard/Laporan/export CSV.
+  Kolom `receipt_path`: path file bukti transfer di Storage, kalau diupload
+- `expenses` — pengeluaran kas (tanggal, keterangan, jumlah, dicatat oleh);
+  hanya pengurus yang bisa insert, tapi semua user login bisa baca (tidak
+  ada data pribadi warga di tabel ini)
 - `settings` — nominal iuran bulanan default
 - `activity_log` — jejak siapa mencatat/mengubah apa (khusus pengurus)
 - `profiles` — role tiap user (`warga` / `pengurus`) + `household_id` yang
   menautkan login warga ke rumahnya, satu baris per akun login
+- `households_public` / `payments_public` — view read-only untuk halaman
+  Laporan versi warga: cuma expose `unit_no` + status bayar, tanpa nama,
+  no. HP, catatan, atau siapa yang mencatat
 
 ## Backup data
 
@@ -106,5 +136,4 @@ skala ini.
 
 - Notifikasi WhatsApp/email otomatis untuk warga yang belum bayar
 - Multi-tahun growth chart di dashboard
-- Upload bukti transfer (Supabase Storage)
 - Daftar user + tombol ubah role langsung dari UI (saat ini via SQL Editor)

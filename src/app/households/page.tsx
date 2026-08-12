@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentUser } from "@/lib/auth";
-import { addHousehold, toggleHouseholdActive } from "./actions";
+import { addHousehold, toggleHouseholdActive, updateAltNames } from "./actions";
 import type { Household } from "@/lib/types";
 
 export default async function HouseholdsPage() {
@@ -25,23 +25,30 @@ export default async function HouseholdsPage() {
         <h2 className="text-sm font-medium text-gray-700 mb-4">
           Tambah warga baru
         </h2>
-        <form action={addHousehold} className="grid sm:grid-cols-4 gap-3">
+        <form action={addHousehold} className="space-y-3">
+          <div className="grid sm:grid-cols-3 gap-3">
+            <input
+              name="unit_no"
+              placeholder="No. Rumah (mis. Blok A-12)"
+              required
+              className="rounded border border-gray-300 px-3 py-2 text-sm"
+            />
+            <input
+              name="name"
+              placeholder="Nama Kepala Keluarga"
+              required
+              className="rounded border border-gray-300 px-3 py-2 text-sm"
+            />
+            <input
+              name="phone"
+              placeholder="No. HP (opsional)"
+              className="rounded border border-gray-300 px-3 py-2 text-sm"
+            />
+          </div>
           <input
-            name="unit_no"
-            placeholder="No. Rumah (mis. Blok A-12)"
-            required
-            className="rounded border border-gray-300 px-3 py-2 text-sm sm:col-span-1"
-          />
-          <input
-            name="name"
-            placeholder="Nama Kepala Keluarga"
-            required
-            className="rounded border border-gray-300 px-3 py-2 text-sm sm:col-span-1"
-          />
-          <input
-            name="phone"
-            placeholder="No. HP (opsional)"
-            className="rounded border border-gray-300 px-3 py-2 text-sm sm:col-span-1"
+            name="alt_names"
+            placeholder="Nama lain yang bisa transfer, pisahkan koma (mis. istri/suami — opsional)"
+            className="w-full rounded border border-gray-300 px-3 py-2 text-sm"
           />
           <button
             type="submit"
@@ -52,13 +59,16 @@ export default async function HouseholdsPage() {
         </form>
       </div>
 
-      <div className="bg-white border border-gray-200 rounded-lg overflow-hidden">
+      <div className="bg-white border border-gray-200 rounded-lg overflow-x-auto">
         <table className="w-full text-sm">
           <thead className="bg-gray-50 text-gray-500 text-left">
             <tr>
               <th className="px-4 py-2 font-medium">No. Rumah</th>
               <th className="px-4 py-2 font-medium">Nama</th>
               <th className="px-4 py-2 font-medium">No. HP</th>
+              <th className="px-4 py-2 font-medium">
+                Nama Lain (utk cocokkan bukti transfer)
+              </th>
               <th className="px-4 py-2 font-medium">Status</th>
               <th className="px-4 py-2 font-medium"></th>
             </tr>
@@ -66,10 +76,31 @@ export default async function HouseholdsPage() {
           <tbody className="divide-y divide-gray-100">
             {(households ?? []).map((h) => (
               <tr key={h.id}>
-                <td className="px-4 py-2">{h.unit_no}</td>
-                <td className="px-4 py-2">{h.name}</td>
-                <td className="px-4 py-2 text-gray-500">{h.phone || "-"}</td>
+                <td className="px-4 py-2 whitespace-nowrap">{h.unit_no}</td>
+                <td className="px-4 py-2 whitespace-nowrap">{h.name}</td>
+                <td className="px-4 py-2 text-gray-500 whitespace-nowrap">
+                  {h.phone || "-"}
+                </td>
                 <td className="px-4 py-2">
+                  <form
+                    action={updateAltNames.bind(null, h.id)}
+                    className="flex gap-2"
+                  >
+                    <input
+                      name="alt_names"
+                      defaultValue={h.alt_names ?? ""}
+                      placeholder="mis. istri/suami"
+                      className="w-48 rounded border border-gray-300 px-2 py-1 text-xs"
+                    />
+                    <button
+                      type="submit"
+                      className="text-xs text-blue-600 hover:text-blue-700 shrink-0"
+                    >
+                      Simpan
+                    </button>
+                  </form>
+                </td>
+                <td className="px-4 py-2 whitespace-nowrap">
                   <span
                     className={`inline-block rounded-full px-2 py-0.5 text-xs ${
                       h.is_active
@@ -80,7 +111,7 @@ export default async function HouseholdsPage() {
                     {h.is_active ? "Aktif" : "Nonaktif"}
                   </span>
                 </td>
-                <td className="px-4 py-2 text-right">
+                <td className="px-4 py-2 text-right whitespace-nowrap">
                   <form
                     action={toggleHouseholdActive.bind(
                       null,
@@ -100,7 +131,7 @@ export default async function HouseholdsPage() {
             ))}
             {(households ?? []).length === 0 && (
               <tr>
-                <td colSpan={5} className="px-4 py-6 text-center text-gray-400">
+                <td colSpan={6} className="px-4 py-6 text-center text-gray-400">
                   Belum ada data warga.
                 </td>
               </tr>

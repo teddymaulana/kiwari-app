@@ -8,6 +8,7 @@ export type CurrentUser = {
   email: string;
   role: Role;
   householdId: string | null;
+  unitNo: string | null;
 };
 
 // Cached per request so layout.tsx and page components can each call this
@@ -22,14 +23,19 @@ export const getCurrentUser = cache(async (): Promise<CurrentUser | null> => {
 
   const { data: profile } = await supabase
     .from("profiles")
-    .select("role, household_id")
+    .select("role, household_id, households(unit_no)")
     .eq("id", user.id)
-    .single<{ role: Role; household_id: string | null }>();
+    .single<{
+      role: Role;
+      household_id: string | null;
+      households: { unit_no: string } | null;
+    }>();
 
   return {
     id: user.id,
     email: user.email ?? "",
     role: profile?.role ?? "warga",
     householdId: profile?.household_id ?? null,
+    unitNo: profile?.households?.unit_no ?? null,
   };
 });

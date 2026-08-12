@@ -19,10 +19,23 @@ create table if not exists households (
   unit_no text not null,           -- e.g. "Blok A No. 12"
   name text not null,              -- head of household
   phone text,
+  -- Comma-separated other names who might send the transfer (e.g. spouse)
+  -- — a unit can have one registered head of household but several people
+  -- actually paying, and the bank receipt shows whoever sent it. Used by
+  -- the "Bayar IPL" receipt OCR matcher on /login as extra name candidates.
+  alt_names text,
   is_active boolean not null default true,
   created_at timestamptz not null default now()
 );
 
+alter table households add column if not exists alt_names text;
+
+-- status: "confirmed" (recorded by pengurus, or approved) vs "pending"
+-- (self-submitted via the public "Bayar IPL" form on /login, not yet
+-- verified). Only "confirmed" rows count toward Lunas/totals anywhere in
+-- the app. The unique constraint applies regardless of status, so a
+-- pending claim blocks a duplicate submission for the same period until a
+-- pengurus confirms or rejects (deletes) it.
 create table if not exists payments (
   id uuid primary key default gen_random_uuid(),
   household_id uuid not null references households(id) on delete cascade,
@@ -32,9 +45,23 @@ create table if not exists payments (
   paid_date date not null default current_date,
   note text,
   recorded_by text,                -- email of the admin who entered it
+  status text not null default 'confirmed' check (status in ('pending', 'confirmed')),
+  receipt_path text,                -- Storage object path for uploaded bukti transfer, if any
   created_at timestamptz not null default now(),
   unique (household_id, period_year, period_month)
 );
+
+alter table payments add column if not exists status text
+  not null default 'confirmed' check (status in ('pending', 'confirmed'));
+alter table payments add column if not exists receipt_path text;
+
+-- Private bucket for uploaded payment receipts ("bukti transfer"). No public
+-- read policy — only the service_role key (server-side) can read/write, so
+-- receipts are never directly browsable; pengurus view them via signed URLs
+-- generated on demand from the Verifikasi Pembayaran queue.
+insert into storage.buckets (id, name, public)
+values ('bukti-transfer', 'bukti-transfer', false)
+on conflict (id) do nothing;
 
 create table if not exists activity_log (
   id uuid primary key default gen_random_uuid(),
@@ -170,3 +197,45 @@ create policy "pengurus read all profiles" on profiles
 drop policy if exists "pengurus update profiles" on profiles;
 create policy "pengurus update profiles" on profiles
   for update to authenticated using (is_pengurus()) with check (is_pengurus());
+
+-- Public-safe cuts of households/payments for the Laporan page: warga can
+-- see every unit's payment status there (community-wide transparency,
+-- unlike Dashboard which stays scoped to their own household), but never
+-- names, phone numbers, notes, or who recorded a payment. Views run as
+-- their owner by default, which bypasses the base tables' RLS — that's
+-- intentional since the view itself already strips the sensitive columns;
+-- GRANT still limits it to logged-in users only.
+create or replace view households_public as
+select id, unit_no, is_active from households;
+grant select on households_public to authenticated;
+
+create or replace view payments_public as
+select household_id, period_year, period_month, amount
+from payments
+where status = 'confirmed';
+grant select on payments_public to authenticated;
+
+-- Community expenses (Pengeluaran) — e.g. keamanan, kebersihan, perbaikan.
+-- Not tied to a household, so no privacy concern reading it: any
+-- authenticated user (warga included) can see the full history, but only
+-- pengurus can record one.
+create table if not exists expenses (
+  id uuid primary key default gen_random_uuid(),
+  expense_date date not null default current_date,
+  description text not null,
+  amount numeric(12,2) not null,
+  recorded_by text,                -- email of the pengurus who entered it
+  created_at timestamptz not null default now()
+);
+
+create index if not exists expenses_date_idx on expenses (expense_date);
+
+alter table expenses enable row level security;
+
+drop policy if exists "authenticated read expenses" on expenses;
+create policy "authenticated read expenses" on expenses
+  for select to authenticated using (true);
+
+drop policy if exists "pengurus write expenses" on expenses;
+create policy "pengurus write expenses" on expenses
+  for all to authenticated using (is_pengurus()) with check (is_pengurus());

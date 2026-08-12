@@ -3,6 +3,7 @@ export type Household = {
   unit_no: string;
   name: string;
   phone: string | null;
+  alt_names: string | null;
   is_active: boolean;
   created_at: string;
 };
@@ -15,6 +16,17 @@ export type Payment = {
   amount: number;
   paid_date: string;
   note: string | null;
+  recorded_by: string | null;
+  status: "pending" | "confirmed";
+  receipt_path: string | null;
+  created_at: string;
+};
+
+export type Expense = {
+  id: string;
+  expense_date: string;
+  description: string;
+  amount: number;
   recorded_by: string | null;
   created_at: string;
 };

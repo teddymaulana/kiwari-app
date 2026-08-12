@@ -16,7 +16,9 @@ export default async function RootLayout({
   return (
     <html lang="id" className="h-full antialiased">
       <body className="min-h-full flex flex-col bg-gray-50">
-        {user && <NavBar email={user.email} role={user.role} />}
+        {user && (
+          <NavBar email={user.email} role={user.role} unitNo={user.unitNo} />
+        )}
         <main className="flex-1">{children}</main>
       </body>
     </html>

@@ -25,6 +25,7 @@ export async function GET(request: NextRequest) {
       .from("payments")
       .select("*")
       .eq("period_year", year)
+      .eq("status", "confirmed")
       .returns<Payment[]>(),
   ]);
 
