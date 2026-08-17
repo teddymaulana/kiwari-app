@@ -3,7 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { getCurrentUser } from "@/lib/auth";
 import { recordPayment } from "./actions";
 import type { Household, Settings } from "@/lib/types";
-import { MONTH_NAMES } from "@/lib/types";
+import { MONTH_NAMES, compareUnitNo } from "@/lib/types";
 
 export default async function NewPaymentPage({
   searchParams,
@@ -21,10 +21,11 @@ export default async function NewPaymentPage({
       .from("households")
       .select("*")
       .eq("is_active", true)
-      .order("unit_no")
       .returns<Household[]>(),
     supabase.from("settings").select("*").eq("id", 1).single<Settings>(),
   ]);
+
+  households?.sort((a, b) => compareUnitNo(a.unit_no, b.unit_no));
 
   const now = new Date();
 
@@ -100,7 +101,7 @@ export default async function NewPaymentPage({
           <input
             type="number"
             name="amount"
-            step="1000"
+            step="50"
             defaultValue={settings?.monthly_amount ?? 50000}
             required
             className="w-full rounded border border-gray-300 px-3 py-2 text-sm"
@@ -117,6 +118,20 @@ export default async function NewPaymentPage({
             defaultValue={now.toISOString().slice(0, 10)}
             className="w-full rounded border border-gray-300 px-3 py-2 text-sm"
           />
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">
+            Sumber Kas
+          </label>
+          <select
+            name="kas_type"
+            defaultValue="bri"
+            className="w-full rounded border border-gray-300 px-3 py-2 text-sm"
+          >
+            <option value="bri">Kas BRI</option>
+            <option value="tunai">Petty Cash</option>
+          </select>
         </div>
 
         <div>

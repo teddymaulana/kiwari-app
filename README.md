@@ -19,6 +19,10 @@ Fitur:
   pembayaran — pilih rumah, isi bulan/tahun/jumlah, opsional upload bukti
   transfer. Berstatus "menunggu verifikasi", belum terhitung Lunas sampai
   dikonfirmasi pengurus
+- **Bayar IPL untuk warga yang sudah login**: form yang sama juga ada di
+  halaman `/bayar-ipl` (link "Bayar IPL" di nav dan di kartu "IPL Bulan
+  Ini" pada Dashboard), tanpa perlu pilih rumah (otomatis rumahnya sendiri,
+  tidak bisa klaim untuk rumah lain)
 - Upload bukti transfer otomatis dibaca (OCR, gratis, tanpa API berbayar) —
   kalau nama pengirim di foto cocok dengan salah satu warga, rumahnya
   otomatis terpilih di form; warga tetap bisa mengubahnya kalau salah
@@ -28,6 +32,13 @@ Fitur:
 - **Pengeluaran**: catat pengeluaran kas (keamanan, kebersihan, perbaikan,
   dst) — hanya pengurus yang bisa input, tapi riwayatnya bisa dilihat warga
   juga (transparansi pemakaian dana)
+- **Profil** (warga): halaman untuk warga cek No. Rumah/Kepala Keluarga dan
+  ubah No. HP sendiri — supaya notifikasi WhatsApp bisa terkirim, tanpa
+  perlu minta pengurus update lewat Data Warga
+- **Kirim WhatsApp** (via [Fonnte](https://fonnte.com), gratis untuk skala
+  kecil) — satu arah, sistem ke warga saja. Ada panel kirim manual di
+  Pengaturan, dan otomatis terkirim ke nomor HP warga saat pengurus
+  mengonfirmasi klaim pembayaran (kalau nomor HP-nya terisi)
 - Log aktivitas (siapa mencatat apa, kapan) — jejak audit sederhana (pengurus)
 
 ## 1. Buat project Supabase
@@ -81,6 +92,11 @@ cp .env.local.example .env.local
 # ini bisa bypass semua RLS, hanya dipakai server-side untuk fitur "Tambah
 # User Warga" di halaman Pengaturan, dan untuk form "Bayar IPL" tanpa login
 # di halaman Login)
+#
+# opsional: isi FONNTE_TOKEN untuk fitur kirim WhatsApp — daftar akun gratis
+# di fonnte.com, hubungkan nomor WhatsApp (scan QR), lalu ambil token dari
+# dashboard-nya. Tanpa ini, tombol "Kirim" di Pengaturan akan gagal dengan
+# pesan error yang jelas, fitur lain tetap jalan normal.
 npm run dev
 ```
 
@@ -93,7 +109,7 @@ dibuat di langkah 1.4.
 - Buka [vercel.com](https://vercel.com) → Import project dari GitHub.
 - Saat konfigurasi, isi environment variable yang sama seperti `.env.local`
   (`NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`,
-  `SUPABASE_SERVICE_ROLE_KEY`).
+  `SUPABASE_SERVICE_ROLE_KEY`, dan `FONNTE_TOKEN` kalau dipakai).
 - Deploy. Vercel free tier + Supabase free tier = Rp 0/bulan untuk
   pemakaian skala RT/RW.
 
@@ -134,6 +150,7 @@ skala ini.
 
 ## Pengembangan lanjutan (ide)
 
-- Notifikasi WhatsApp/email otomatis untuk warga yang belum bayar
+- Pengingat WhatsApp otomatis untuk warga yang belum bayar (mis. H-3
+  sebelum akhir bulan)
 - Multi-tahun growth chart di dashboard
 - Daftar user + tombol ubah role langsung dari UI (saat ini via SQL Editor)

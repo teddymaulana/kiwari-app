@@ -4,12 +4,15 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { getCurrentUser } from "@/lib/auth";
 import {
   updateMonthlyAmount,
+  updateOpeningBalance,
   createWargaUser,
   confirmPaymentClaim,
   rejectPaymentClaim,
+  sendTestWhatsApp,
+  recordCashTransfer,
 } from "./actions";
 import type { Household, Payment, Settings } from "@/lib/types";
-import { MONTH_NAMES, formatRupiah } from "@/lib/types";
+import { MONTH_NAMES, formatRupiah, compareUnitNo } from "@/lib/types";
 
 type PendingClaim = Payment & {
   households: Pick<Household, "unit_no" | "name"> | null;
@@ -18,12 +21,20 @@ type PendingClaim = Payment & {
 export default async function SettingsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ error?: string; success?: string }>;
+  searchParams: Promise<{
+    error?: string;
+    success?: string;
+    wa_error?: string;
+    wa_success?: string;
+    kas_error?: string;
+    kas_success?: string;
+  }>;
 }) {
   const user = await getCurrentUser();
   if (user?.role !== "pengurus") redirect("/dashboard");
 
-  const { error, success } = await searchParams;
+  const { error, success, wa_error, wa_success, kas_error, kas_success } =
+    await searchParams;
 
   const supabase = await createClient();
   const { data: settings } = await supabase
@@ -42,8 +53,9 @@ export default async function SettingsPage({
     .from("households")
     .select("*")
     .eq("is_active", true)
-    .order("unit_no")
     .returns<Household[]>();
+
+  households?.sort((a, b) => compareUnitNo(a.unit_no, b.unit_no));
 
   const { data: pendingClaims } = await supabase
     .from("payments")
@@ -99,6 +111,118 @@ export default async function SettingsPage({
       </div>
 
       <div>
+        <h2 className="text-sm font-medium text-gray-700 mb-1">
+          Saldo Awal Kas
+        </h2>
+        <p className="text-xs text-gray-400 mb-4">
+          Saldo kas sebelum ada pembayaran/pengeluaran yang tercatat di
+          aplikasi ini (mis. saldo dari pembukuan lama). Ikut dihitung ke
+          &quot;Kas Saat Ini&quot; di halaman Laporan. Terkunci setelah
+          diatur — ini hanya untuk saldo awal satu kali, bukan koreksi
+          rutin.
+        </p>
+        <form
+          action={updateOpeningBalance}
+          className="bg-white border border-gray-200 rounded-lg p-6 grid sm:grid-cols-2 gap-3"
+        >
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Kas BRI
+            </label>
+            <input
+              type="number"
+              name="opening_balance_bri"
+              step="1"
+              defaultValue={settings?.opening_balance_bri ?? 0}
+              disabled
+              className="w-full rounded border border-gray-300 px-3 py-2 text-sm bg-gray-100 text-gray-500"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Petty Cash
+            </label>
+            <input
+              type="number"
+              name="opening_balance_tunai"
+              step="1"
+              defaultValue={settings?.opening_balance_tunai ?? 0}
+              disabled
+              className="w-full rounded border border-gray-300 px-3 py-2 text-sm bg-gray-100 text-gray-500"
+            />
+          </div>
+          <button
+            type="submit"
+            disabled
+            className="sm:col-span-2 bg-gray-300 text-gray-500 rounded px-4 py-2 text-sm font-medium cursor-not-allowed"
+          >
+            Simpan
+          </button>
+        </form>
+      </div>
+
+      <div>
+        <h2 className="text-sm font-medium text-gray-700 mb-1">
+          Transfer Kas
+        </h2>
+        <p className="text-xs text-gray-400 mb-4">
+          Catat perpindahan uang antar kas — mis. tarik tunai dari Kas BRI
+          untuk mengisi kas tunai, atau setor kas tunai ke Kas BRI. Tidak
+          menambah/mengurangi total kas, hanya memindahkan saldo antar
+          keduanya.
+        </p>
+
+        {kas_error && (
+          <div className="mb-4 text-sm text-red-700 bg-red-50 border border-red-200 rounded px-3 py-2">
+            {kas_error}
+          </div>
+        )}
+        {kas_success && (
+          <div className="mb-4 text-sm text-green-700 bg-green-50 border border-green-200 rounded px-3 py-2">
+            Transfer kas berhasil dicatat.
+          </div>
+        )}
+
+        <form
+          action={recordCashTransfer}
+          className="bg-white border border-gray-200 rounded-lg p-6 grid sm:grid-cols-4 gap-3"
+        >
+          <select
+            name="direction"
+            defaultValue="bri_to_tunai"
+            className="rounded border border-gray-300 px-3 py-2 text-sm sm:col-span-2"
+          >
+            <option value="bri_to_tunai">Tarik Tunai (Kas BRI → Petty Cash)</option>
+            <option value="tunai_to_bri">Setor Tunai (Petty Cash → Kas BRI)</option>
+          </select>
+          <input
+            type="number"
+            name="amount"
+            placeholder="Jumlah (Rp)"
+            required
+            className="rounded border border-gray-300 px-3 py-2 text-sm"
+          />
+          <input
+            type="date"
+            name="transfer_date"
+            defaultValue={new Date().toISOString().slice(0, 10)}
+            className="rounded border border-gray-300 px-3 py-2 text-sm"
+          />
+          <input
+            name="note"
+            placeholder="Catatan (opsional)"
+            className="rounded border border-gray-300 px-3 py-2 text-sm sm:col-span-3"
+          />
+          <button
+            type="submit"
+            className="bg-blue-600 text-white rounded px-4 py-2 text-sm font-medium hover:bg-blue-700 transition"
+          >
+            Simpan
+          </button>
+        </form>
+      </div>
+
+      <div>
         <div className="flex items-center gap-2 mb-1">
           <h2 className="text-sm font-medium text-gray-700">
             Verifikasi Pembayaran
@@ -129,18 +253,18 @@ export default async function SettingsPage({
                   {formatRupiah(Number(c.amount))}
                   {c.note && ` — ${c.note}`}
                 </p>
+              </div>
+              <div className="flex gap-2">
                 {receiptUrls.has(c.id) && (
                   <a
                     href={receiptUrls.get(c.id)}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="text-xs text-blue-600 hover:text-blue-700"
+                    className="text-xs text-gray-600 border border-gray-300 rounded px-3 py-1.5 hover:bg-gray-50 transition"
                   >
-                    Lihat bukti transfer
+                    Lihat Bukti
                   </a>
                 )}
-              </div>
-              <div className="flex gap-2">
                 <form action={confirmPaymentClaim.bind(null, c.id)}>
                   <button
                     type="submit"
@@ -166,6 +290,53 @@ export default async function SettingsPage({
             </div>
           )}
         </div>
+      </div>
+
+      <div>
+        <h2 className="text-sm font-medium text-gray-700 mb-1">
+          Kirim Pesan WhatsApp
+        </h2>
+        <p className="text-xs text-gray-400 mb-4">
+          Uji coba integrasi WhatsApp (Fonnte) — kirim pesan manual ke satu
+          nomor. Butuh <code>FONNTE_TOKEN</code> di environment variables
+          (lihat README).
+        </p>
+
+        {wa_error && (
+          <div className="mb-4 text-sm text-red-700 bg-red-50 border border-red-200 rounded px-3 py-2">
+            {wa_error}
+          </div>
+        )}
+        {wa_success && (
+          <div className="mb-4 text-sm text-green-700 bg-green-50 border border-green-200 rounded px-3 py-2">
+            Pesan berhasil dikirim.
+          </div>
+        )}
+
+        <form
+          action={sendTestWhatsApp}
+          className="bg-white border border-gray-200 rounded-lg p-6 space-y-3"
+        >
+          <input
+            name="phone"
+            placeholder="No. HP (mis. 08123456789)"
+            required
+            className="w-full rounded border border-gray-300 px-3 py-2 text-sm"
+          />
+          <textarea
+            name="message"
+            placeholder="Pesan"
+            required
+            rows={3}
+            className="w-full rounded border border-gray-300 px-3 py-2 text-sm"
+          />
+          <button
+            type="submit"
+            className="bg-blue-600 text-white rounded px-4 py-2 text-sm font-medium hover:bg-blue-700 transition"
+          >
+            Kirim
+          </button>
+        </form>
       </div>
 
       <div>

@@ -1,26 +1,23 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { getCurrentUser } from "@/lib/auth";
 import type { Household, Payment } from "@/lib/types";
+import { compareUnitNo } from "@/lib/types";
 
 export async function GET(request: NextRequest) {
   const year =
     Number(request.nextUrl.searchParams.get("year")) ||
     new Date().getFullYear();
 
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) {
+  const user = await getCurrentUser();
+  if (user?.role !== "pengurus") {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
 
+  const supabase = await createClient();
+
   const [{ data: households }, { data: payments }] = await Promise.all([
-    supabase
-      .from("households")
-      .select("*")
-      .order("unit_no")
-      .returns<Household[]>(),
+    supabase.from("households").select("*").returns<Household[]>(),
     supabase
       .from("payments")
       .select("*")
@@ -28,6 +25,8 @@ export async function GET(request: NextRequest) {
       .eq("status", "confirmed")
       .returns<Payment[]>(),
   ]);
+
+  households?.sort((a, b) => compareUnitNo(a.unit_no, b.unit_no));
 
   const paidMap = new Map<string, Payment>();
   (payments ?? []).forEach((p) => {

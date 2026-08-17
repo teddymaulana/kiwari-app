@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { getCurrentUser } from "@/lib/auth";
 import { addHousehold, toggleHouseholdActive, updateAltNames } from "./actions";
 import type { Household } from "@/lib/types";
+import { compareUnitNo } from "@/lib/types";
 
 export default async function HouseholdsPage() {
   const user = await getCurrentUser();
@@ -12,8 +13,9 @@ export default async function HouseholdsPage() {
   const { data: households } = await supabase
     .from("households")
     .select("*")
-    .order("unit_no")
     .returns<Household[]>();
+
+  households?.sort((a, b) => compareUnitNo(a.unit_no, b.unit_no));
 
   return (
     <div className="max-w-5xl mx-auto px-4 py-8">

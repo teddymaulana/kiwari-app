@@ -1,31 +1,68 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { submitPaymentClaim } from "./actions";
 import type { Household } from "@/lib/types";
-import { MONTH_NAMES } from "@/lib/types";
+import { MONTH_NAMES, formatRupiah } from "@/lib/types";
 
 type HouseholdOption = Pick<Household, "id" | "unit_no" | "name">;
 
 export default function BayarIplForm({
   households,
   defaultAmount,
+  year,
 }: {
   households: HouseholdOption[];
   defaultAmount: number;
+  year: number;
 }) {
   const now = new Date();
   const [householdId, setHouseholdId] = useState("");
-  const [amount, setAmount] = useState(NaN);
   const [suggestion, setSuggestion] = useState<HouseholdOption | null>(null);
-  const [amountDetected, setAmountDetected] = useState(false);
   const [checking, setChecking] = useState(false);
   const [checkNote, setCheckNote] = useState<string | null>(null);
+  const [unpaidMonths, setUnpaidMonths] = useState<number[] | null>(null);
+  const [selectedMonths, setSelectedMonths] = useState<number[]>([]);
+
+  useEffect(() => {
+    if (!householdId) return;
+
+    let cancelled = false;
+    fetch(`/api/unpaid-months?household_id=${householdId}&year=${year}`)
+      .then((res) => res.json())
+      .then((data) => {
+        if (cancelled) return;
+        const months: number[] = data.unpaidMonths ?? [];
+        setUnpaidMonths(months);
+        const currentMonth = now.getMonth() + 1;
+        setSelectedMonths(months.includes(currentMonth) ? [currentMonth] : []);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [householdId, year]);
+
+  function selectHousehold(id: string) {
+    setHouseholdId(id);
+    setUnpaidMonths(null);
+    setSelectedMonths([]);
+  }
+
+  function toggleMonth(month: number) {
+    setSelectedMonths((prev) =>
+      prev.includes(month)
+        ? prev.filter((m) => m !== month)
+        : [...prev, month].sort((a, b) => a - b)
+    );
+  }
+
+  const total = defaultAmount * selectedMonths.length;
 
   async function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     setSuggestion(null);
-    setAmountDetected(false);
     setCheckNote(null);
     if (!file) return;
 
@@ -41,19 +78,14 @@ export default function BayarIplForm({
 
       if (data.match) {
         setSuggestion(data.match);
-        setHouseholdId(data.match.id);
-      }
-      if (data.amount) {
-        setAmount(data.amount);
-        setAmountDetected(true);
-      }
-      if (!data.match && !data.amount) {
+        selectHousehold(data.match.id);
+      } else {
         setCheckNote(
-          "Rumah/jumlah tidak terdeteksi otomatis dari gambar, isi secara manual di bawah."
+          "Rumah tidak terdeteksi otomatis dari gambar, pilih secara manual di bawah."
         );
       }
     } catch {
-      setCheckNote("Gagal membaca gambar, isi secara manual di bawah.");
+      setCheckNote("Gagal membaca gambar, pilih rumah secara manual di bawah.");
     } finally {
       setChecking(false);
     }
@@ -81,12 +113,6 @@ export default function BayarIplForm({
             Sudah dipilih otomatis di bawah — ubah jika salah.
           </p>
         )}
-        {amountDetected && (
-          <p className="text-xs text-green-600 mt-1">
-            Jumlah terdeteksi: Rp{amount.toLocaleString("id-ID")}. Sudah
-            diisi otomatis di bawah — ubah jika salah.
-          </p>
-        )}
         {checkNote && (
           <p className="text-xs text-gray-500 mt-1">{checkNote}</p>
         )}
@@ -100,7 +126,7 @@ export default function BayarIplForm({
           name="household_id"
           required
           value={householdId}
-          onChange={(e) => setHouseholdId(e.target.value)}
+          onChange={(e) => selectHousehold(e.target.value)}
           className="w-full rounded border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
         >
           <option value="" disabled>
@@ -114,53 +140,55 @@ export default function BayarIplForm({
         </select>
       </div>
 
-      <div className="grid grid-cols-2 gap-3">
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">
-            Bulan
-          </label>
-          <select
-            name="period_month"
-            defaultValue={now.getMonth() + 1}
-            className="w-full rounded border border-gray-300 px-3 py-2 text-sm"
-          >
-            {MONTH_NAMES.map((m, i) => (
-              <option key={m} value={i + 1}>
-                {m}
-              </option>
+      <input type="hidden" name="period_year" value={year} />
+
+      <div>
+        <label className="block text-sm font-medium text-gray-700 mb-1">
+          Bulan ({year})
+        </label>
+        {!householdId ? (
+          <p className="text-sm text-gray-500">Pilih rumah terlebih dahulu.</p>
+        ) : unpaidMonths === null ? (
+          <p className="text-sm text-gray-500">Memuat bulan...</p>
+        ) : unpaidMonths.length === 0 ? (
+          <p className="text-sm text-gray-500">
+            Semua bulan tahun {year} sudah lunas atau menunggu verifikasi.
+          </p>
+        ) : (
+          <div className="grid grid-cols-3 gap-2">
+            {unpaidMonths.map((m) => (
+              <label
+                key={m}
+                className={`flex items-center gap-1.5 text-sm rounded border px-2 py-1.5 cursor-pointer ${
+                  selectedMonths.includes(m)
+                    ? "border-blue-500 bg-blue-50 text-blue-700"
+                    : "border-gray-300 text-gray-700"
+                }`}
+              >
+                <input
+                  type="checkbox"
+                  name="period_months"
+                  value={m}
+                  checked={selectedMonths.includes(m)}
+                  onChange={() => toggleMonth(m)}
+                  className="accent-blue-600"
+                />
+                {MONTH_NAMES[m - 1]}
+              </label>
             ))}
-          </select>
-        </div>
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">
-            Tahun
-          </label>
-          <input
-            type="number"
-            name="period_year"
-            defaultValue={now.getFullYear()}
-            required
-            className="w-full rounded border border-gray-300 px-3 py-2 text-sm"
-          />
-        </div>
+          </div>
+        )}
       </div>
 
       <div>
         <label className="block text-sm font-medium text-gray-700 mb-1">
-          Jumlah (Rp)
+          Jumlah
         </label>
-        <input
-          type="number"
-          name="amount"
-          step="1000"
-          placeholder={`Contoh: ${defaultAmount}`}
-          value={Number.isNaN(amount) ? "" : amount}
-          onChange={(e) =>
-            setAmount(e.target.value === "" ? NaN : Number(e.target.value))
-          }
-          required
-          className="w-full rounded border border-gray-300 px-3 py-2 text-sm"
-        />
+        <p className="text-sm text-gray-700 rounded border border-gray-200 bg-gray-50 px-3 py-2">
+          {formatRupiah(defaultAmount)} / bulan
+          {selectedMonths.length > 1 &&
+            ` × ${selectedMonths.length} bulan = ${formatRupiah(total)}`}
+        </p>
       </div>
 
       <div>
@@ -176,7 +204,8 @@ export default function BayarIplForm({
 
       <button
         type="submit"
-        className="w-full bg-blue-600 text-white rounded py-2 text-sm font-medium hover:bg-blue-700 transition"
+        disabled={!householdId || selectedMonths.length === 0}
+        className="w-full bg-blue-600 text-white rounded py-2 text-sm font-medium hover:bg-blue-700 transition disabled:opacity-50 disabled:cursor-not-allowed"
       >
         Kirim Klaim
       </button>

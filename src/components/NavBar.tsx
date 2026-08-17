@@ -6,11 +6,13 @@ import { signOut } from "@/app/login/actions";
 import type { Role } from "@/lib/auth";
 
 const links = [
-  { href: "/dashboard", label: "Dashboard" },
+  { href: "/dashboard", label: "IPL" },
   { href: "/payments/new", label: "Catat Pembayaran", pengurusOnly: true },
   { href: "/households", label: "Warga", pengurusOnly: true },
   { href: "/report", label: "Laporan" },
+  { href: "/contributions", label: "Sumbangan" },
   { href: "/expenses", label: "Pengeluaran" },
+  { href: "/piutang", label: "Piutang", pengurusOnly: true },
   { href: "/settings", label: "Pengaturan", pengurusOnly: true },
 ];
 
@@ -33,7 +35,7 @@ export default function NavBar({
       <div className="max-w-5xl mx-auto px-4 py-3 flex items-center justify-between gap-3">
         <div className="flex items-center gap-6 min-w-0">
           <span className="font-semibold text-gray-900 shrink-0 flex items-center gap-2">
-            Kiwari App
+            KIWARI
             {unitNo && (
               <span className="text-xs font-normal text-gray-500 bg-gray-100 rounded-full px-2 py-0.5">
                 {unitNo}
@@ -56,6 +58,16 @@ export default function NavBar({
         </div>
         <div className="flex items-center gap-3 text-sm text-gray-500 shrink-0">
           <span className="hidden sm:inline truncate max-w-40">{email}</span>
+          {role === "warga" && (
+            <Link
+              href="/profile"
+              className={`hover:text-blue-600 transition ${
+                pathname === "/profile" ? "font-semibold text-gray-900" : ""
+              }`}
+            >
+              Profil
+            </Link>
+          )}
           <form action={signOut}>
             <button
               type="submit"

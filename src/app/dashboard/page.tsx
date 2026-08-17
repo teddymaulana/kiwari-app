@@ -2,7 +2,39 @@ import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentUser } from "@/lib/auth";
 import type { Household, Payment, Settings } from "@/lib/types";
-import { MONTH_NAMES, formatRupiah } from "@/lib/types";
+import { MONTH_NAMES, formatRupiah, compareUnitNo } from "@/lib/types";
+
+// Warga can pay ahead (e.g. 3 months in advance), so "paid through" walks
+// forward from the real current month over consecutive confirmed periods —
+// not just the latest payment on file, which would hide a gap (e.g. paid
+// Jan + Mar but skipped Feb shouldn't read as "paid through March").
+function getPaidThrough(
+  history: Payment[],
+  fromYear: number,
+  fromMonth: number
+): { year: number; month: number } | null {
+  const confirmed = new Set(
+    history
+      .filter((p) => p.status === "confirmed")
+      .map((p) => `${p.period_year}-${p.period_month}`)
+  );
+
+  if (!confirmed.has(`${fromYear}-${fromMonth}`)) return null;
+
+  let y = fromYear;
+  let m = fromMonth;
+  let last = { year: y, month: m };
+  while (true) {
+    m += 1;
+    if (m > 12) {
+      m = 1;
+      y += 1;
+    }
+    if (!confirmed.has(`${y}-${m}`)) break;
+    last = { year: y, month: m };
+  }
+  return last;
+}
 
 export default async function DashboardPage({
   searchParams,
@@ -50,6 +82,8 @@ export default async function DashboardPage({
       : Promise.resolve({ data: null as Payment[] | null }),
   ]);
 
+  households?.sort((a, b) => compareUnitNo(a.unit_no, b.unit_no));
+
   const paidByHousehold = new Map((payments ?? []).map((p) => [p.household_id, p]));
   const myHousehold = user?.householdId
     ? (households ?? []).find((h) => h.id === user.householdId) ?? null
@@ -58,6 +92,15 @@ export default async function DashboardPage({
     (myHistory ?? []).find(
       (p) => p.period_year === year && p.period_month === month
     ) ?? null;
+  const realNowYear = now.getFullYear();
+  const realNowMonth = now.getMonth() + 1;
+  const paidThrough = myHistory
+    ? getPaidThrough(myHistory, realNowYear, realNowMonth)
+    : null;
+  const isPaidAhead =
+    paidThrough !== null &&
+    (paidThrough.year > realNowYear ||
+      (paidThrough.year === realNowYear && paidThrough.month > realNowMonth));
   const totalHouseholds = households?.length ?? 0;
   const paidCount = (households ?? []).filter((h) =>
     paidByHousehold.has(h.id)
@@ -72,7 +115,6 @@ export default async function DashboardPage({
           Pembayaran berhasil dicatat.
         </div>
       )}
-
       <div className="flex flex-wrap items-center justify-between gap-4 mb-6">
         <h1 className="text-lg font-semibold text-gray-900">
           Dashboard — {MONTH_NAMES[month - 1]} {year}
@@ -146,6 +188,18 @@ export default async function DashboardPage({
                     {myCurrentPeriodPayment &&
                       ` · ${formatRupiah(Number(myCurrentPeriodPayment.amount))}`}
                   </p>
+                  {isPaidAhead && paidThrough && (
+                    <p className="text-xs text-blue-600 mt-1">
+                      Lunas sampai {MONTH_NAMES[paidThrough.month - 1]}{" "}
+                      {paidThrough.year}
+                    </p>
+                  )}
+                  <Link
+                    href="/bayar-ipl"
+                    className="inline-block text-xs text-blue-600 hover:text-blue-700 mt-2"
+                  >
+                    + Bayar IPL
+                  </Link>
                 </div>
               );
             })()
@@ -237,7 +291,7 @@ export default async function DashboardPage({
             </p>
           </div>
           <div className="bg-white border border-gray-200 rounded-lg p-4">
-            <p className="text-xs text-gray-500 mb-1">Target Bulan Ini</p>
+            <p className="text-xs text-gray-500 mb-1">Target</p>
             <p className="text-2xl font-semibold text-gray-900">
               {formatRupiah(expectedTotal)}
             </p>

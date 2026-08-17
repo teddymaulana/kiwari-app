@@ -1,0 +1,105 @@
+import { createAdminClient } from "@/lib/supabase/admin";
+import { MONTH_NAMES } from "@/lib/types";
+
+// Shared by the public "Bayar IPL" form on /login (no session) and the
+// logged-in warga's version on /dashboard (household comes from the
+// session, not form input). Always lands as status "pending" — never
+// counts as Lunas until a pengurus confirms it from Pengaturan. Uses the
+// admin client because the public path has no session for RLS to key off
+// of; status is hardcoded here and never taken from caller input.
+//
+// periodMonths can carry more than one month (warga paying several months
+// in one transfer) — the receipt, if any, is uploaded once and reused
+// across all of them rather than duplicated per month.
+//
+// The per-month amount is never taken from the caller — it's always the
+// pengurus-set nominal from Pengaturan, looked up here so neither form (nor
+// a tampered request on the public, unauthenticated /login path) can claim
+// an arbitrary amount.
+export async function createPendingPaymentClaim({
+  householdId,
+  periodYear,
+  periodMonths,
+  note,
+  receipt,
+  actorEmail,
+}: {
+  householdId: string;
+  periodYear: number;
+  periodMonths: number[];
+  note: string;
+  receipt: File | null;
+  actorEmail: string | null;
+}): Promise<{ success: true; message: string } | { success: false; message: string }> {
+  const admin = createAdminClient();
+
+  const { data: settings } = await admin
+    .from("settings")
+    .select("monthly_amount")
+    .eq("id", 1)
+    .single<{ monthly_amount: number }>();
+  const amount = Number(settings?.monthly_amount ?? 0);
+  if (!amount) {
+    return { success: false, message: "Nominal iuran belum diatur, hubungi pengurus" };
+  }
+
+  let receipt_path: string | null = null;
+  if (receipt && receipt.size > 0) {
+    const ext = receipt.name.split(".").pop() || "jpg";
+    const path = `${householdId}/${Date.now()}-${crypto.randomUUID()}.${ext}`;
+    const { error: uploadError } = await admin.storage
+      .from("bukti-transfer")
+      .upload(path, receipt, { contentType: receipt.type });
+    if (!uploadError) receipt_path = path;
+  }
+
+  const months = [...new Set(periodMonths)].sort((a, b) => a - b);
+  const claimed: number[] = [];
+  const failed: { month: number; message: string }[] = [];
+
+  for (const period_month of months) {
+    const { error } = await admin.from("payments").insert({
+      household_id: householdId,
+      period_year: periodYear,
+      period_month,
+      amount,
+      note: note || null,
+      status: "pending",
+      receipt_path,
+      kas_type: "bri",
+    });
+
+    if (error) {
+      let message = error.message;
+      if (error.code === "23505") {
+        message = `${MONTH_NAMES[period_month - 1]} ${periodYear} sudah pernah dibayar atau sedang menunggu verifikasi`;
+      }
+      failed.push({ month: period_month, message });
+    } else {
+      claimed.push(period_month);
+      await admin.from("activity_log").insert({
+        actor_email: actorEmail,
+        action: "payment.claim_pending",
+        detail: `household ${householdId} - ${period_month}/${periodYear} - ${amount}`,
+      });
+    }
+  }
+
+  if (claimed.length === 0) {
+    if (receipt_path) {
+      await admin.storage.from("bukti-transfer").remove([receipt_path]);
+    }
+    return {
+      success: false,
+      message: failed[0]?.message ?? "Gagal mengirim klaim",
+    };
+  }
+
+  const claimedLabel = claimed.map((m) => MONTH_NAMES[m - 1]).join(", ");
+  let message = `Klaim terkirim untuk ${claimedLabel} ${periodYear}.`;
+  if (failed.length > 0) {
+    message += ` Gagal: ${failed.map((f) => f.message).join("; ")}`;
+  }
+
+  return { success: true, message };
+}
