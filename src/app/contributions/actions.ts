@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentUser } from "@/lib/auth";
 
@@ -41,6 +42,7 @@ export async function addContribution(formData: FormData) {
 
   revalidatePath("/contributions");
   revalidatePath("/report");
+  redirect("/contributions?success=1");
 }
 
 export async function deleteContribution(id: string) {

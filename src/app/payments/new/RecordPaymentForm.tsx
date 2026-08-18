@@ -1,27 +1,26 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { submitPaymentClaim } from "./actions";
+import { recordPayments } from "./actions";
 import type { Household } from "@/lib/types";
 import { MONTH_NAMES, formatRupiah } from "@/lib/types";
 import HouseholdSelect from "@/components/HouseholdSelect";
 
 type HouseholdOption = Pick<Household, "id" | "unit_no" | "name">;
 
-export default function BayarIplForm({
+// Only 2026 data exists so far, so the year is locked instead of a free
+// input — swap this back to an editable field once other years exist.
+const YEAR = 2026;
+
+export default function RecordPaymentForm({
   households,
   defaultAmount,
-  year,
 }: {
   households: HouseholdOption[];
   defaultAmount: number;
-  year: number;
 }) {
   const now = new Date();
   const [householdId, setHouseholdId] = useState("");
-  const [suggestion, setSuggestion] = useState<HouseholdOption | null>(null);
-  const [checking, setChecking] = useState(false);
-  const [checkNote, setCheckNote] = useState<string | null>(null);
   const [unpaidMonths, setUnpaidMonths] = useState<number[] | null>(null);
   const [selectedMonths, setSelectedMonths] = useState<number[]>([]);
 
@@ -29,21 +28,25 @@ export default function BayarIplForm({
     if (!householdId) return;
 
     let cancelled = false;
-    fetch(`/api/unpaid-months?household_id=${householdId}&year=${year}`)
+    fetch(`/api/unpaid-months?household_id=${householdId}&year=${YEAR}`)
       .then((res) => res.json())
       .then((data) => {
         if (cancelled) return;
         const months: number[] = data.unpaidMonths ?? [];
         setUnpaidMonths(months);
         const currentMonth = now.getMonth() + 1;
-        setSelectedMonths(months.includes(currentMonth) ? [currentMonth] : []);
+        setSelectedMonths(
+          YEAR === now.getFullYear() && months.includes(currentMonth)
+            ? [currentMonth]
+            : []
+        );
       });
 
     return () => {
       cancelled = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [householdId, year]);
+  }, [householdId]);
 
   function selectHousehold(id: string) {
     setHouseholdId(id);
@@ -61,67 +64,14 @@ export default function BayarIplForm({
 
   const total = defaultAmount * selectedMonths.length;
 
-  async function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
-    setSuggestion(null);
-    setCheckNote(null);
-    if (!file) return;
-
-    setChecking(true);
-    try {
-      const fd = new FormData();
-      fd.append("file", file);
-      const res = await fetch("/api/extract-receipt", {
-        method: "POST",
-        body: fd,
-      });
-      const data = await res.json();
-
-      if (data.match) {
-        setSuggestion(data.match);
-        selectHousehold(data.match.id);
-      } else {
-        setCheckNote(
-          "Rumah tidak terdeteksi otomatis dari gambar, pilih secara manual di bawah."
-        );
-      }
-    } catch {
-      setCheckNote("Gagal membaca gambar, pilih rumah secara manual di bawah.");
-    } finally {
-      setChecking(false);
-    }
-  }
-
   return (
-    <form action={submitPaymentClaim} className="space-y-4">
+    <form
+      action={recordPayments}
+      className="bg-white border border-gray-200 rounded-lg p-6 space-y-4"
+    >
       <div>
         <label className="block text-sm font-medium text-gray-700 mb-1">
-          Bukti Transfer (opsional)
-        </label>
-        <input
-          type="file"
-          name="receipt"
-          accept="image/*"
-          onChange={handleFileChange}
-          className="w-full text-sm text-gray-600 file:mr-3 file:py-1.5 file:px-3 file:rounded file:border-0 file:bg-gray-100 file:text-sm file:text-gray-700"
-        />
-        {checking && (
-          <p className="text-xs text-gray-400 mt-1">Membaca gambar...</p>
-        )}
-        {suggestion && (
-          <p className="text-xs text-green-600 mt-1">
-            Sepertinya ini rumah {suggestion.unit_no} - {suggestion.name}.
-            Sudah dipilih otomatis di bawah — ubah jika salah.
-          </p>
-        )}
-        {checkNote && (
-          <p className="text-xs text-gray-500 mt-1">{checkNote}</p>
-        )}
-      </div>
-
-      <div>
-        <label className="block text-sm font-medium text-gray-700 mb-1">
-          Rumah
+          Warga
         </label>
         <HouseholdSelect
           households={households}
@@ -130,23 +80,30 @@ export default function BayarIplForm({
           value={householdId}
           onChange={selectHousehold}
           placeholder="Cari No. Rumah atau nama..."
-          className="w-full rounded border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
         />
       </div>
 
-      <input type="hidden" name="period_year" value={year} />
+      <div>
+        <label className="block text-sm font-medium text-gray-700 mb-1">
+          Tahun
+        </label>
+        <input type="hidden" name="period_year" value={YEAR} />
+        <p className="rounded border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-500">
+          {YEAR}
+        </p>
+      </div>
 
       <div>
         <label className="block text-sm font-medium text-gray-700 mb-1">
-          Bulan ({year})
+          Bulan
         </label>
         {!householdId ? (
-          <p className="text-sm text-gray-500">Pilih rumah terlebih dahulu.</p>
+          <p className="text-sm text-gray-500">Pilih warga terlebih dahulu.</p>
         ) : unpaidMonths === null ? (
           <p className="text-sm text-gray-500">Memuat bulan...</p>
         ) : unpaidMonths.length === 0 ? (
           <p className="text-sm text-gray-500">
-            Semua bulan tahun {year} sudah lunas atau menunggu verifikasi.
+            Semua bulan tahun {YEAR} sudah lunas atau menunggu verifikasi.
           </p>
         ) : (
           <div className="grid grid-cols-3 gap-2">
@@ -178,6 +135,7 @@ export default function BayarIplForm({
         <label className="block text-sm font-medium text-gray-700 mb-1">
           Jumlah
         </label>
+        <input type="hidden" name="amount" value={defaultAmount} />
         <p className="text-sm text-gray-700 rounded border border-gray-200 bg-gray-50 px-3 py-2">
           {formatRupiah(defaultAmount)} / bulan
           {selectedMonths.length > 1 &&
@@ -187,11 +145,37 @@ export default function BayarIplForm({
 
       <div>
         <label className="block text-sm font-medium text-gray-700 mb-1">
+          Tanggal Bayar
+        </label>
+        <input
+          type="date"
+          name="paid_date"
+          defaultValue={now.toISOString().slice(0, 10)}
+          className="w-full rounded border border-gray-300 px-3 py-2 text-sm"
+        />
+      </div>
+
+      <div>
+        <label className="block text-sm font-medium text-gray-700 mb-1">
+          Kas Tujuan
+        </label>
+        <select
+          name="kas_type"
+          defaultValue="bri"
+          className="w-full rounded border border-gray-300 px-3 py-2 text-sm"
+        >
+          <option value="bri">Kas BRI</option>
+          <option value="tunai">Petty Cash</option>
+        </select>
+      </div>
+
+      <div>
+        <label className="block text-sm font-medium text-gray-700 mb-1">
           Catatan (opsional)
         </label>
         <input
           name="note"
-          placeholder="mis. transfer BCA a.n. ..."
+          placeholder="mis. transfer BCA"
           className="w-full rounded border border-gray-300 px-3 py-2 text-sm"
         />
       </div>
@@ -201,7 +185,7 @@ export default function BayarIplForm({
         disabled={!householdId || selectedMonths.length === 0}
         className="w-full bg-blue-600 text-white rounded py-2 text-sm font-medium hover:bg-blue-700 transition disabled:opacity-50 disabled:cursor-not-allowed"
       >
-        Kirim Klaim
+        Simpan
       </button>
     </form>
   );

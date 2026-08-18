@@ -1,3 +1,4 @@
+import Image from "next/image";
 import { signIn } from "./actions";
 import BayarIplForm from "./BayarIplForm";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -58,7 +59,7 @@ export default async function LoginPage({
   const loginBody = (
     <>
       <p className="text-sm text-gray-500 mb-6">
-        Login untuk pengurus dan warga.
+        Login untuk warga.
       </p>
 
       {error && (
@@ -103,6 +104,14 @@ export default async function LoginPage({
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-50 px-4 py-8">
       <div className="w-full max-w-sm md:max-w-3xl">
+        <Image
+          src="/kiwari-logo.png"
+          alt="Forum Warga Kiwari Residence"
+          width={200}
+          height={140}
+          className="mx-auto mb-6 h-auto w-40"
+          priority
+        />
         {/* Desktop: both boxes always expanded, side by side */}
         <div className="hidden md:grid md:grid-cols-2 gap-6 items-start">
           <div className="bg-white p-8 rounded-lg shadow-sm border border-gray-200">
@@ -112,8 +121,8 @@ export default async function LoginPage({
             {bayarIplBody}
           </div>
           <div className="bg-white p-8 rounded-lg shadow-sm border border-gray-200">
-            <h1 className="text-xl font-semibold text-gray-900 mb-1">
-              Kiwari App
+            <h1 className="text-lg font-semibold text-gray-900 mb-1">
+              Kiwari
             </h1>
             {loginBody}
           </div>
@@ -128,8 +137,8 @@ export default async function LoginPage({
             <div className="px-6 pb-6">{bayarIplBody}</div>
           </details>
           <details className="bg-white rounded-lg shadow-sm border border-gray-200">
-            <summary className="cursor-pointer select-none px-6 py-4 text-xl font-semibold text-gray-900">
-              Kiwari App
+            <summary className="cursor-pointer select-none px-6 py-4 text-lg font-semibold text-gray-900">
+              Login Warga
             </summary>
             <div className="px-6 pb-6">{loginBody}</div>
           </details>

@@ -4,6 +4,7 @@ import { addContribution, deleteContribution } from "./actions";
 import SumbanganTabs from "./SumbanganTabs";
 import type { Contribution, Household, KasType } from "@/lib/types";
 import { formatRupiah, KAS_LABELS, compareUnitNo } from "@/lib/types";
+import HouseholdSelect from "@/components/HouseholdSelect";
 
 type UnitRow = { id: string; unit_no: string; label: string };
 type ContribEntry = {
@@ -21,7 +22,7 @@ type ContributionRow = Contribution & {
 export default async function ContributionsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ year?: string }>;
+  searchParams: Promise<{ year?: string; success?: string }>;
 }) {
   const sp = await searchParams;
   const year = Number(sp.year) || new Date().getFullYear();
@@ -158,21 +159,23 @@ export default async function ContributionsPage({
           <h2 className="text-sm font-medium text-gray-700 mb-4">
             Catat Sumbangan
           </h2>
+          {sp.success && (
+            <div className="mb-4 text-sm text-green-700 bg-green-50 border border-green-200 rounded px-3 py-2">
+              Sumbangan berhasil dicatat.
+            </div>
+          )}
           <form
             action={addContribution}
             className="grid sm:grid-cols-6 gap-3"
           >
-            <select
-              name="household_id"
-              className="rounded border border-gray-300 px-3 py-2 text-sm sm:col-span-2"
-            >
-              <option value="">Pilih warga (kosongkan jika bukan warga)...</option>
-              {activeHouseholds.map((h) => (
-                <option key={h.id} value={h.id}>
-                  {h.unit_no} - {h.name}
-                </option>
-              ))}
-            </select>
+            <div className="sm:col-span-2">
+              <HouseholdSelect
+                households={activeHouseholds}
+                name="household_id"
+                placeholder="Pilih warga (kosongkan jika bukan warga)..."
+                className="w-full rounded border border-gray-300 px-3 py-2 text-sm"
+              />
+            </div>
             <input
               name="source_name"
               placeholder="Atau sumber lain (mis. Sumbangan Developer)"

@@ -2,6 +2,8 @@ import { createClient } from "@/lib/supabase/server";
 import { getCurrentUser } from "@/lib/auth";
 import type { Household, KasType, Payment, Settings } from "@/lib/types";
 import { MONTH_NAMES, formatRupiah, KAS_LABELS, compareUnitNo } from "@/lib/types";
+import ReportTabs from "./ReportTabs";
+import ScrollRight from "./ScrollRight";
 
 type UnitRow = { id: string; unit_no: string; label: string };
 type PaidEntry = { household_id: string; period_month: number; amount: number };
@@ -307,39 +309,41 @@ export default async function ReportPage({
       </div>
 
       <div className="flex flex-wrap gap-4 mb-6">
-        <div className="bg-white border border-gray-200 rounded-lg p-4 w-55">
-          <p className="text-xs text-gray-500 mb-1">Kas Saat Ini</p>
-          <p
-            className={`text-2xl font-semibold ${
-              kasSaatIni < 0 ? "text-red-600" : "text-gray-900"
-            }`}
-          >
-            {formatRupiah(kasSaatIni)}
-          </p>
-          <div className="mt-3 pt-3 border-t border-gray-100 space-y-1">
-            {(Object.keys(kasBalance) as KasType[]).map((kasType) => (
-              <div key={kasType} className="flex items-center justify-between text-xs">
-                <span className="text-gray-500">{KAS_LABELS[kasType]}</span>
-                <span
-                  className={
-                    kasBalance[kasType] < 0 ? "text-red-600" : "text-gray-700"
-                  }
-                >
-                  {formatRupiah(kasBalance[kasType])}
-                </span>
-              </div>
-            ))}
+        {isPengurus && (
+          <div className="bg-white border border-gray-200 rounded-lg p-4 w-55">
+            <p className="text-xs text-gray-500 mb-1">Kas Saat Ini</p>
+            <p
+              className={`text-2xl font-semibold ${
+                kasSaatIni < 0 ? "text-red-600" : "text-emerald-600"
+              }`}
+            >
+              {formatRupiah(kasSaatIni)}
+            </p>
+            <div className="mt-3 pt-3 border-t border-gray-100 space-y-1">
+              {(Object.keys(kasBalance) as KasType[]).map((kasType) => (
+                <div key={kasType} className="flex items-center justify-between text-xs">
+                  <span className="text-gray-500">{KAS_LABELS[kasType]}</span>
+                  <span
+                    className={
+                      kasBalance[kasType] < 0 ? "text-red-600" : "text-gray-700"
+                    }
+                  >
+                    {formatRupiah(kasBalance[kasType])}
+                  </span>
+                </div>
+              ))}
+            </div>
+            {/* An outstanding loan isn't liquid cash, so it's never summed
+                into Kas Saat Ini above — just noted here as where else the
+                association's money is. */}
+            <p className="text-xs text-gray-400 mt-2 pt-2 border-t border-gray-100">
+              + Piutang Personel {formatRupiah(piutangPersonel)} (di luar kas) —{" "}
+              <a href="/piutang" className="text-blue-600 hover:underline">
+                lihat
+              </a>
+            </p>
           </div>
-          {/* An outstanding loan isn't liquid cash, so it's never summed
-              into Kas Saat Ini above — just noted here as where else the
-              association's money is. */}
-          <p className="text-xs text-gray-400 mt-2 pt-2 border-t border-gray-100">
-            + Piutang Personel {formatRupiah(piutangPersonel)} (di luar kas) —{" "}
-            <a href="/piutang" className="text-blue-600 hover:underline">
-              lihat
-            </a>
-          </p>
-        </div>
+        )}
         <div className="bg-white border border-gray-200 rounded-lg p-4 w-55">
           <p className="text-xs text-gray-500 mb-1">Total Terkumpul {periodLabel}</p>
           <p className="text-2xl font-semibold text-gray-900">
@@ -383,45 +387,169 @@ export default async function ReportPage({
         </div>
       </div>
 
-      {isPengurus && (
-        <div className="bg-white border border-gray-200 rounded-lg overflow-x-auto mb-6">
-          <table className="w-full text-xs">
+      {isPengurus ? (
+        <ReportTabs
+          checklistTable={
+            <ScrollRight className="bg-white border border-gray-200 rounded-lg overflow-x-auto">
+              <table className="w-full text-xs">
+                <thead className="bg-gray-50 text-gray-500 text-left">
+                  <tr>
+                    <th className="px-3 py-2 font-medium sticky left-0 bg-gray-50 max-w-[180px]">
+                      Warga
+                    </th>
+                    {MONTH_NAMES.map((m) => (
+                      <th key={m} className="px-2 py-2 font-medium text-center">
+                        {m.slice(0, 3)}
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-100">
+                  {units.map((u) => (
+                    <tr key={u.id}>
+                      <td
+                        className="px-3 py-2 whitespace-nowrap overflow-hidden text-ellipsis sticky left-0 bg-white max-w-[180px]"
+                        title={u.label}
+                      >
+                        {u.label}
+                      </td>
+                      {MONTH_NAMES.map((_, i) => {
+                        const paid = paidMap.has(`${u.id}-${i + 1}`);
+                        return (
+                          <td key={i} className="px-2 py-2 text-center">
+                            <span
+                              className={paid ? "text-green-600" : "text-gray-300"}
+                            >
+                              {paid ? "✓" : "·"}
+                            </span>
+                          </td>
+                        );
+                      })}
+                    </tr>
+                  ))}
+                  {units.length === 0 && (
+                    <tr>
+                      <td
+                        colSpan={13}
+                        className="px-3 py-6 text-center text-gray-400"
+                      >
+                        Belum ada data.
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </ScrollRight>
+          }
+          monthlyTable={
+            <div className="bg-white border border-gray-200 rounded-lg overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead className="bg-gray-50 text-gray-500 text-left">
+                  <tr>
+                    <th className="px-3 py-2 font-medium">Bulan</th>
+                    <th className="px-3 py-2 font-medium">Total Terkumpul</th>
+                    <th className="px-3 py-2 font-medium">Rumah Bayar</th>
+                    <th className="px-3 py-2 font-medium">Pengeluaran</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-100">
+                  {monthlyStats.map((s) => (
+                    <tr
+                      key={s.month}
+                      className={s.month === currentMonth ? "bg-blue-50" : ""}
+                    >
+                      <td className="px-3 py-2">{MONTH_NAMES[s.month - 1]}</td>
+                      <td className="px-3 py-2">
+                        {formatRupiah(s.total)}
+                        {s.contributions.length > 0 && (
+                          <div className="mt-1 space-y-0.5 text-xs text-gray-400">
+                            <div>IPL: {formatRupiah(s.iplTotal)}</div>
+                            {s.contributions.map(([eventName, amount]) => (
+                              <div key={eventName}>
+                                {eventName}: {formatRupiah(amount)}
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </td>
+                      <td
+                        className={`px-3 py-2 ${
+                          units.length > 0 && s.paidCount === units.length
+                            ? "text-green-600 font-medium"
+                            : ""
+                        }`}
+                      >
+                        {s.paidCount} / {units.length}
+                      </td>
+                      <td className="px-3 py-2 text-gray-500">
+                        {formatRupiah(s.pengeluaran)}
+                      </td>
+                    </tr>
+                  ))}
+                  {units.length === 0 && (
+                    <tr>
+                      <td
+                        colSpan={4}
+                        className="px-3 py-6 text-center text-gray-400"
+                      >
+                        Belum ada data.
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          }
+        />
+      ) : (
+        <div className="bg-white border border-gray-200 rounded-lg overflow-x-auto">
+          <table className="w-full text-sm">
             <thead className="bg-gray-50 text-gray-500 text-left">
               <tr>
-                <th className="px-3 py-2 font-medium sticky left-0 bg-gray-50">
-                  Warga
-                </th>
-                {MONTH_NAMES.map((m) => (
-                  <th key={m} className="px-2 py-2 font-medium text-center">
-                    {m.slice(0, 3)}
-                  </th>
-                ))}
+                <th className="px-3 py-2 font-medium">Bulan</th>
+                <th className="px-3 py-2 font-medium">Total Terkumpul</th>
+                <th className="px-3 py-2 font-medium">Rumah Bayar</th>
+                <th className="px-3 py-2 font-medium">Pengeluaran</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
-              {units.map((u) => (
-                <tr key={u.id}>
-                  <td className="px-3 py-2 whitespace-nowrap sticky left-0 bg-white">
-                    {u.label}
+              {monthlyStats.map((s) => (
+                <tr
+                  key={s.month}
+                  className={s.month === currentMonth ? "bg-blue-50" : ""}
+                >
+                  <td className="px-3 py-2">{MONTH_NAMES[s.month - 1]}</td>
+                  <td className="px-3 py-2">
+                    {formatRupiah(s.total)}
+                    {s.contributions.length > 0 && (
+                      <div className="mt-1 space-y-0.5 text-xs text-gray-400">
+                        <div>IPL: {formatRupiah(s.iplTotal)}</div>
+                        {s.contributions.map(([eventName, amount]) => (
+                          <div key={eventName}>
+                            {eventName}: {formatRupiah(amount)}
+                          </div>
+                        ))}
+                      </div>
+                    )}
                   </td>
-                  {MONTH_NAMES.map((_, i) => {
-                    const paid = paidMap.has(`${u.id}-${i + 1}`);
-                    return (
-                      <td key={i} className="px-2 py-2 text-center">
-                        <span
-                          className={paid ? "text-green-600" : "text-gray-300"}
-                        >
-                          {paid ? "✓" : "·"}
-                        </span>
-                      </td>
-                    );
-                  })}
+                  <td
+                    className={`px-3 py-2 ${
+                      units.length > 0 && s.paidCount === units.length
+                        ? "text-green-600 font-medium"
+                        : ""
+                    }`}
+                  >
+                    {s.paidCount} / {units.length}
+                  </td>
+                  <td className="px-3 py-2 text-gray-500">
+                    {formatRupiah(s.pengeluaran)}
+                  </td>
                 </tr>
               ))}
               {units.length === 0 && (
                 <tr>
                   <td
-                    colSpan={13}
+                    colSpan={4}
                     className="px-3 py-6 text-center text-gray-400"
                   >
                     Belum ada data.
@@ -432,64 +560,6 @@ export default async function ReportPage({
           </table>
         </div>
       )}
-
-      <div className="bg-white border border-gray-200 rounded-lg overflow-x-auto">
-        <table className="w-full text-sm">
-          <thead className="bg-gray-50 text-gray-500 text-left">
-            <tr>
-              <th className="px-3 py-2 font-medium">Bulan</th>
-              <th className="px-3 py-2 font-medium">Total Terkumpul</th>
-              <th className="px-3 py-2 font-medium">Rumah Bayar</th>
-              <th className="px-3 py-2 font-medium">Pengeluaran</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-gray-100">
-            {monthlyStats.map((s) => (
-              <tr
-                key={s.month}
-                className={s.month === currentMonth ? "bg-blue-50" : ""}
-              >
-                <td className="px-3 py-2">{MONTH_NAMES[s.month - 1]}</td>
-                <td className="px-3 py-2">
-                  {formatRupiah(s.total)}
-                  {s.contributions.length > 0 && (
-                    <div className="mt-1 space-y-0.5 text-xs text-gray-400">
-                      <div>IPL: {formatRupiah(s.iplTotal)}</div>
-                      {s.contributions.map(([eventName, amount]) => (
-                        <div key={eventName}>
-                          {eventName}: {formatRupiah(amount)}
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </td>
-                <td
-                  className={`px-3 py-2 ${
-                    units.length > 0 && s.paidCount === units.length
-                      ? "text-green-600 font-medium"
-                      : ""
-                  }`}
-                >
-                  {s.paidCount} / {units.length}
-                </td>
-                <td className="px-3 py-2 text-gray-500">
-                  {formatRupiah(s.pengeluaran)}
-                </td>
-              </tr>
-            ))}
-            {units.length === 0 && (
-              <tr>
-                <td
-                  colSpan={4}
-                  className="px-3 py-6 text-center text-gray-400"
-                >
-                  Belum ada data.
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
-      </div>
     </div>
   );
 }

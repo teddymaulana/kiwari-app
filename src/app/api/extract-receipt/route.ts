@@ -40,12 +40,24 @@ function nameCandidates(h: MatchableHousehold): string[] {
   return names;
 }
 
+// True if `needle`'s tokens appear consecutively, in order, inside
+// `haystack` — a word-boundary-safe alternative to string.includes() that
+// won't be fooled by e.g. "18" being a substring of "118".
+function containsSubsequence(haystack: string[], needle: string[]): boolean {
+  if (needle.length === 0) return false;
+  for (let i = 0; i + needle.length <= haystack.length; i++) {
+    if (needle.every((tok, j) => haystack[i + j] === tok)) return true;
+  }
+  return false;
+}
+
 function matchHousehold(
   ocrText: string,
   households: MatchableHousehold[]
 ): Pick<Household, "id" | "unit_no" | "name"> | null {
   const text = normalize(ocrText);
-  const textTokens = new Set(text.split(" ").filter(Boolean));
+  const textTokenList = text.split(" ").filter(Boolean);
+  const textTokens = new Set(textTokenList);
 
   // Name first: the more common case is a bank showing the sender's name.
   let best: { household: MatchableHousehold; score: number } | null = null;
@@ -57,7 +69,7 @@ function matchHousehold(
         .filter((w) => w.length >= 3);
       if (words.length === 0) continue;
 
-      const matched = words.filter((w) => text.includes(w)).length;
+      const matched = words.filter((w) => textTokens.has(w)).length;
       const score = matched / words.length;
 
       if (score > 0.5 && (!best || score > best.score)) {
@@ -73,16 +85,30 @@ function matchHousehold(
 
   // Fall back to unit number: some banks show no sender name at all, only
   // whatever note the sender typed — and warga sometimes write their unit
-  // number there instead. A whole-token match (e.g. "18g") is precise
-  // enough to trust on its own.
+  // number there instead, in any of several forms ("18g", "18G", "18 g",
+  // "18-g", ...). Hyphens/extra spaces already collapse to a single space
+  // via normalize(), so a "18g"-style unit number just needs checking both
+  // as one token and split into its digit/letter parts.
+  //
+  // OCR also frequently reads the letter "O" as the digit "0" (they look
+  // alike) — no unit number in this system is purely numeric with a
+  // trailing 0 (they're always digits-then-letter, e.g. "8O" not "80"), so
+  // it's safe to treat "o"/"0" as the same character for this comparison.
+  const oZeroCanon = (tok: string) => tok.replace(/o/g, "0");
+  const canonicalTextTokens = textTokenList.map(oZeroCanon);
+
   for (const h of households) {
     const unitTokens = normalize(h.unit_no).split(" ").filter(Boolean);
     if (unitTokens.length === 0) continue;
 
-    const unitMatches =
-      unitTokens.length === 1
-        ? textTokens.has(unitTokens[0])
-        : text.includes(unitTokens.join(" "));
+    const variants = [unitTokens];
+    const splitMatch =
+      unitTokens.length === 1 ? unitTokens[0].match(/^(\d+)([a-z]+)$/) : null;
+    if (splitMatch) variants.push([splitMatch[1], splitMatch[2]]);
+
+    const unitMatches = variants.some((tokens) =>
+      containsSubsequence(canonicalTextTokens, tokens.map(oZeroCanon))
+    );
 
     if (unitMatches) return h;
   }

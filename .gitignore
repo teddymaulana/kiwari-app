@@ -45,3 +45,9 @@ next-env.d.ts
 *.traineddata
 
 .env.local.example
+
+# plaintext warga login credentials, read by the "Kirim Info Login" action
+warga_credentials.csv
+
+# QA data snapshot/restore scripts — operational, not app code, kept local only
+/supabase/qa/

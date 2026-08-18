@@ -13,6 +13,7 @@ import {
 } from "./actions";
 import type { Household, Payment, Settings } from "@/lib/types";
 import { MONTH_NAMES, formatRupiah, compareUnitNo } from "@/lib/types";
+import HouseholdSelect from "@/components/HouseholdSelect";
 
 type PendingClaim = Payment & {
   households: Pick<Household, "unit_no" | "name"> | null;
@@ -379,21 +380,15 @@ export default async function SettingsPage({
             required
             className="flex-1 min-w-40 rounded border border-gray-300 px-3 py-2 text-sm"
           />
-          <select
-            name="household_id"
-            required
-            defaultValue=""
-            className="flex-1 min-w-40 rounded border border-gray-300 px-3 py-2 text-sm"
-          >
-            <option value="" disabled>
-              Pilih rumah...
-            </option>
-            {(households ?? []).map((h) => (
-              <option key={h.id} value={h.id}>
-                {h.unit_no} - {h.name}
-              </option>
-            ))}
-          </select>
+          <div className="flex-1 min-w-40">
+            <HouseholdSelect
+              households={households ?? []}
+              name="household_id"
+              required
+              placeholder="Pilih rumah..."
+              className="w-full rounded border border-gray-300 px-3 py-2 text-sm"
+            />
+          </div>
           <button
             type="submit"
             className="bg-blue-600 text-white rounded px-4 py-2 text-sm font-medium hover:bg-blue-700 transition"

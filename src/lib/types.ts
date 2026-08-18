@@ -3,6 +3,7 @@ export type Household = {
   unit_no: string;
   name: string;
   phone: string | null;
+  phone_pasangan: string | null;
   alt_names: string | null;
   is_active: boolean;
   created_at: string;

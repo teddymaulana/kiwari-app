@@ -32,9 +32,14 @@ export async function updateSession(request: NextRequest) {
   } = await supabase.auth.getUser();
 
   const isLoginPage = request.nextUrl.pathname.startsWith("/login");
-  const isPublicApi = request.nextUrl.pathname.startsWith(
-    "/api/extract-receipt"
-  );
+  // Both back the anonymous "Bayar IPL" form on /login: OCR-matching a
+  // receipt, and loading which months are still unpaid once a household
+  // is picked. Without this allowlist, an anonymous fetch to either gets
+  // redirected to /login (HTML) instead of JSON, breaking res.json() on
+  // the client with "Unexpected token '<'".
+  const isPublicApi =
+    request.nextUrl.pathname.startsWith("/api/extract-receipt") ||
+    request.nextUrl.pathname.startsWith("/api/unpaid-months");
 
   if (!user && !isLoginPage && !isPublicApi) {
     const url = request.nextUrl.clone();
@@ -44,7 +49,7 @@ export async function updateSession(request: NextRequest) {
 
   if (user && isLoginPage) {
     const url = request.nextUrl.clone();
-    url.pathname = "/dashboard";
+    url.pathname = "/report";
     return NextResponse.redirect(url);
   }
 

@@ -29,6 +29,7 @@ create table if not exists households (
   unit_no text not null,           -- e.g. "Blok A No. 12"
   name text not null,              -- head of household
   phone text,
+  phone_pasangan text,             -- spouse/emergency contact number
   -- Comma-separated other names who might send the transfer (e.g. spouse)
   -- — a unit can have one registered head of household but several people
   -- actually paying, and the bank receipt shows whoever sent it. Used by
@@ -37,6 +38,8 @@ create table if not exists households (
   is_active boolean not null default true,
   created_at timestamptz not null default now()
 );
+
+alter table households add column if not exists phone_pasangan text;
 
 alter table households add column if not exists alt_names text;
 
@@ -366,9 +369,9 @@ create policy "pengurus write cash_transfers" on cash_transfers
 -- affects_kas = true; false is only ever set via a one-off backfill script.
 -- The outstanding total itself ("Piutang Personel") is shown as separate
 -- info on /report, deliberately never summed into "Kas Saat Ini" — it
--- isn't liquid cash, it's money owed back. Same transparency as expenses:
--- any authenticated user can read the full history, only pengurus can
--- record.
+-- isn't liquid cash, it's money owed back. Unlike expenses, this is
+-- pengurus-only end to end (/piutang redirects warga away) — both read and
+-- write are gated by is_pengurus() below.
 create table if not exists personnel_loans (
   id uuid primary key default gen_random_uuid(),
   person_name text not null,
@@ -389,10 +392,10 @@ alter table personnel_loans add column if not exists affects_kas boolean not nul
 
 alter table personnel_loans enable row level security;
 
+-- Pengurus-only end to end, unlike expenses/contributions — a warga-facing
+-- read policy was dropped in favor of this single "for all" policy, so
+-- reads are gated the same as writes.
 drop policy if exists "authenticated read personnel_loans" on personnel_loans;
-create policy "authenticated read personnel_loans" on personnel_loans
-  for select to authenticated using (true);
-
 drop policy if exists "pengurus write personnel_loans" on personnel_loans;
-create policy "pengurus write personnel_loans" on personnel_loans
+create policy "pengurus read write personnel_loans" on personnel_loans
   for all to authenticated using (is_pengurus()) with check (is_pengurus());

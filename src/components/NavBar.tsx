@@ -3,13 +3,14 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { signOut } from "@/app/login/actions";
+import { setViewAsWarga, setViewAsPengurus } from "@/lib/viewAs";
 import type { Role } from "@/lib/auth";
 
 const links = [
+  { href: "/report", label: "Laporan" },
   { href: "/dashboard", label: "IPL" },
   { href: "/payments/new", label: "Catat Pembayaran", pengurusOnly: true },
   { href: "/households", label: "Warga", pengurusOnly: true },
-  { href: "/report", label: "Laporan" },
   { href: "/contributions", label: "Sumbangan" },
   { href: "/expenses", label: "Pengeluaran" },
   { href: "/piutang", label: "Piutang", pengurusOnly: true },
@@ -17,12 +18,12 @@ const links = [
 ];
 
 export default function NavBar({
-  email,
   role,
+  actualRole,
   unitNo,
 }: {
-  email: string;
   role: Role;
+  actualRole: Role;
   unitNo: string | null;
 }) {
   const pathname = usePathname();
@@ -57,17 +58,42 @@ export default function NavBar({
           </nav>
         </div>
         <div className="flex items-center gap-3 text-sm text-gray-500 shrink-0">
-          <span className="hidden sm:inline truncate max-w-40">{email}</span>
-          {role === "warga" && (
-            <Link
-              href="/profile"
-              className={`hover:text-blue-600 transition ${
-                pathname === "/profile" ? "font-semibold text-gray-900" : ""
-              }`}
-            >
-              Profil
-            </Link>
+          {actualRole === "pengurus" && (
+            <div className="flex items-center rounded-full border border-gray-300 p-0.5 text-xs">
+              <form action={setViewAsPengurus}>
+                <button
+                  type="submit"
+                  className={`px-2 py-0.5 rounded-full transition ${
+                    role === "pengurus"
+                      ? "bg-blue-600 text-white"
+                      : "text-gray-500 hover:text-gray-700"
+                  }`}
+                >
+                  Pengurus
+                </button>
+              </form>
+              <form action={setViewAsWarga}>
+                <button
+                  type="submit"
+                  className={`px-2 py-0.5 rounded-full transition ${
+                    role === "warga"
+                      ? "bg-blue-600 text-white"
+                      : "text-gray-500 hover:text-gray-700"
+                  }`}
+                >
+                  Warga
+                </button>
+              </form>
+            </div>
           )}
+          <Link
+            href="/profile"
+            className={`hover:text-blue-600 transition ${
+              pathname === "/profile" ? "font-semibold text-gray-900" : ""
+            }`}
+          >
+            Profil
+          </Link>
           <form action={signOut}>
             <button
               type="submit"
