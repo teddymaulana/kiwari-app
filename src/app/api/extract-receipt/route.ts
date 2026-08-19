@@ -4,6 +4,10 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import type { Household } from "@/lib/types";
 
 export const runtime = "nodejs";
+// OCR (language download on cold start + recognition) can run past the
+// platform default — give it real headroom instead of hanging until an
+// ungraceful kill.
+export const maxDuration = 60;
 
 const MAX_FILE_BYTES = 8 * 1024 * 1024;
 
@@ -152,7 +156,17 @@ export async function POST(request: NextRequest) {
 
   const buffer = Buffer.from(await file.arrayBuffer());
 
-  const worker = await createWorker("ind+eng");
+  // tesseract.js defaults to caching its downloaded language data (a real
+  // Node fs read/write) in the current working directory — fine locally,
+  // but Vercel's serverless functions have a read-only filesystem apart
+  // from /tmp, so that write silently fails and the recognize() call
+  // below hangs instead of erroring. Point the cache at /tmp, the one
+  // writable path. (Not to be confused with `dataPath`, which is an
+  // internal path inside tesseract's WASM virtual filesystem, not a real
+  // OS path — leave that alone.)
+  const worker = await createWorker("ind+eng", 1, {
+    cachePath: "/tmp",
+  });
   let text = "";
   try {
     const result = await worker.recognize(buffer);
