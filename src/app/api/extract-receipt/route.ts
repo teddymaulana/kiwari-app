@@ -1,3 +1,4 @@
+import path from "path";
 import { NextRequest, NextResponse } from "next/server";
 import { createWorker } from "tesseract.js";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -156,16 +157,18 @@ export async function POST(request: NextRequest) {
 
   const buffer = Buffer.from(await file.arrayBuffer());
 
-  // tesseract.js defaults to caching its downloaded language data (a real
-  // Node fs read/write) in the current working directory — fine locally,
-  // but Vercel's serverless functions have a read-only filesystem apart
-  // from /tmp, so that write silently fails and the recognize() call
-  // below hangs instead of erroring. Point the cache at /tmp, the one
-  // writable path. (Not to be confused with `dataPath`, which is an
-  // internal path inside tesseract's WASM virtual filesystem, not a real
-  // OS path — leave that alone.)
+  // tesseract.js defaults to downloading its language data from a CDN on
+  // every cold start (slow/unreliable enough on Vercel to blow past
+  // maxDuration) and caching it in the current working directory, which
+  // is read-only on Vercel outside of /tmp. Both problems go away by
+  // pointing langPath at the copies bundled into the deployment (see
+  // tessdata/ + next.config.ts outputFileTracingIncludes) and skipping
+  // the cache entirely — cacheMethod "none" means it's read fresh off
+  // local disk every time instead of touching any cache dir at all.
   const worker = await createWorker("ind+eng", 1, {
-    cachePath: "/tmp",
+    langPath: path.join(process.cwd(), "tessdata"),
+    cacheMethod: "none",
+    gzip: false,
   });
   let text = "";
   try {

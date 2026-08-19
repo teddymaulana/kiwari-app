@@ -41,8 +41,11 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 
-# tesseract.js language models, downloaded to cwd at runtime
+# tesseract.js language models — committed under tessdata/ (bundled into the
+# deployment so OCR doesn't depend on a runtime CDN download, see
+# next.config.ts outputFileTracingIncludes); ignore any stray ones elsewhere
 *.traineddata
+!/tessdata/*.traineddata
 
 .env.local.example
 
