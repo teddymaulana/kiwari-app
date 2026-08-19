@@ -6,7 +6,6 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getCurrentUser } from "@/lib/auth";
 import { sendWhatsAppMessage } from "@/lib/fonnte";
-import { MONTH_NAMES, formatRupiah } from "@/lib/types";
 
 export async function updateMonthlyAmount(formData: FormData) {
   const user = await getCurrentUser();
@@ -117,62 +116,6 @@ export async function createWargaUser(formData: FormData) {
   redirect("/settings?success=1");
 }
 
-// Approves a payment claim submitted anonymously via the public "Bayar IPL"
-// form on /login — flips it from "pending" to "confirmed" so it starts
-// counting as Lunas everywhere (dashboard, report, CSV export).
-export async function confirmPaymentClaim(id: string) {
-  const user = await getCurrentUser();
-  if (user?.role !== "pengurus") return;
-
-  const supabase = await createClient();
-
-  const { data: claim } = await supabase
-    .from("payments")
-    .update({
-      status: "confirmed",
-      recorded_by: user.email,
-      paid_date: new Date().toISOString().slice(0, 10),
-    })
-    .eq("id", id)
-    .eq("status", "pending")
-    .select(
-      "household_id, period_year, period_month, amount, households(unit_no, phone)"
-    )
-    .single<{
-      household_id: string;
-      period_year: number;
-      period_month: number;
-      amount: number;
-      households: { unit_no: string; phone: string | null } | null;
-    }>();
-
-  if (claim) {
-    await supabase.from("activity_log").insert({
-      actor_email: user.email,
-      action: "payment.confirm_claim",
-      detail: `household ${claim.household_id} - ${claim.period_month}/${claim.period_year} - ${claim.amount}`,
-    });
-
-    // Best-effort notification — a WhatsApp failure (no phone on file,
-    // Fonnte device disconnected, etc.) must never block the confirmation
-    // itself, which has already succeeded above.
-    if (claim.households?.phone) {
-      const message = `Halo, pembayaran IPL ${MONTH_NAMES[claim.period_month - 1]} ${claim.period_year} untuk ${claim.households.unit_no} sebesar ${formatRupiah(Number(claim.amount))} telah dikonfirmasi pengurus. Terima kasih!`;
-      const result = await sendWhatsAppMessage(claim.households.phone, message);
-      await supabase.from("activity_log").insert({
-        actor_email: user.email,
-        action: result.success ? "whatsapp.send" : "whatsapp.send_failed",
-        detail: result.success
-          ? `notif konfirmasi pembayaran -> ${claim.households.phone}`
-          : `notif konfirmasi pembayaran -> ${claim.households.phone} - ${result.reason}`,
-      });
-    }
-  }
-
-  revalidatePath("/settings");
-  revalidatePath("/report");
-}
-
 // Manual WhatsApp send, for testing the Fonnte integration before it's
 // wired into automatic events (e.g. payment confirmed).
 export async function sendTestWhatsApp(formData: FormData) {
@@ -254,30 +197,3 @@ export async function recordCashTransfer(formData: FormData) {
   redirect("/settings?kas_success=1");
 }
 
-// Rejects a pending claim by deleting it — this frees up that period so
-// the household can submit a corrected claim (the unique constraint on
-// household_id+period_year+period_month would otherwise block a retry).
-export async function rejectPaymentClaim(id: string) {
-  const user = await getCurrentUser();
-  if (user?.role !== "pengurus") return;
-
-  const supabase = await createClient();
-
-  const { data: claim } = await supabase
-    .from("payments")
-    .delete()
-    .eq("id", id)
-    .eq("status", "pending")
-    .select("household_id, period_year, period_month, amount")
-    .single();
-
-  if (claim) {
-    await supabase.from("activity_log").insert({
-      actor_email: user.email,
-      action: "payment.reject_claim",
-      detail: `household ${claim.household_id} - ${claim.period_month}/${claim.period_year} - ${claim.amount}`,
-    });
-  }
-
-  revalidatePath("/settings");
-}
