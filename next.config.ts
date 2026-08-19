@@ -19,15 +19,20 @@ const nextConfig: NextConfig = {
       // can't follow that dynamic spawn, so it silently drops the entire
       // worker-script subtree (and everything it requires) from the
       // deployed function, causing "Cannot find module" at runtime. Force
-      // it all in explicitly instead. tesseract.js-core ships every
-      // SIMD/legacy WASM variant for every OEM mode (~43MB total); this
-      // app always requests OEM.LSTM_ONLY, so only the "*lstm*" variants
-      // are included — trims ~23MB of engine variants that would never
-      // be used.
+      // it all in explicitly instead.
+      //
+      // Include every tesseract.js-core WASM variant (~43MB), not just the
+      // LSTM-only ones this app requests — worker-script/index.js passes
+      // its boolean `lstmOnly` flag into getCore(oem, ...), whose param is
+      // actually compared against numeric OEM constants
+      // ([OEM.DEFAULT, OEM.LSTM_ONLY].includes(oem)), so a boolean never
+      // matches and it silently falls through to the non-LSTM variant
+      // regardless of what mode was requested. This only ever worked
+      // locally because every variant happens to exist in full local
+      // node_modules — trimming to just "*lstm*" (as this used to do)
+      // breaks in production the moment that fallthrough fires.
       "./node_modules/tesseract.js/**/*",
-      "./node_modules/tesseract.js-core/index.js",
-      "./node_modules/tesseract.js-core/package.json",
-      "./node_modules/tesseract.js-core/*lstm*",
+      "./node_modules/tesseract.js-core/**/*",
       "./node_modules/node-fetch/**/*",
       "./node_modules/wasm-feature-detect/**/*",
       "./node_modules/regenerator-runtime/**/*",
