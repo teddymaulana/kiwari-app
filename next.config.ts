@@ -35,6 +35,14 @@ const nextConfig: NextConfig = {
       "./node_modules/bmp-js/**/*",
       "./node_modules/idb-keyval/**/*",
       "./node_modules/zlibjs/**/*",
+      // sharp's native binary lives in a separate per-platform package
+      // (@img/sharp-<platform> / @img/sharp-libvips-<platform>) that npm
+      // resolves to whatever matches the actual build machine — Vercel's
+      // own build installs the Linux binary here even though only a
+      // macOS one is present locally, so this glob picks up the right
+      // one at each respective build time.
+      "./node_modules/sharp/**/*",
+      "./node_modules/@img/**/*",
     ],
   },
 };

@@ -1,8 +1,17 @@
 import path from "path";
 import { NextRequest, NextResponse } from "next/server";
 import { createWorker } from "tesseract.js";
+import sharp from "sharp";
 import { createAdminClient } from "@/lib/supabase/admin";
 import type { Household } from "@/lib/types";
+
+// Phone-camera receipt photos can be several thousand pixels wide — way
+// more resolution than OCR needs for what's ultimately small print, and
+// the extra pixels cost real recognition time on a serverless function's
+// constrained CPU. Capping the longest edge (and dropping to grayscale,
+// which also tends to help Tesseract's contrast-based text detection)
+// cuts that cost without hurting legibility.
+const MAX_OCR_DIMENSION = 1800;
 
 export const runtime = "nodejs";
 // OCR (language download on cold start + recognition) can run past the
@@ -155,7 +164,23 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Ukuran file maksimal 8MB" }, { status: 400 });
   }
 
-  const buffer = Buffer.from(await file.arrayBuffer());
+  const rawBuffer = Buffer.from(await file.arrayBuffer());
+
+  // Stage timings are logged (visible in Vercel's function logs) so a
+  // slow/timed-out request is diagnosable from the logs alone instead of
+  // guessing — this endpoint has hit Vercel's maxDuration in production
+  // before with no way to tell which stage was the actual cost.
+  const t0 = Date.now();
+  const buffer = await sharp(rawBuffer)
+    .rotate() // apply EXIF orientation before resizing, since phone photos often carry it
+    .resize(MAX_OCR_DIMENSION, MAX_OCR_DIMENSION, {
+      fit: "inside",
+      withoutEnlargement: true,
+    })
+    .grayscale()
+    .toBuffer();
+  const t1 = Date.now();
+  console.log(`[extract-receipt] preprocess: ${t1 - t0}ms`);
 
   // tesseract.js defaults to downloading its language data from a CDN on
   // every cold start (slow/unreliable enough on Vercel to blow past
@@ -170,10 +195,14 @@ export async function POST(request: NextRequest) {
     cacheMethod: "none",
     gzip: false,
   });
+  const t2 = Date.now();
+  console.log(`[extract-receipt] worker init: ${t2 - t1}ms`);
+
   let text = "";
   try {
     const result = await worker.recognize(buffer);
     text = result.data.text;
+    console.log(`[extract-receipt] recognize: ${Date.now() - t2}ms`);
   } finally {
     await worker.terminate();
   }
