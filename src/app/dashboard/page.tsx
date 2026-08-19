@@ -1,8 +1,22 @@
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentUser } from "@/lib/auth";
-import type { Household, Payment, Settings } from "@/lib/types";
+import type { Contribution, Household, Payment, Settings } from "@/lib/types";
 import { MONTH_NAMES, formatRupiah, compareUnitNo } from "@/lib/types";
+
+// Unifies IPL payments and Sumbangan contributions into one row shape so
+// the warga-facing "Riwayat Pembayaran" table can show both together,
+// sorted by date. Contributions have no pending state — they're only ever
+// entered by a pengurus directly, so they're always "confirmed".
+type HistoryRow = {
+  id: string;
+  type: "ipl" | "sumbangan";
+  label: string;
+  status: "confirmed" | "pending";
+  date: string;
+  amount: number;
+  note: string | null;
+};
 
 // Warga can pay ahead (e.g. 3 months in advance), so "paid through" walks
 // forward from the real current month over consecutive confirmed periods —
@@ -56,6 +70,7 @@ export default async function DashboardPage({
     { data: payments },
     { data: settings },
     { data: myHistory },
+    { data: myContributions },
   ] = await Promise.all([
     supabase
       .from("households")
@@ -80,9 +95,38 @@ export default async function DashboardPage({
           .order("period_month", { ascending: false })
           .returns<Payment[]>()
       : Promise.resolve({ data: null as Payment[] | null }),
+    user?.householdId
+      ? supabase
+          .from("contributions")
+          .select("*")
+          .eq("household_id", user.householdId)
+          .order("contribution_date", { ascending: false })
+          .returns<Contribution[]>()
+      : Promise.resolve({ data: null as Contribution[] | null }),
   ]);
 
   households?.sort((a, b) => compareUnitNo(a.unit_no, b.unit_no));
+
+  const historyRows: HistoryRow[] = [
+    ...(myHistory ?? []).map((p) => ({
+      id: p.id,
+      type: "ipl" as const,
+      label: MONTH_NAMES[p.period_month - 1],
+      status: p.status,
+      date: p.paid_date,
+      amount: Number(p.amount),
+      note: p.note,
+    })),
+    ...(myContributions ?? []).map((c) => ({
+      id: c.id,
+      type: "sumbangan" as const,
+      label: c.event_name,
+      status: "confirmed" as const,
+      date: c.contribution_date,
+      amount: Number(c.amount),
+      note: c.note,
+    })),
+  ].sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0));
 
   const paidByHousehold = new Map((payments ?? []).map((p) => [p.household_id, p]));
   const myHousehold = user?.householdId
@@ -216,54 +260,70 @@ export default async function DashboardPage({
 
       {!isPengurus && (
         <div className="mb-8">
-          <h2 className="text-sm font-medium text-gray-700 mb-3">
+          <h2 className="text-sm font-medium text-gray-700 mb-1">
             Riwayat Pembayaran
           </h2>
-          <div className="bg-white border border-gray-200 rounded-lg overflow-hidden">
+          <p className="sm:hidden text-xs text-gray-400 mb-2">
+            Geser tabel ke kanan untuk lihat semua kolom →
+          </p>
+          <div className="bg-white border border-gray-200 rounded-lg overflow-x-auto">
             <table className="w-full text-sm">
               <thead className="bg-gray-50 text-gray-500 text-left">
                 <tr>
-                  <th className="px-4 py-2 font-medium">Periode</th>
-                  <th className="px-4 py-2 font-medium">Status</th>
-                  <th className="px-4 py-2 font-medium">Tanggal Bayar</th>
-                  <th className="px-4 py-2 font-medium">Jumlah</th>
-                  <th className="px-4 py-2 font-medium">Catatan</th>
+                  <th className="px-4 py-2 font-medium whitespace-nowrap">Jenis</th>
+                  <th className="px-4 py-2 font-medium whitespace-nowrap max-w-[150px]">Keterangan</th>
+                  <th className="px-4 py-2 font-medium whitespace-nowrap">Status</th>
+                  <th className="px-4 py-2 font-medium whitespace-nowrap">Tanggal</th>
+                  <th className="px-4 py-2 font-medium whitespace-nowrap">Jumlah</th>
+                  <th className="px-4 py-2 font-medium whitespace-nowrap">Catatan</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
-                {(myHistory ?? []).map((p) => (
-                  <tr key={p.id}>
-                    <td className="px-4 py-2">
-                      {MONTH_NAMES[p.period_month - 1]} {p.period_year}
-                    </td>
-                    <td className="px-4 py-2">
+                {historyRows.map((r) => (
+                  <tr key={`${r.type}-${r.id}`}>
+                    <td className="px-4 py-2 whitespace-nowrap">
                       <span
                         className={`inline-block rounded-full px-2 py-0.5 text-xs ${
-                          p.status === "confirmed"
+                          r.type === "ipl"
+                            ? "bg-blue-100 text-blue-700"
+                            : "bg-purple-100 text-purple-700"
+                        }`}
+                      >
+                        {r.type === "ipl" ? "IPL" : "Sumbangan"}
+                      </span>
+                    </td>
+                    <td
+                      className="px-4 py-2 whitespace-nowrap overflow-hidden text-ellipsis max-w-[150px]"
+                      title={r.label}
+                    >
+                      {r.label}
+                    </td>
+                    <td className="px-4 py-2 whitespace-nowrap">
+                      <span
+                        className={`inline-block rounded-full px-2 py-0.5 text-xs ${
+                          r.status === "confirmed"
                             ? "bg-green-100 text-green-700"
                             : "bg-yellow-100 text-yellow-700"
                         }`}
                       >
-                        {p.status === "confirmed"
+                        {r.status === "confirmed"
                           ? "Lunas"
                           : "Menunggu Verifikasi"}
                       </span>
                     </td>
-                    <td className="px-4 py-2 text-gray-500">
-                      {new Date(p.paid_date).toLocaleDateString("id-ID")}
+                    <td className="px-4 py-2 whitespace-nowrap text-gray-500">
+                      {new Date(r.date).toLocaleDateString("id-ID")}
                     </td>
-                    <td className="px-4 py-2">
-                      {formatRupiah(Number(p.amount))}
-                    </td>
-                    <td className="px-4 py-2 text-gray-500">
-                      {p.note || "-"}
+                    <td className="px-4 py-2 whitespace-nowrap">{formatRupiah(r.amount)}</td>
+                    <td className="px-4 py-2 whitespace-nowrap text-gray-500">
+                      {r.note || "-"}
                     </td>
                   </tr>
                 ))}
-                {(myHistory ?? []).length === 0 && (
+                {historyRows.length === 0 && (
                   <tr>
                     <td
-                      colSpan={5}
+                      colSpan={6}
                       className="px-4 py-6 text-center text-gray-400"
                     >
                       Belum ada riwayat pembayaran.

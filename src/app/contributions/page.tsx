@@ -1,20 +1,13 @@
+import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentUser } from "@/lib/auth";
 import { addContribution, deleteContribution } from "./actions";
 import SumbanganTabs from "./SumbanganTabs";
-import type { Contribution, Household, KasType } from "@/lib/types";
+import type { Contribution, Household } from "@/lib/types";
 import { formatRupiah, KAS_LABELS, compareUnitNo } from "@/lib/types";
 import HouseholdSelect from "@/components/HouseholdSelect";
 
 type UnitRow = { id: string; unit_no: string; label: string };
-type ContribEntry = {
-  household_id: string | null;
-  source_name: string | null;
-  event_name: string;
-  amount: number;
-  kas_type: KasType;
-  contribution_date: string;
-};
 type ContributionRow = Contribution & {
   households: Pick<Household, "unit_no" | "name"> | null;
 };
@@ -28,77 +21,43 @@ export default async function ContributionsPage({
   const year = Number(sp.year) || new Date().getFullYear();
 
   const user = await getCurrentUser();
-  const isPengurus = user?.role === "pengurus";
+  if (user?.role !== "pengurus") redirect("/dashboard");
 
   const supabase = await createClient();
 
-  let units: UnitRow[];
-  let allEntries: ContribEntry[];
-  let detailRows: ContributionRow[] = [];
-  let activeHouseholds: Household[] = [];
-
-  if (isPengurus) {
-    // Pengurus sees full household detail — same as Laporan.
-    const [{ data: households }, { data: activeHh }, { data: contributions }] =
-      await Promise.all([
-        supabase.from("households").select("*").returns<Household[]>(),
-        supabase
-          .from("households")
-          .select("*")
-          .eq("is_active", true)
-          .returns<Household[]>(),
-        supabase
-          .from("contributions")
-          .select("*, households(unit_no, name)")
-          .gte("contribution_date", `${year}-01-01`)
-          .lte("contribution_date", `${year}-12-31`)
-          .order("contribution_date", { ascending: true })
-          .returns<ContributionRow[]>(),
-      ]);
-    units = (households ?? []).map((h) => ({
-      id: h.id,
-      unit_no: h.unit_no,
-      label: `${h.unit_no} - ${h.name}`,
-    }));
-    activeHouseholds = activeHh ?? [];
-    detailRows = contributions ?? [];
-    allEntries = detailRows.map((c) => ({
-      household_id: c.household_id,
-      source_name: c.source_name,
-      event_name: c.event_name,
-      amount: Number(c.amount),
-      kas_type: c.kas_type,
-      contribution_date: c.contribution_date,
-    }));
-  } else {
-    // Warga sees every unit for community-wide transparency, same
-    // households_public / contributions_public treatment as Laporan.
-    const [{ data: households }, { data: contributions }] = await Promise.all([
+  const [{ data: households }, { data: activeHh }, { data: contributions }] =
+    await Promise.all([
+      supabase.from("households").select("*").returns<Household[]>(),
       supabase
-        .from("households_public")
-        .select("id, unit_no")
-        .returns<{ id: string; unit_no: string }[]>(),
+        .from("households")
+        .select("*")
+        .eq("is_active", true)
+        .returns<Household[]>(),
       supabase
-        .from("contributions_public")
-        .select("household_id, source_name, event_name, amount, kas_type, contribution_date")
+        .from("contributions")
+        .select("*, households(unit_no, name)")
         .gte("contribution_date", `${year}-01-01`)
         .lte("contribution_date", `${year}-12-31`)
         .order("contribution_date", { ascending: true })
-        .returns<ContribEntry[]>(),
+        .returns<ContributionRow[]>(),
     ]);
-    units = (households ?? []).map((h) => ({
-      id: h.id,
-      unit_no: h.unit_no,
-      label: h.unit_no,
-    }));
-    allEntries = contributions ?? [];
-  }
+
+  const units: UnitRow[] = (households ?? []).map((h) => ({
+    id: h.id,
+    unit_no: h.unit_no,
+    label: `${h.unit_no} - ${h.name}`,
+  }));
+  const activeHouseholds = activeHh ?? [];
+  const detailRows = contributions ?? [];
+  const allEntries = detailRows.map((c) => ({
+    household_id: c.household_id,
+    amount: Number(c.amount),
+  }));
 
   units.sort((a, b) => compareUnitNo(a.unit_no, b.unit_no));
   activeHouseholds.sort((a, b) => compareUnitNo(a.unit_no, b.unit_no));
 
-  const householdEntries = allEntries.filter((e) => e.household_id);
-  const externalEntries = allEntries.filter((e) => !e.household_id);
+  const householdEntries = detailRows.filter((c) => c.household_id);
   const externalDetailRows = detailRows.filter((c) => !c.household_id);
 
   // Distinct acara among household-linked entries, in the order they first
@@ -111,7 +70,7 @@ export default async function ContributionsPage({
   const amountMap = new Map<string, number>();
   householdEntries.forEach((e) => {
     const key = `${e.household_id}|${e.event_name}`;
-    amountMap.set(key, (amountMap.get(key) ?? 0) + e.amount);
+    amountMap.set(key, (amountMap.get(key) ?? 0) + Number(e.amount));
   });
 
   const rowTotal = (householdId: string) =>
@@ -122,7 +81,10 @@ export default async function ContributionsPage({
 
   const eventTotals = new Map<string, number>();
   householdEntries.forEach((e) => {
-    eventTotals.set(e.event_name, (eventTotals.get(e.event_name) ?? 0) + e.amount);
+    eventTotals.set(
+      e.event_name,
+      (eventTotals.get(e.event_name) ?? 0) + Number(e.amount)
+    );
   });
   const grandTotal = eventNames.reduce((s, ev) => s + (eventTotals.get(ev) ?? 0), 0);
 
@@ -154,74 +116,69 @@ export default async function ContributionsPage({
         Total sumbangan {year}: <strong>{formatRupiah(yearTotal)}</strong>
       </p>
 
-      {isPengurus && (
-        <div className="bg-white border border-gray-200 rounded-lg p-6 mb-8">
-          <h2 className="text-sm font-medium text-gray-700 mb-4">
-            Catat Sumbangan
-          </h2>
-          {sp.success && (
-            <div className="mb-4 text-sm text-green-700 bg-green-50 border border-green-200 rounded px-3 py-2">
-              Sumbangan berhasil dicatat.
-            </div>
-          )}
-          <form
-            action={addContribution}
-            className="grid sm:grid-cols-6 gap-3"
+      <div className="bg-white border border-gray-200 rounded-lg p-6 mb-8">
+        <h2 className="text-sm font-medium text-gray-700 mb-4">
+          Catat Sumbangan
+        </h2>
+        {sp.success && (
+          <div className="mb-4 text-sm text-green-700 bg-green-50 border border-green-200 rounded px-3 py-2">
+            Sumbangan berhasil dicatat.
+          </div>
+        )}
+        <form action={addContribution} className="grid sm:grid-cols-6 gap-3">
+          <div className="sm:col-span-2">
+            <HouseholdSelect
+              households={activeHouseholds}
+              name="household_id"
+              placeholder="Pilih warga (kosongkan jika bukan warga)..."
+              className="w-full rounded border border-gray-300 px-3 py-2 text-sm"
+            />
+          </div>
+          <input
+            name="source_name"
+            placeholder="Atau sumber lain (mis. Sumbangan Developer)"
+            className="rounded border border-gray-300 px-3 py-2 text-sm sm:col-span-2"
+          />
+          <input
+            name="event_name"
+            placeholder="Acara (mis. Sumbangan Agustusan 2026)"
+            required
+            className="rounded border border-gray-300 px-3 py-2 text-sm sm:col-span-2"
+          />
+          <input
+            type="number"
+            name="amount"
+            placeholder="Jumlah (Rp)"
+            required
+            className="rounded border border-gray-300 px-3 py-2 text-sm"
+          />
+          <input
+            type="date"
+            name="contribution_date"
+            defaultValue={new Date().toISOString().slice(0, 10)}
+            className="rounded border border-gray-300 px-3 py-2 text-sm"
+          />
+          <select
+            name="kas_type"
+            defaultValue="bri"
+            className="rounded border border-gray-300 px-3 py-2 text-sm"
           >
-            <div className="sm:col-span-2">
-              <HouseholdSelect
-                households={activeHouseholds}
-                name="household_id"
-                placeholder="Pilih warga (kosongkan jika bukan warga)..."
-                className="w-full rounded border border-gray-300 px-3 py-2 text-sm"
-              />
-            </div>
-            <input
-              name="source_name"
-              placeholder="Atau sumber lain (mis. Sumbangan Developer)"
-              className="rounded border border-gray-300 px-3 py-2 text-sm sm:col-span-2"
-            />
-            <input
-              name="event_name"
-              placeholder="Acara (mis. Sumbangan Agustusan 2026)"
-              required
-              className="rounded border border-gray-300 px-3 py-2 text-sm sm:col-span-2"
-            />
-            <input
-              type="number"
-              name="amount"
-              placeholder="Jumlah (Rp)"
-              required
-              className="rounded border border-gray-300 px-3 py-2 text-sm"
-            />
-            <input
-              type="date"
-              name="contribution_date"
-              defaultValue={new Date().toISOString().slice(0, 10)}
-              className="rounded border border-gray-300 px-3 py-2 text-sm"
-            />
-            <select
-              name="kas_type"
-              defaultValue="bri"
-              className="rounded border border-gray-300 px-3 py-2 text-sm"
-            >
-              <option value="bri">Kas BRI</option>
-              <option value="tunai">Petty Cash</option>
-            </select>
-            <input
-              name="note"
-              placeholder="Catatan (opsional)"
-              className="rounded border border-gray-300 px-3 py-2 text-sm sm:col-span-2"
-            />
-            <button
-              type="submit"
-              className="sm:col-span-6 bg-blue-600 text-white rounded px-4 py-2 text-sm font-medium hover:bg-blue-700 transition"
-            >
-              Simpan
-            </button>
-          </form>
-        </div>
-      )}
+            <option value="bri">Kas BRI</option>
+            <option value="tunai">Petty Cash</option>
+          </select>
+          <input
+            name="note"
+            placeholder="Catatan (opsional)"
+            className="rounded border border-gray-300 px-3 py-2 text-sm sm:col-span-2"
+          />
+          <button
+            type="submit"
+            className="sm:col-span-6 bg-blue-600 text-white rounded px-4 py-2 text-sm font-medium hover:bg-blue-700 transition"
+          >
+            Simpan
+          </button>
+        </form>
+      </div>
 
       <SumbanganTabs
         warga={
@@ -304,55 +261,39 @@ export default async function ContributionsPage({
                       <th className="px-4 py-2 font-medium">Acara</th>
                       <th className="px-4 py-2 font-medium">Jumlah</th>
                       <th className="px-4 py-2 font-medium">Kas</th>
-                      {isPengurus && <th className="px-4 py-2 font-medium"></th>}
+                      <th className="px-4 py-2 font-medium"></th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-100">
-                    {isPengurus
-                      ? externalDetailRows.map((c) => (
-                          <tr key={c.id}>
-                            <td className="px-4 py-2 whitespace-nowrap">
-                              {new Date(c.contribution_date).toLocaleDateString("id-ID")}
-                            </td>
-                            <td className="px-4 py-2">{c.source_name || "—"}</td>
-                            <td className="px-4 py-2">{c.event_name}</td>
-                            <td className="px-4 py-2 text-gray-500">
-                              {formatRupiah(Number(c.amount))}
-                            </td>
-                            <td className="px-4 py-2 text-gray-500">
-                              {KAS_LABELS[c.kas_type]}
-                            </td>
-                            <td className="px-4 py-2 text-right">
-                              <form action={deleteContribution.bind(null, c.id)}>
-                                <button
-                                  type="submit"
-                                  className="text-xs text-red-600 hover:text-red-700 transition"
-                                >
-                                  Hapus
-                                </button>
-                              </form>
-                            </td>
-                          </tr>
-                        ))
-                      : externalEntries.map((c, i) => (
-                          <tr key={i}>
-                            <td className="px-4 py-2 whitespace-nowrap">
-                              {new Date(c.contribution_date).toLocaleDateString("id-ID")}
-                            </td>
-                            <td className="px-4 py-2">{c.source_name || "—"}</td>
-                            <td className="px-4 py-2">{c.event_name}</td>
-                            <td className="px-4 py-2 text-gray-500">
-                              {formatRupiah(Number(c.amount))}
-                            </td>
-                            <td className="px-4 py-2 text-gray-500">
-                              {KAS_LABELS[c.kas_type]}
-                            </td>
-                          </tr>
-                        ))}
-                    {(isPengurus ? externalDetailRows.length : externalEntries.length) === 0 && (
+                    {externalDetailRows.map((c) => (
+                      <tr key={c.id}>
+                        <td className="px-4 py-2 whitespace-nowrap">
+                          {new Date(c.contribution_date).toLocaleDateString("id-ID")}
+                        </td>
+                        <td className="px-4 py-2">{c.source_name || "—"}</td>
+                        <td className="px-4 py-2">{c.event_name}</td>
+                        <td className="px-4 py-2 text-gray-500">
+                          {formatRupiah(Number(c.amount))}
+                        </td>
+                        <td className="px-4 py-2 text-gray-500">
+                          {KAS_LABELS[c.kas_type]}
+                        </td>
+                        <td className="px-4 py-2 text-right">
+                          <form action={deleteContribution.bind(null, c.id)}>
+                            <button
+                              type="submit"
+                              className="text-xs text-red-600 hover:text-red-700 transition"
+                            >
+                              Hapus
+                            </button>
+                          </form>
+                        </td>
+                      </tr>
+                    ))}
+                    {externalDetailRows.length === 0 && (
                       <tr>
                         <td
-                          colSpan={isPengurus ? 6 : 5}
+                          colSpan={6}
                           className="px-4 py-6 text-center text-gray-400"
                         >
                           Belum ada sumbangan lain-lain tahun ini.
@@ -364,65 +305,61 @@ export default async function ContributionsPage({
               </div>
             </div>
 
-            {isPengurus && (
-              <div>
-                <h2 className="text-sm font-medium text-gray-700 mb-2">
-                  Kelola Sumbangan Warga
-                </h2>
-                <div className="bg-white border border-gray-200 rounded-lg overflow-hidden">
-                  <table className="w-full text-sm">
-                    <thead className="bg-gray-50 text-gray-500 text-left">
-                      <tr>
-                        <th className="px-4 py-2 font-medium">Tanggal</th>
-                        <th className="px-4 py-2 font-medium">Warga</th>
-                        <th className="px-4 py-2 font-medium">Acara</th>
-                        <th className="px-4 py-2 font-medium">Jumlah</th>
-                        <th className="px-4 py-2 font-medium">Kas</th>
-                        <th className="px-4 py-2 font-medium"></th>
+            <div>
+              <h2 className="text-sm font-medium text-gray-700 mb-2">
+                Kelola Sumbangan Warga
+              </h2>
+              <div className="bg-white border border-gray-200 rounded-lg overflow-hidden">
+                <table className="w-full text-sm">
+                  <thead className="bg-gray-50 text-gray-500 text-left">
+                    <tr>
+                      <th className="px-4 py-2 font-medium">Tanggal</th>
+                      <th className="px-4 py-2 font-medium">Warga</th>
+                      <th className="px-4 py-2 font-medium">Acara</th>
+                      <th className="px-4 py-2 font-medium">Jumlah</th>
+                      <th className="px-4 py-2 font-medium">Kas</th>
+                      <th className="px-4 py-2 font-medium"></th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-100">
+                    {householdEntries.map((c) => (
+                      <tr key={c.id}>
+                        <td className="px-4 py-2 whitespace-nowrap">
+                          {new Date(c.contribution_date).toLocaleDateString("id-ID")}
+                        </td>
+                        <td className="px-4 py-2">
+                          {c.households?.unit_no} - {c.households?.name}
+                        </td>
+                        <td className="px-4 py-2">{c.event_name}</td>
+                        <td className="px-4 py-2 text-gray-500">
+                          {formatRupiah(Number(c.amount))}
+                        </td>
+                        <td className="px-4 py-2 text-gray-500">
+                          {KAS_LABELS[c.kas_type]}
+                        </td>
+                        <td className="px-4 py-2 text-right">
+                          <form action={deleteContribution.bind(null, c.id)}>
+                            <button
+                              type="submit"
+                              className="text-xs text-red-600 hover:text-red-700 transition"
+                            >
+                              Hapus
+                            </button>
+                          </form>
+                        </td>
                       </tr>
-                    </thead>
-                    <tbody className="divide-y divide-gray-100">
-                      {detailRows
-                        .filter((c) => c.household_id)
-                        .map((c) => (
-                          <tr key={c.id}>
-                            <td className="px-4 py-2 whitespace-nowrap">
-                              {new Date(c.contribution_date).toLocaleDateString("id-ID")}
-                            </td>
-                            <td className="px-4 py-2">
-                              {c.households?.unit_no} - {c.households?.name}
-                            </td>
-                            <td className="px-4 py-2">{c.event_name}</td>
-                            <td className="px-4 py-2 text-gray-500">
-                              {formatRupiah(Number(c.amount))}
-                            </td>
-                            <td className="px-4 py-2 text-gray-500">
-                              {KAS_LABELS[c.kas_type]}
-                            </td>
-                            <td className="px-4 py-2 text-right">
-                              <form action={deleteContribution.bind(null, c.id)}>
-                                <button
-                                  type="submit"
-                                  className="text-xs text-red-600 hover:text-red-700 transition"
-                                >
-                                  Hapus
-                                </button>
-                              </form>
-                            </td>
-                          </tr>
-                        ))}
-                      {detailRows.filter((c) => c.household_id).length === 0 && (
-                        <tr>
-                          <td colSpan={6} className="px-4 py-6 text-center text-gray-400">
-                            Belum ada sumbangan warga tercatat tahun ini.
-                          </td>
-                        </tr>
-                      )}
-                    </tbody>
-                  </table>
-                </div>
+                    ))}
+                    {householdEntries.length === 0 && (
+                      <tr>
+                        <td colSpan={6} className="px-4 py-6 text-center text-gray-400">
+                          Belum ada sumbangan warga tercatat tahun ini.
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
               </div>
-            )}
+            </div>
           </div>
         }
       />

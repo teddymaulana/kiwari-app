@@ -310,7 +310,7 @@ export default async function ReportPage({
 
       <div className="flex flex-wrap gap-4 mb-6">
         {isPengurus && (
-          <div className="bg-white border border-gray-200 rounded-lg p-4 w-55">
+          <div className="bg-white border border-gray-200 rounded-lg p-4 w-full sm:w-55">
             <p className="text-xs text-gray-500 mb-1">Kas Saat Ini</p>
             <p
               className={`text-2xl font-semibold ${
@@ -344,7 +344,7 @@ export default async function ReportPage({
             </p>
           </div>
         )}
-        <div className="bg-white border border-gray-200 rounded-lg p-4 w-55">
+        <div className="bg-white border border-gray-200 rounded-lg p-4 w-full sm:w-55">
           <p className="text-xs text-gray-500 mb-1">Total Terkumpul {periodLabel}</p>
           <p className="text-2xl font-semibold text-gray-900">
             {formatRupiah(cardTotalTerkumpul)}
@@ -371,7 +371,7 @@ export default async function ReportPage({
             )}
           </div>
         </div>
-        <div className="bg-white border border-gray-200 rounded-lg p-4 w-55">
+        <div className="bg-white border border-gray-200 rounded-lg p-4 w-full sm:w-55">
           <p className="text-xs text-gray-500 mb-1">Total Pengeluaran {periodLabel}</p>
           <p className="text-2xl font-semibold text-gray-900">
             {formatRupiah(cardExpenseTotal)}

@@ -11,7 +11,7 @@ const links = [
   { href: "/dashboard", label: "IPL" },
   { href: "/payments/new", label: "Catat Pembayaran", pengurusOnly: true },
   { href: "/households", label: "Warga", pengurusOnly: true },
-  { href: "/contributions", label: "Sumbangan" },
+  { href: "/contributions", label: "Sumbangan", pengurusOnly: true },
   { href: "/expenses", label: "Pengeluaran" },
   { href: "/piutang", label: "Piutang", pengurusOnly: true },
   { href: "/settings", label: "Pengaturan", pengurusOnly: true },
