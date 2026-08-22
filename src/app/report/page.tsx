@@ -117,7 +117,12 @@ export default async function ReportPage({
           .from("contributions_public")
           .select("amount, kas_type, contribution_date, event_name, household_id")
           .order("contribution_date", { ascending: true }),
-    supabase.from("expenses").select("amount, kas_type, expense_date"),
+    isPengurus
+      ? supabase.from("expenses").select("amount, kas_type, expense_date")
+      : supabase
+          .from("expenses")
+          .select("amount, kas_type, expense_date")
+          .eq("status", "released"),
     supabase.from("cash_transfers").select("amount, direction"),
     supabase.from("personnel_loans").select("amount, kas_type, transaction_type, affects_kas"),
     supabase.from("settings").select("*").eq("id", 1).single<Settings>(),
@@ -344,7 +349,7 @@ export default async function ReportPage({
             </p>
           </div>
         )}
-        <div className="bg-white border border-gray-200 rounded-lg p-4 w-full sm:w-55">
+        <div className="bg-white border border-gray-200 rounded-lg p-4 w-full sm:w-87.5">
           <p className="text-xs text-gray-500 mb-1">Total Terkumpul {periodLabel}</p>
           <p className="text-2xl font-semibold text-gray-900">
             {formatRupiah(cardTotalTerkumpul)}
@@ -371,7 +376,7 @@ export default async function ReportPage({
             )}
           </div>
         </div>
-        <div className="bg-white border border-gray-200 rounded-lg p-4 w-full sm:w-55">
+        <div className="bg-white border border-gray-200 rounded-lg p-4 w-full sm:w-87.5">
           <p className="text-xs text-gray-500 mb-1">Total Pengeluaran {periodLabel}</p>
           <p className="text-2xl font-semibold text-gray-900">
             {formatRupiah(cardExpenseTotal)}

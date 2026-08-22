@@ -36,6 +36,62 @@ export async function addExpense(formData: FormData) {
   revalidatePath("/report");
 }
 
+export async function releaseExpense(id: string) {
+  const user = await getCurrentUser();
+  if (user?.role !== "pengurus") return;
+
+  const supabase = await createClient();
+
+  const { data: expense } = await supabase
+    .from("expenses")
+    .update({ status: "released" })
+    .eq("id", id)
+    .select("description, amount")
+    .single();
+
+  if (expense) {
+    await supabase.from("activity_log").insert({
+      actor_email: user.email,
+      action: "expense.release",
+      detail: `${expense.description} - ${expense.amount}`,
+    });
+  }
+
+  revalidatePath("/expenses");
+  revalidatePath("/report");
+}
+
+// Releases exactly the draft ids passed in (the currently-visible set on
+// the page, respecting whatever month filter is active) rather than every
+// draft ever recorded — bulk version of releaseExpense above.
+export async function releaseAllDrafts(formData: FormData) {
+  const user = await getCurrentUser();
+  if (user?.role !== "pengurus") return;
+
+  const ids = formData.getAll("ids").map(String);
+  if (ids.length === 0) return;
+
+  const supabase = await createClient();
+
+  const { data: released } = await supabase
+    .from("expenses")
+    .update({ status: "released" })
+    .eq("status", "draft")
+    .in("id", ids)
+    .select("description, amount");
+
+  if (released && released.length > 0) {
+    await supabase.from("activity_log").insert({
+      actor_email: user.email,
+      action: "expense.release_all",
+      detail: `${released.length} pengeluaran dirilis`,
+    });
+  }
+
+  revalidatePath("/expenses");
+  revalidatePath("/report");
+}
+
 export async function deleteExpense(id: string) {
   const user = await getCurrentUser();
   if (user?.role !== "pengurus") return;

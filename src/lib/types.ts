@@ -56,7 +56,13 @@ export type Expense = {
   amount: number;
   recorded_by: string | null;
   kas_type: KasType;
+  status: "draft" | "released";
   created_at: string;
+};
+
+export const EXPENSE_STATUS_LABELS: Record<Expense["status"], string> = {
+  draft: "Draft",
+  released: "Dirilis",
 };
 
 // direction 'bri_to_tunai' = cash withdrawn from bank BRI into petty cash;

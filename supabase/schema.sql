@@ -298,9 +298,9 @@ from contributions;
 grant select on contributions_public to authenticated;
 
 -- Community expenses (Pengeluaran) — e.g. keamanan, kebersihan, perbaikan.
--- Not tied to a household, so no privacy concern reading it: any
--- authenticated user (warga included) can see the full history, but only
--- pengurus can record one.
+-- Not tied to a household, so no privacy concern reading it: pengurus sees
+-- the full history immediately, but warga only sees an entry once it's
+-- released (status = 'released') — see status column below.
 create table if not exists expenses (
   id uuid primary key default gen_random_uuid(),
   expense_date date not null default current_date,
@@ -317,11 +317,17 @@ create index if not exists expenses_date_idx on expenses (expense_date);
 alter table expenses add column if not exists kas_type text
   not null default 'bri' check (kas_type in ('tunai', 'bri'));
 
+-- New entries start as 'draft': visible and counted in pengurus's own
+-- Laporan right away, but hidden from warga until a pengurus releases it
+-- (see "authenticated read expenses" policy below).
+alter table expenses add column if not exists status text
+  not null default 'draft' check (status in ('draft', 'released'));
+
 alter table expenses enable row level security;
 
 drop policy if exists "authenticated read expenses" on expenses;
 create policy "authenticated read expenses" on expenses
-  for select to authenticated using (true);
+  for select to authenticated using (status = 'released' or is_pengurus());
 
 drop policy if exists "pengurus write expenses" on expenses;
 create policy "pengurus write expenses" on expenses

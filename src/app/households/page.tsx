@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentUser } from "@/lib/auth";
 import { addHousehold, toggleHouseholdActive, sendLoginInvite } from "./actions";
+import ToggleActiveButton from "./ToggleActiveButton";
 import type { Household } from "@/lib/types";
 import { compareUnitNo } from "@/lib/types";
 
@@ -160,21 +161,15 @@ export default async function HouseholdsPage({
                       </button>
                     </form>
                   )}
-                  <form
+                  <ToggleActiveButton
                     action={toggleHouseholdActive.bind(
                       null,
                       h.id,
                       h.is_active
                     )}
-                    className="inline"
-                  >
-                    <button
-                      type="submit"
-                      className="text-xs text-gray-500 hover:text-blue-600 transition"
-                    >
-                      {h.is_active ? "Nonaktifkan" : "Aktifkan"}
-                    </button>
-                  </form>
+                    householdLabel={`${h.unit_no} - ${h.name}`}
+                    isActive={h.is_active}
+                  />
                 </td>
               </tr>
             ))}
