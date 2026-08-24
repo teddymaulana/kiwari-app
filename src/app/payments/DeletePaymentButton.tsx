@@ -10,6 +10,7 @@ export default function DeletePaymentButton({
   description: string;
 }) {
   const [open, setOpen] = useState(false);
+  const [pending, setPending] = useState(false);
 
   return (
     <>
@@ -43,19 +44,23 @@ export default function DeletePaymentButton({
               <button
                 type="button"
                 onClick={() => setOpen(false)}
-                className="rounded border border-gray-300 px-3 py-1.5 text-sm hover:bg-gray-50 transition"
+                disabled={pending}
+                className="rounded border border-gray-300 px-3 py-1.5 text-sm hover:bg-gray-50 transition disabled:opacity-60 disabled:cursor-not-allowed"
               >
                 Batal
               </button>
               <button
                 type="button"
+                disabled={pending}
                 onClick={async () => {
+                  setPending(true);
                   await action();
+                  setPending(false);
                   setOpen(false);
                 }}
-                className="rounded bg-red-600 px-3 py-1.5 text-sm text-white hover:bg-red-700 transition"
+                className="rounded bg-red-600 px-3 py-1.5 text-sm text-white hover:bg-red-700 transition disabled:opacity-60 disabled:cursor-not-allowed"
               >
-                Hapus
+                {pending ? "Menghapus..." : "Hapus"}
               </button>
             </div>
           </div>

@@ -7,6 +7,7 @@ import { addExpense, deleteExpense, releaseExpense, releaseAllDrafts } from "./a
 import DeleteExpenseButton from "./DeleteExpenseButton";
 import KeteranganCell from "./KeteranganCell";
 import ReleaseAllDraftsButton from "./ReleaseAllDraftsButton";
+import SubmitButton from "@/components/SubmitButton";
 import type { Expense } from "@/lib/types";
 import { formatRupiah, KAS_LABELS, EXPENSE_STATUS_LABELS, MONTH_NAMES } from "@/lib/types";
 
@@ -145,12 +146,12 @@ export default async function ExpensesPage({
                 className="w-full text-sm text-gray-600 file:mr-3 file:py-1.5 file:px-3 file:rounded file:border-0 file:bg-gray-100 file:text-sm file:text-gray-700"
               />
             </div>
-            <button
-              type="submit"
+            <SubmitButton
+              pendingText="Menyimpan..."
               className="sm:col-span-5 bg-blue-600 text-white rounded px-4 py-2 text-sm font-medium hover:bg-blue-700 transition"
             >
               Simpan
-            </button>
+            </SubmitButton>
           </form>
         </div>
       )}
@@ -243,12 +244,12 @@ export default async function ExpensesPage({
                     <td className="px-4 py-2 text-right">
                       {e.status === "draft" && (
                         <form action={releaseExpense.bind(null, e.id)}>
-                          <button
-                            type="submit"
+                          <SubmitButton
+                            pendingText="Merilis..."
                             className="text-xs text-blue-600 hover:text-blue-700 transition"
                           >
                             Rilis ke Warga
-                          </button>
+                          </SubmitButton>
                         </form>
                       )}
                     </td>

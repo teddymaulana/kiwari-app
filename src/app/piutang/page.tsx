@@ -4,6 +4,7 @@ import { getCurrentUser } from "@/lib/auth";
 import { addPersonnelLoan, deletePersonnelLoan } from "./actions";
 import type { PersonnelLoan } from "@/lib/types";
 import { formatRupiah, KAS_LABELS } from "@/lib/types";
+import SubmitButton from "@/components/SubmitButton";
 
 export default async function PiutangPage() {
   const user = await getCurrentUser();
@@ -113,12 +114,12 @@ export default async function PiutangPage() {
             placeholder="Catatan (opsional)"
             className="rounded border border-gray-300 px-3 py-2 text-sm sm:col-span-3"
           />
-          <button
-            type="submit"
+          <SubmitButton
+            pendingText="Menyimpan..."
             className="sm:col-span-5 bg-blue-600 text-white rounded px-4 py-2 text-sm font-medium hover:bg-blue-700 transition"
           >
             Simpan
-          </button>
+          </SubmitButton>
         </form>
       </div>
 
@@ -196,12 +197,12 @@ export default async function PiutangPage() {
                 </td>
                 <td className="px-4 py-2 text-right">
                   <form action={deletePersonnelLoan.bind(null, l.id)}>
-                    <button
-                      type="submit"
+                    <SubmitButton
+                      pendingText="Menghapus..."
                       className="text-xs text-red-600 hover:text-red-700 transition"
                     >
                       Hapus
-                    </button>
+                    </SubmitButton>
                   </form>
                 </td>
               </tr>

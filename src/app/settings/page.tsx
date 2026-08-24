@@ -10,6 +10,7 @@ import {
 import type { Household, Settings } from "@/lib/types";
 import { formatRupiah, compareUnitNo } from "@/lib/types";
 import HouseholdSelect from "@/components/HouseholdSelect";
+import SubmitButton from "@/components/SubmitButton";
 
 export default async function SettingsPage({
   searchParams,
@@ -125,12 +126,12 @@ export default async function SettingsPage({
             placeholder="Catatan (opsional)"
             className="rounded border border-gray-300 px-3 py-2 text-sm sm:col-span-3"
           />
-          <button
-            type="submit"
+          <SubmitButton
+            pendingText="Menyimpan..."
             className="bg-blue-600 text-white rounded px-4 py-2 text-sm font-medium hover:bg-blue-700 transition"
           >
             Simpan
-          </button>
+          </SubmitButton>
         </form>
       </div>
 
@@ -223,12 +224,12 @@ export default async function SettingsPage({
             rows={3}
             className="w-full rounded border border-gray-300 px-3 py-2 text-sm"
           />
-          <button
-            type="submit"
+          <SubmitButton
+            pendingText="Mengirim..."
             className="bg-blue-600 text-white rounded px-4 py-2 text-sm font-medium hover:bg-blue-700 transition"
           >
             Kirim
-          </button>
+          </SubmitButton>
         </form>
       </div>
 
@@ -281,12 +282,12 @@ export default async function SettingsPage({
               className="w-full rounded border border-gray-300 px-3 py-2 text-sm"
             />
           </div>
-          <button
-            type="submit"
+          <SubmitButton
+            pendingText="Membuat..."
             className="bg-blue-600 text-white rounded px-4 py-2 text-sm font-medium hover:bg-blue-700 transition"
           >
             Buat User
-          </button>
+          </SubmitButton>
         </form>
       </div>
 

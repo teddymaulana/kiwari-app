@@ -2,6 +2,7 @@ import { createClient } from "@/lib/supabase/server";
 import { getCurrentUser } from "@/lib/auth";
 import { updatePhone, updatePassword } from "./actions";
 import type { Household } from "@/lib/types";
+import SubmitButton from "@/components/SubmitButton";
 
 export default async function ProfilePage({
   searchParams,
@@ -80,12 +81,12 @@ export default async function ProfilePage({
               defaultValue={household?.phone ?? ""}
               className="flex-1 rounded border border-gray-300 px-3 py-2 text-sm"
             />
-            <button
-              type="submit"
+            <SubmitButton
+              pendingText="Menyimpan..."
               className="bg-blue-600 text-white rounded px-4 py-2 text-sm font-medium hover:bg-blue-700 transition"
             >
               Simpan
-            </button>
+            </SubmitButton>
           </form>
         </div>
       )}
@@ -137,12 +138,12 @@ export default async function ProfilePage({
               className="w-full rounded border border-gray-300 px-3 py-2 text-sm"
             />
           </div>
-          <button
-            type="submit"
+          <SubmitButton
+            pendingText="Menyimpan..."
             className="w-full bg-blue-600 text-white rounded py-2 text-sm font-medium hover:bg-blue-700 transition"
           >
             Simpan Password
-          </button>
+          </SubmitButton>
         </form>
       </div>
     </div>

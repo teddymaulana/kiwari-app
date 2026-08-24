@@ -5,6 +5,7 @@ import { createClient } from "@/lib/supabase/server";
 import { getCurrentUser } from "@/lib/auth";
 import { addHousehold, toggleHouseholdActive, sendLoginInvite } from "./actions";
 import ToggleActiveButton from "./ToggleActiveButton";
+import SubmitButton from "@/components/SubmitButton";
 import type { Household } from "@/lib/types";
 import { compareUnitNo } from "@/lib/types";
 
@@ -97,12 +98,12 @@ export default async function HouseholdsPage({
             placeholder="Nama lain yang bisa transfer, pisahkan koma (mis. istri/suami — opsional)"
             className="w-full rounded border border-gray-300 px-3 py-2 text-sm"
           />
-          <button
-            type="submit"
+          <SubmitButton
+            pendingText="Menyimpan..."
             className="bg-blue-600 text-white rounded px-4 py-2 text-sm font-medium hover:bg-blue-700 transition"
           >
             Tambah
-          </button>
+          </SubmitButton>
         </form>
       </div>
 
@@ -153,12 +154,12 @@ export default async function HouseholdsPage({
                       action={sendLoginInvite.bind(null, h.id)}
                       className="inline"
                     >
-                      <button
-                        type="submit"
+                      <SubmitButton
+                        pendingText="Mengirim..."
                         className="text-xs text-blue-600 hover:text-blue-700 transition"
                       >
                         Kirim Info Login
-                      </button>
+                      </SubmitButton>
                     </form>
                   )}
                   <ToggleActiveButton

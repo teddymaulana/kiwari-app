@@ -7,6 +7,7 @@ import SumbanganTabs from "./SumbanganTabs";
 import type { Contribution, Household } from "@/lib/types";
 import { formatRupiah, KAS_LABELS, compareUnitNo } from "@/lib/types";
 import HouseholdSelect from "@/components/HouseholdSelect";
+import SubmitButton from "@/components/SubmitButton";
 
 type UnitRow = { id: string; unit_no: string; label: string };
 type ContributionRow = Contribution & {
@@ -191,12 +192,12 @@ export default async function ContributionsPage({
             placeholder="Catatan (opsional)"
             className="rounded border border-gray-300 px-3 py-2 text-sm sm:col-span-2"
           />
-          <button
-            type="submit"
+          <SubmitButton
+            pendingText="Menyimpan..."
             className="sm:col-span-6 bg-blue-600 text-white rounded px-4 py-2 text-sm font-medium hover:bg-blue-700 transition"
           >
             Simpan
-          </button>
+          </SubmitButton>
         </form>
       </div>
 

@@ -5,6 +5,7 @@ import { submitPaymentClaim } from "./actions";
 import type { Household } from "@/lib/types";
 import { MONTH_NAMES, formatRupiah } from "@/lib/types";
 import HouseholdSelect from "@/components/HouseholdSelect";
+import SubmitButton from "@/components/SubmitButton";
 
 type HouseholdOption = Pick<Household, "id" | "unit_no" | "name">;
 
@@ -196,13 +197,13 @@ export default function BayarIplForm({
         />
       </div>
 
-      <button
-        type="submit"
+      <SubmitButton
         disabled={!householdId || selectedMonths.length === 0}
-        className="w-full bg-blue-600 text-white rounded py-2 text-sm font-medium hover:bg-blue-700 transition disabled:opacity-50 disabled:cursor-not-allowed"
+        pendingText="Mengirim..."
+        className="w-full bg-blue-600 text-white rounded py-2 text-sm font-medium hover:bg-blue-700 transition"
       >
         Kirim Klaim
-      </button>
+      </SubmitButton>
     </form>
   );
 }

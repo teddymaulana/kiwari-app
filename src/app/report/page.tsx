@@ -182,19 +182,17 @@ export default async function ReportPage({
   }
   const kasSaatIni = kasBalance.tunai + kasBalance.bri;
 
-  // Only warga-linked acara show in the IPL/Sumbangan card below — an
-  // external source (e.g. "Sumbangan Developer", no household_id) is
-  // tracked separately under Lain-lain on /contributions, not mixed in
-  // here.
-  const wargaContributionsThisYear = (allContributions ?? []).filter(
-    (c) => c.household_id && c.contribution_date?.startsWith(String(year))
+  // Every Sumbangan this year, warga-linked or external (Lain-lain, e.g.
+  // "Sumbangan Developer") — all of it counts toward Total Terkumpul.
+  const contributionsThisYear = (allContributions ?? []).filter((c) =>
+    c.contribution_date?.startsWith(String(year))
   );
 
   // Distinct acara this year, in the order they first appear (fetched
   // oldest-first) — shown as separate lines in the IPL/Sumbangan card.
   const contributionEventNames: string[] = [];
   const contributionByEvent = new Map<string, number>();
-  wargaContributionsThisYear.forEach((c) => {
+  contributionsThisYear.forEach((c) => {
     if (!contributionEventNames.includes(c.event_name)) {
       contributionEventNames.push(c.event_name);
     }
@@ -204,11 +202,11 @@ export default async function ReportPage({
     );
   });
 
-  // "Total Terkumpul" is everything collected from warga this year — IPL
-  // plus every acara (THR, Sumbangan, ...) — shown as one figure with each
+  // "Total Terkumpul" is everything collected this year — IPL plus every
+  // acara (THR, Sumbangan, Lain-lain, ...) — shown as one figure with each
   // source broken out below it.
   const totalTerkumpul =
-    yearTotal + wargaContributionsThisYear.reduce((s, c) => s + Number(c.amount), 0);
+    yearTotal + contributionsThisYear.reduce((s, c) => s + Number(c.amount), 0);
 
   const expensesThisYear = (allExpenses ?? []).filter((e) =>
     e.expense_date?.startsWith(String(year))
@@ -230,7 +228,7 @@ export default async function ReportPage({
     // these, so e.g. Agustus shows both IPL Agustus and Sumbangan
     // Agustusan 2026 together instead of one line per household.
     const contributionTotalsThisMonth = new Map<string, number>();
-    wargaContributionsThisYear
+    contributionsThisYear
       .filter((c) => c.contribution_date?.startsWith(`${year}-${monthStr}`))
       .forEach((c) => {
         contributionTotalsThisMonth.set(

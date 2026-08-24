@@ -1,6 +1,7 @@
 import Image from "next/image";
 import { signIn } from "./actions";
 import BayarIplForm from "./BayarIplForm";
+import SubmitButton from "@/components/SubmitButton";
 import { createAdminClient } from "@/lib/supabase/admin";
 import type { Household, Settings } from "@/lib/types";
 import { compareUnitNo } from "@/lib/types";
@@ -91,12 +92,12 @@ export default async function LoginPage({
             className="w-full rounded border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
           />
         </div>
-        <button
-          type="submit"
+        <SubmitButton
+          pendingText="Masuk..."
           className="w-full bg-blue-600 text-white rounded py-2 text-sm font-medium hover:bg-blue-700 transition"
         >
           Masuk
-        </button>
+        </SubmitButton>
       </form>
     </>
   );

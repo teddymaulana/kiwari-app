@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { submitOwnPaymentClaim } from "./actions";
 import { MONTH_NAMES, formatRupiah } from "@/lib/types";
+import SubmitButton from "@/components/SubmitButton";
 
 export default function BayarIplForm({
   defaultAmount,
@@ -100,13 +101,13 @@ export default function BayarIplForm({
         />
       </div>
 
-      <button
-        type="submit"
+      <SubmitButton
         disabled={selectedMonths.length === 0}
-        className="w-full bg-blue-600 text-white rounded py-2 text-sm font-medium hover:bg-blue-700 transition disabled:opacity-50 disabled:cursor-not-allowed"
+        pendingText="Mengirim..."
+        className="w-full bg-blue-600 text-white rounded py-2 text-sm font-medium hover:bg-blue-700 transition"
       >
         Kirim Klaim
-      </button>
+      </SubmitButton>
     </form>
   );
 }

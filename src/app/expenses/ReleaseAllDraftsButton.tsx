@@ -10,6 +10,7 @@ export default function ReleaseAllDraftsButton({
   ids: string[];
 }) {
   const [open, setOpen] = useState(false);
+  const [pending, setPending] = useState(false);
   const count = ids.length;
 
   return (
@@ -45,21 +46,25 @@ export default function ReleaseAllDraftsButton({
               <button
                 type="button"
                 onClick={() => setOpen(false)}
-                className="rounded border border-gray-300 px-3 py-1.5 text-sm hover:bg-gray-50 transition"
+                disabled={pending}
+                className="rounded border border-gray-300 px-3 py-1.5 text-sm hover:bg-gray-50 transition disabled:opacity-60 disabled:cursor-not-allowed"
               >
                 Batal
               </button>
               <button
                 type="button"
+                disabled={pending}
                 onClick={async () => {
+                  setPending(true);
                   const formData = new FormData();
                   ids.forEach((id) => formData.append("ids", id));
                   await action(formData);
+                  setPending(false);
                   setOpen(false);
                 }}
-                className="rounded bg-blue-600 px-3 py-1.5 text-sm text-white hover:bg-blue-700 transition"
+                className="rounded bg-blue-600 px-3 py-1.5 text-sm text-white hover:bg-blue-700 transition disabled:opacity-60 disabled:cursor-not-allowed"
               >
-                Rilis Semua
+                {pending ? "Memproses..." : "Rilis Semua"}
               </button>
             </div>
           </div>

@@ -4,6 +4,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { getCurrentUser } from "@/lib/auth";
 import { confirmPaymentClaim, rejectPaymentClaim } from "./actions";
 import RecordPaymentForm from "./RecordPaymentForm";
+import SubmitButton from "@/components/SubmitButton";
 import type { Household, Payment, Settings } from "@/lib/types";
 import { MONTH_NAMES, formatRupiah, compareUnitNo } from "@/lib/types";
 
@@ -109,20 +110,20 @@ export default async function NewPaymentPage({
                   </a>
                 )}
                 <form action={confirmPaymentClaim.bind(null, c.id)}>
-                  <button
-                    type="submit"
+                  <SubmitButton
+                    pendingText="Memproses..."
                     className="text-xs bg-green-600 text-white rounded px-3 py-1.5 hover:bg-green-700 transition"
                   >
                     Konfirmasi
-                  </button>
+                  </SubmitButton>
                 </form>
                 <form action={rejectPaymentClaim.bind(null, c.id)}>
-                  <button
-                    type="submit"
+                  <SubmitButton
+                    pendingText="Memproses..."
                     className="text-xs text-red-600 border border-red-200 rounded px-3 py-1.5 hover:bg-red-50 transition"
                   >
                     Tolak
-                  </button>
+                  </SubmitButton>
                 </form>
               </div>
             </div>
