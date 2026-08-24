@@ -43,6 +43,11 @@ alter table households add column if not exists phone_pasangan text;
 
 alter table households add column if not exists alt_names text;
 
+-- When "Kirim Info Login" (households/actions.ts sendLoginInvite) last
+-- successfully sent this household's login credentials over WhatsApp —
+-- null if never sent. Shown as a "Sent" status on /households.
+alter table households add column if not exists login_invite_sent_at timestamptz;
+
 -- status: "confirmed" (recorded by pengurus, or approved) vs "pending"
 -- (self-submitted via the public "Bayar IPL" form on /login, not yet
 -- verified). Only "confirmed" rows count toward Lunas/totals anywhere in

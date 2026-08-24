@@ -155,8 +155,16 @@ export async function rejectPaymentClaim(id: string) {
     .delete()
     .eq("id", id)
     .eq("status", "pending")
-    .select("household_id, period_year, period_month, amount")
-    .single();
+    .select(
+      "household_id, period_year, period_month, amount, households(unit_no, phone)"
+    )
+    .single<{
+      household_id: string;
+      period_year: number;
+      period_month: number;
+      amount: number;
+      households: { unit_no: string; phone: string | null } | null;
+    }>();
 
   if (claim) {
     await supabase.from("activity_log").insert({
@@ -164,6 +172,20 @@ export async function rejectPaymentClaim(id: string) {
       action: "payment.reject_claim",
       detail: `household ${claim.household_id} - ${claim.period_month}/${claim.period_year} - ${claim.amount}`,
     });
+
+    // Best-effort notification — a WhatsApp failure must never block the
+    // rejection itself, which has already succeeded above.
+    if (claim.households?.phone) {
+      const message = `Halo, klaim pembayaran IPL ${MONTH_NAMES[claim.period_month - 1]} ${claim.period_year} untuk ${claim.households.unit_no} sebesar ${formatRupiah(Number(claim.amount))} ditolak pengurus. Jika ini kesalahan, silakan kirim ulang klaim dengan bukti transfer yang jelas atau hubungi pengurus. Terima kasih!`;
+      const result = await sendWhatsAppMessage(claim.households.phone, message);
+      await supabase.from("activity_log").insert({
+        actor_email: user.email,
+        action: result.success ? "whatsapp.send" : "whatsapp.send_failed",
+        detail: result.success
+          ? `notif penolakan pembayaran -> ${claim.households.phone}`
+          : `notif penolakan pembayaran -> ${claim.households.phone} - ${result.reason}`,
+      });
+    }
   }
 
   revalidatePath("/payments/new");

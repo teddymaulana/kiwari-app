@@ -38,14 +38,24 @@ export default async function HouseholdsPage({
   const { wa_success, wa_error } = await searchParams;
 
   const supabase = await createClient();
-  const { data: households } = await supabase
-    .from("households")
-    .select("*")
-    .returns<Household[]>();
+  const [{ data: households }, { data: pengurusProfiles }] = await Promise.all([
+    supabase.from("households").select("*").returns<Household[]>(),
+    supabase
+      .from("profiles")
+      .select("household_id")
+      .eq("role", "pengurus")
+      .not("household_id", "is", null)
+      .returns<{ household_id: string }[]>(),
+  ]);
 
   households?.sort((a, b) => compareUnitNo(a.unit_no, b.unit_no));
 
   const credentialUnits = unitsWithCredentials();
+  // "Kirim Info Login" only applies to households actually linked to a
+  // pengurus-role login (profiles.role = 'pengurus') — not every warga.
+  const pengurusHouseholdIds = new Set(
+    (pengurusProfiles ?? []).map((p) => p.household_id)
+  );
 
   return (
     <div className="max-w-5xl mx-auto px-4 py-8">
@@ -146,21 +156,23 @@ export default async function HouseholdsPage({
                   </span>
                 </td>
                 <td className="px-4 py-2 text-right whitespace-nowrap space-x-3">
-                  {/* Rolled out to 18G only for now, while this feature is
-                      being tried out — see sendLoginInvite in actions.ts,
-                      which also enforces this server-side. */}
-                  {h.unit_no === "18G" && credentialUnits.has(h.unit_no) && h.phone && (
-                    <form
-                      action={sendLoginInvite.bind(null, h.id)}
-                      className="inline"
-                    >
-                      <SubmitButton
-                        pendingText="Mengirim..."
-                        className="text-xs text-blue-600 hover:text-blue-700 transition"
+                  {pengurusHouseholdIds.has(h.id) && credentialUnits.has(h.unit_no) && h.phone && (
+                    <>
+                      {h.login_invite_sent_at && (
+                        <span className="text-xs text-green-600">Sent</span>
+                      )}
+                      <form
+                        action={sendLoginInvite.bind(null, h.id)}
+                        className="inline"
                       >
-                        Kirim Info Login
-                      </SubmitButton>
-                    </form>
+                        <SubmitButton
+                          pendingText="Mengirim..."
+                          className="text-xs text-blue-600 hover:text-blue-700 transition"
+                        >
+                          Kirim Info Login
+                        </SubmitButton>
+                      </form>
+                    </>
                   )}
                   <ToggleActiveButton
                     action={toggleHouseholdActive.bind(

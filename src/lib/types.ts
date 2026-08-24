@@ -6,6 +6,7 @@ export type Household = {
   phone_pasangan: string | null;
   alt_names: string | null;
   is_active: boolean;
+  login_invite_sent_at: string | null;
   created_at: string;
 };
 

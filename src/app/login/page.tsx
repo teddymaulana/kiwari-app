@@ -2,6 +2,7 @@ import Image from "next/image";
 import { signIn } from "./actions";
 import BayarIplForm from "./BayarIplForm";
 import SubmitButton from "@/components/SubmitButton";
+import ClaimSuccessCard from "@/components/ClaimSuccessCard";
 import { createAdminClient } from "@/lib/supabase/admin";
 import type { Household, Settings } from "@/lib/types";
 import { compareUnitNo } from "@/lib/types";
@@ -33,27 +34,28 @@ export default async function LoginPage({
 
   const bayarIplBody = (
     <>
-      <p className="text-sm text-gray-500 mb-6">
-        Sudah transfer? Klaim pembayaran di sini, tanpa perlu login. Pengurus
-        akan verifikasi sebelum tercatat Lunas.
-      </p>
-
       {claim_error && (
         <div className="mb-4 text-sm text-red-700 bg-red-50 border border-red-200 rounded px-3 py-2">
           {claim_error}
         </div>
       )}
-      {claim_success && (
-        <div className="mb-4 text-sm text-green-700 bg-green-50 border border-green-200 rounded px-3 py-2">
-          {claim_success}
-        </div>
-      )}
 
-      <BayarIplForm
-        households={households ?? []}
-        defaultAmount={settings?.monthly_amount ?? 50000}
-        year={new Date().getFullYear()}
-      />
+      {claim_success ? (
+        <ClaimSuccessCard message={claim_success} resetHref="/login" />
+      ) : (
+        <>
+          <p className="text-sm text-gray-500 mb-6">
+            Sudah transfer? Klaim pembayaran di sini, tanpa perlu login.
+            Pengurus akan verifikasi sebelum tercatat Lunas.
+          </p>
+
+          <BayarIplForm
+            households={households ?? []}
+            defaultAmount={settings?.monthly_amount ?? 50000}
+            year={new Date().getFullYear()}
+          />
+        </>
+      )}
     </>
   );
 
@@ -131,7 +133,10 @@ export default async function LoginPage({
 
         {/* Mobile: accordion, collapsed by default */}
         <div className="md:hidden space-y-3">
-          <details className="bg-white rounded-lg shadow-sm border border-gray-200">
+          <details
+            open={!!(claim_success || claim_error)}
+            className="bg-white rounded-lg shadow-sm border border-gray-200"
+          >
             <summary className="cursor-pointer select-none px-6 py-4 text-lg font-semibold text-gray-900">
               Bayar IPL
             </summary>

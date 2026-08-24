@@ -90,15 +90,22 @@ export async function sendLoginInvite(id: string) {
   if (user?.role !== "pengurus") return;
 
   const supabase = await createClient();
+
+  // Only applies to households actually linked to a pengurus-role login
+  // (profiles.role = 'pengurus') — not every warga.
+  const { data: pengurusProfile } = await supabase
+    .from("profiles")
+    .select("id")
+    .eq("household_id", id)
+    .eq("role", "pengurus")
+    .maybeSingle();
+  if (!pengurusProfile) return;
+
   const { data: household } = await supabase
     .from("households")
     .select("unit_no, phone")
     .eq("id", id)
     .single<{ unit_no: string; phone: string | null }>();
-
-  // Rolled out to 18G only for now, while this feature is being tried out
-  // — remove this check once ready for everyone.
-  if (household?.unit_no !== "18G") return;
 
   if (!household?.phone) {
     redirect(
@@ -114,9 +121,16 @@ export async function sendLoginInvite(id: string) {
     );
   }
 
-  const message = `Halo, berikut info login akun Anda untuk aplikasi Kiwari Residence (IPL):\n\nUsername: ${credential!.email}\nPassword: ${credential!.password}\n\nSilakan login lalu segera ganti password Anda di halaman Profil. Jangan bagikan info ini ke orang lain. Terima kasih!`;
+  const message = `Halo, berikut info login akun Anda untuk aplikasi Kiwari Residence (IPL):\n\nUsername: ${credential!.email}\nPassword: ${credential!.password}\n\nLogin di: https://kiwari-app.vercel.app/`;
 
   const result = await sendWhatsAppMessage(household!.phone!, message);
+
+  if (result.success) {
+    await supabase
+      .from("households")
+      .update({ login_invite_sent_at: new Date().toISOString() })
+      .eq("id", id);
+  }
 
   await supabase.from("activity_log").insert({
     actor_email: user.email,

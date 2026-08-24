@@ -73,17 +73,33 @@ export default async function ProfilePage({
 
           <form
             action={updatePhone}
-            className="bg-white border border-gray-200 rounded-lg p-6 flex gap-3"
+            className="bg-white border border-gray-200 rounded-lg p-6 space-y-3"
           >
-            <input
-              name="phone"
-              placeholder="mis. 08123456789"
-              defaultValue={household?.phone ?? ""}
-              className="flex-1 rounded border border-gray-300 px-3 py-2 text-sm"
-            />
+            <div>
+              <label className="block text-xs text-gray-500 mb-1">
+                No. HP
+              </label>
+              <input
+                name="phone"
+                placeholder="mis. 08123456789"
+                defaultValue={household?.phone ?? ""}
+                className="w-full rounded border border-gray-300 px-3 py-2 text-sm"
+              />
+            </div>
+            <div>
+              <label className="block text-xs text-gray-500 mb-1">
+                No. HP Pasangan
+              </label>
+              <input
+                name="phone_pasangan"
+                placeholder="mis. 08123456789"
+                defaultValue={household?.phone_pasangan ?? ""}
+                className="w-full rounded border border-gray-300 px-3 py-2 text-sm"
+              />
+            </div>
             <SubmitButton
               pendingText="Menyimpan..."
-              className="bg-blue-600 text-white rounded px-4 py-2 text-sm font-medium hover:bg-blue-700 transition"
+              className="w-full bg-blue-600 text-white rounded px-4 py-2 text-sm font-medium hover:bg-blue-700 transition"
             >
               Simpan
             </SubmitButton>

@@ -1,6 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentUser } from "@/lib/auth";
 import BayarIplForm from "./BayarIplForm";
+import ClaimSuccessCard from "@/components/ClaimSuccessCard";
 import type { Payment, Settings } from "@/lib/types";
 
 export default async function BayarIplPage({
@@ -55,18 +56,17 @@ export default async function BayarIplPage({
           {claim_error}
         </div>
       )}
-      {claim_success && (
-        <div className="mb-4 text-sm text-green-700 bg-green-50 border border-green-200 rounded px-3 py-2">
-          {claim_success}
-        </div>
-      )}
 
       <div className="bg-white border border-gray-200 rounded-lg p-6">
-        <BayarIplForm
-          defaultAmount={settings?.monthly_amount ?? 50000}
-          year={year}
-          unpaidMonths={unpaidMonths}
-        />
+        {claim_success ? (
+          <ClaimSuccessCard message={claim_success} resetHref="/bayar-ipl" />
+        ) : (
+          <BayarIplForm
+            defaultAmount={settings?.monthly_amount ?? 50000}
+            year={year}
+            unpaidMonths={unpaidMonths}
+          />
+        )}
       </div>
     </div>
   );

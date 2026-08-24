@@ -6,11 +6,11 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getCurrentUser } from "@/lib/auth";
 
-// Lets a logged-in warga update their own household's phone number — the
-// household comes from their session, never from form input, so they can
-// only ever edit their own record. Regular UPDATE on households is
-// pengurus-only (see schema.sql), so this goes through the admin client;
-// authorization is enforced here in the action, not by RLS.
+// Lets a logged-in warga update their own household's phone numbers (own
+// + pasangan) — the household comes from their session, never from form
+// input, so they can only ever edit their own record. Regular UPDATE on
+// households is pengurus-only (see schema.sql), so this goes through the
+// admin client; authorization is enforced here in the action, not by RLS.
 export async function updatePhone(formData: FormData) {
   const user = await getCurrentUser();
   if (!user?.householdId) {
@@ -21,11 +21,12 @@ export async function updatePhone(formData: FormData) {
   }
 
   const phone = String(formData.get("phone") || "").trim();
+  const phone_pasangan = String(formData.get("phone_pasangan") || "").trim();
 
   const admin = createAdminClient();
   await admin
     .from("households")
-    .update({ phone: phone || null })
+    .update({ phone: phone || null, phone_pasangan: phone_pasangan || null })
     .eq("id", user.householdId);
 
   // Regular activity_log writes are pengurus-only (see schema.sql RLS) —
@@ -33,7 +34,7 @@ export async function updatePhone(formData: FormData) {
   await admin.from("activity_log").insert({
     actor_email: user.email,
     action: "profile.update_phone",
-    detail: `household ${user.householdId} -> ${phone || "(kosong)"}`,
+    detail: `household ${user.householdId} -> ${phone || "(kosong)"} / pasangan ${phone_pasangan || "(kosong)"}`,
   });
 
   revalidatePath("/profile");
