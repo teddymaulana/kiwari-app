@@ -3,11 +3,12 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import { getCurrentUser, CONTRIBUTION_DELETERS } from "@/lib/auth";
+import { getCurrentUser, CONTRIBUTION_RECORDERS, CONTRIBUTION_DELETERS } from "@/lib/auth";
 
 export async function addContribution(formData: FormData) {
   const user = await getCurrentUser();
   if (user?.role !== "pengurus") return;
+  if (!CONTRIBUTION_RECORDERS.includes(user.email)) return;
 
   const household_id = String(formData.get("household_id") || "").trim();
   const source_name = String(formData.get("source_name") || "").trim();

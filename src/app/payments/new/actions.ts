@@ -3,7 +3,7 @@
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
-import { getCurrentUser } from "@/lib/auth";
+import { getCurrentUser, PAYMENT_RECORDERS } from "@/lib/auth";
 import { sendWhatsAppMessage } from "@/lib/fonnte";
 import { MONTH_NAMES, formatRupiah } from "@/lib/types";
 
@@ -15,6 +15,7 @@ import { MONTH_NAMES, formatRupiah } from "@/lib/types";
 export async function recordPayments(formData: FormData) {
   const user = await getCurrentUser();
   if (user?.role !== "pengurus") redirect("/dashboard");
+  if (!PAYMENT_RECORDERS.includes(user.email)) redirect("/dashboard");
 
   const household_id = String(formData.get("household_id") || "");
   const period_year = Number(formData.get("period_year"));

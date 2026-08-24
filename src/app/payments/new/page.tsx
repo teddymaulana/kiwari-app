@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { getCurrentUser } from "@/lib/auth";
+import { getCurrentUser, PAYMENT_RECORDERS } from "@/lib/auth";
 import { confirmPaymentClaim, rejectPaymentClaim } from "./actions";
 import RecordPaymentForm from "./RecordPaymentForm";
 import SubmitButton from "@/components/SubmitButton";
@@ -136,10 +136,12 @@ export default async function NewPaymentPage({
         </div>
       </div>
 
-      <RecordPaymentForm
-        households={households ?? []}
-        defaultAmount={settings?.monthly_amount ?? 50000}
-      />
+      {PAYMENT_RECORDERS.includes(user.email) && (
+        <RecordPaymentForm
+          households={households ?? []}
+          defaultAmount={settings?.monthly_amount ?? 50000}
+        />
+      )}
     </div>
   );
 }

@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import { getCurrentUser, CONTRIBUTION_DELETERS } from "@/lib/auth";
+import { getCurrentUser, CONTRIBUTION_RECORDERS, CONTRIBUTION_DELETERS } from "@/lib/auth";
 import { addContribution, deleteContribution } from "./actions";
 import DeleteContributionButton from "./DeleteContributionButton";
 import SumbanganTabs from "./SumbanganTabs";
@@ -137,69 +137,71 @@ export default async function ContributionsPage({
         Total sumbangan {year}: <strong>{formatRupiah(yearTotal)}</strong>
       </p>
 
-      <div className="bg-white border border-gray-200 rounded-lg p-6 mb-8">
-        <h2 className="text-sm font-medium text-gray-700 mb-4">
-          Catat Sumbangan
-        </h2>
-        {sp.success && (
-          <div className="mb-4 text-sm text-green-700 bg-green-50 border border-green-200 rounded px-3 py-2">
-            Sumbangan berhasil dicatat.
-          </div>
-        )}
-        <form action={addContribution} className="grid sm:grid-cols-6 gap-3">
-          <div className="sm:col-span-2">
-            <HouseholdSelect
-              households={activeHouseholds}
-              name="household_id"
-              placeholder="Pilih warga (kosongkan jika bukan warga)..."
-              className="w-full rounded border border-gray-300 px-3 py-2 text-sm"
+      {CONTRIBUTION_RECORDERS.includes(user.email) && (
+        <div className="bg-white border border-gray-200 rounded-lg p-6 mb-8">
+          <h2 className="text-sm font-medium text-gray-700 mb-4">
+            Catat Sumbangan
+          </h2>
+          {sp.success && (
+            <div className="mb-4 text-sm text-green-700 bg-green-50 border border-green-200 rounded px-3 py-2">
+              Sumbangan berhasil dicatat.
+            </div>
+          )}
+          <form action={addContribution} className="grid sm:grid-cols-6 gap-3">
+            <div className="sm:col-span-2">
+              <HouseholdSelect
+                households={activeHouseholds}
+                name="household_id"
+                placeholder="Pilih warga (kosongkan jika bukan warga)..."
+                className="w-full rounded border border-gray-300 px-3 py-2 text-sm"
+              />
+            </div>
+            <input
+              name="source_name"
+              placeholder="Atau sumber lain (mis. Sumbangan Developer)"
+              className="rounded border border-gray-300 px-3 py-2 text-sm sm:col-span-2"
             />
-          </div>
-          <input
-            name="source_name"
-            placeholder="Atau sumber lain (mis. Sumbangan Developer)"
-            className="rounded border border-gray-300 px-3 py-2 text-sm sm:col-span-2"
-          />
-          <input
-            name="event_name"
-            placeholder="Acara (mis. Sumbangan Agustusan 2026)"
-            required
-            className="rounded border border-gray-300 px-3 py-2 text-sm sm:col-span-2"
-          />
-          <input
-            type="number"
-            name="amount"
-            placeholder="Jumlah (Rp)"
-            required
-            className="rounded border border-gray-300 px-3 py-2 text-sm"
-          />
-          <input
-            type="date"
-            name="contribution_date"
-            defaultValue={new Date().toISOString().slice(0, 10)}
-            className="rounded border border-gray-300 px-3 py-2 text-sm"
-          />
-          <select
-            name="kas_type"
-            defaultValue="bri"
-            className="rounded border border-gray-300 px-3 py-2 text-sm"
-          >
-            <option value="bri">Kas BRI</option>
-            <option value="tunai">Petty Cash</option>
-          </select>
-          <input
-            name="note"
-            placeholder="Catatan (opsional)"
-            className="rounded border border-gray-300 px-3 py-2 text-sm sm:col-span-2"
-          />
-          <SubmitButton
-            pendingText="Menyimpan..."
-            className="sm:col-span-6 bg-blue-600 text-white rounded px-4 py-2 text-sm font-medium hover:bg-blue-700 transition"
-          >
-            Simpan
-          </SubmitButton>
-        </form>
-      </div>
+            <input
+              name="event_name"
+              placeholder="Acara (mis. Sumbangan Agustusan 2026)"
+              required
+              className="rounded border border-gray-300 px-3 py-2 text-sm sm:col-span-2"
+            />
+            <input
+              type="number"
+              name="amount"
+              placeholder="Jumlah (Rp)"
+              required
+              className="rounded border border-gray-300 px-3 py-2 text-sm"
+            />
+            <input
+              type="date"
+              name="contribution_date"
+              defaultValue={new Date().toISOString().slice(0, 10)}
+              className="rounded border border-gray-300 px-3 py-2 text-sm"
+            />
+            <select
+              name="kas_type"
+              defaultValue="bri"
+              className="rounded border border-gray-300 px-3 py-2 text-sm"
+            >
+              <option value="bri">Kas BRI</option>
+              <option value="tunai">Petty Cash</option>
+            </select>
+            <input
+              name="note"
+              placeholder="Catatan (opsional)"
+              className="rounded border border-gray-300 px-3 py-2 text-sm sm:col-span-2"
+            />
+            <SubmitButton
+              pendingText="Menyimpan..."
+              className="sm:col-span-6 bg-blue-600 text-white rounded px-4 py-2 text-sm font-medium hover:bg-blue-700 transition"
+            >
+              Simpan
+            </SubmitButton>
+          </form>
+        </div>
+      )}
 
       <SumbanganTabs
         defaultTab={activeTab}

@@ -12,6 +12,19 @@ const VIEW_AS_COOKIE = "view_as_warga";
 // (actions.ts) that actually writes the row.
 export const EXPENSE_RECORDERS = ["18g@kiwari.local", "19b@kiwari.local"];
 
+// Recording an IPL payment (Catat Pembayaran Iuran on /payments/new) is
+// restricted to these two pengurus accounts, checked both in the UI
+// (payments/new/page.tsx) and again in the server action
+// (payments/new/actions.ts). Doesn't apply to Verifikasi Pembayaran
+// (Konfirmasi/Tolak) on the same page — that stays open to any pengurus.
+export const PAYMENT_RECORDERS = ["18g@kiwari.local", "19b@kiwari.local"];
+
+// Recording a Sumbangan (Catat Sumbangan on /contributions) is restricted
+// to this one pengurus account, checked both in the UI
+// (contributions/page.tsx) and again in the server action
+// (contributions/actions.ts).
+export const CONTRIBUTION_RECORDERS = ["18g@kiwari.local"];
+
 // Deleting a Sumbangan (contribution) entry — warga-linked or external
 // ("Lain-lain") — is restricted to this one pengurus account, checked both
 // in the UI (contributions/page.tsx) and again in the server action
