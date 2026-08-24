@@ -2,14 +2,20 @@
 
 import { useState, type ReactNode } from "react";
 
+type Tab = "warga" | "kelola" | "lain";
+
 export default function SumbanganTabs({
   warga,
+  kelola,
   lainLain,
+  defaultTab = "warga",
 }: {
   warga: ReactNode;
+  kelola: ReactNode;
   lainLain: ReactNode;
+  defaultTab?: Tab;
 }) {
-  const [tab, setTab] = useState<"warga" | "lain">("warga");
+  const [tab, setTab] = useState<Tab>(defaultTab);
 
   const tabClass = (active: boolean) =>
     `px-4 py-2 text-sm font-medium border-b-2 transition ${
@@ -30,13 +36,20 @@ export default function SumbanganTabs({
         </button>
         <button
           type="button"
+          onClick={() => setTab("kelola")}
+          className={tabClass(tab === "kelola")}
+        >
+          Kelola Sumbangan Warga
+        </button>
+        <button
+          type="button"
           onClick={() => setTab("lain")}
           className={tabClass(tab === "lain")}
         >
           Lain-lain
         </button>
       </div>
-      {tab === "warga" ? warga : lainLain}
+      {tab === "warga" ? warga : tab === "kelola" ? kelola : lainLain}
     </div>
   );
 }

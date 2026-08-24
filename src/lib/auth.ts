@@ -6,6 +6,24 @@ export type Role = "warga" | "pengurus";
 
 const VIEW_AS_COOKIE = "view_as_warga";
 
+// Recording an expense (Catat Pengeluaran on /expenses) is restricted to
+// these two pengurus accounts specifically, not every pengurus login —
+// checked both in the UI (page.tsx) and again in the server action
+// (actions.ts) that actually writes the row.
+export const EXPENSE_RECORDERS = ["18g@kiwari.local", "19b@kiwari.local"];
+
+// Deleting a Sumbangan (contribution) entry — warga-linked or external
+// ("Lain-lain") — is restricted to this one pengurus account, checked both
+// in the UI (contributions/page.tsx) and again in the server action
+// (contributions/actions.ts).
+export const CONTRIBUTION_DELETERS = ["18g@kiwari.local"];
+
+// Deleting a recorded IPL payment (e.g. entered by mistake, or a bank
+// transfer claim that turned out not to have gone through) is restricted
+// to this one pengurus account, checked both in the UI (payments/page.tsx)
+// and again in the server action (payments/actions.ts).
+export const PAYMENT_DELETERS = ["18g@kiwari.local"];
+
 export type CurrentUser = {
   id: string;
   email: string;

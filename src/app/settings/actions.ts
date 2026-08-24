@@ -7,29 +7,6 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { getCurrentUser } from "@/lib/auth";
 import { sendWhatsAppMessage } from "@/lib/fonnte";
 
-export async function updateMonthlyAmount(formData: FormData) {
-  const user = await getCurrentUser();
-  if (user?.role !== "pengurus") return;
-
-  const monthly_amount = Number(formData.get("monthly_amount"));
-  if (!monthly_amount || monthly_amount <= 0) return;
-
-  const supabase = await createClient();
-
-  await supabase
-    .from("settings")
-    .update({ monthly_amount, updated_at: new Date().toISOString() })
-    .eq("id", 1);
-
-  await supabase.from("activity_log").insert({
-    actor_email: user.email,
-    action: "settings.update_amount",
-    detail: `monthly_amount -> ${monthly_amount}`,
-  });
-
-  revalidatePath("/settings");
-}
-
 // Kas balance carried over from before this app existed — not income, so
 // it's stored on settings (like monthly_amount) rather than as a
 // payment/expense row. Added into the running totals on /report.

@@ -32,17 +32,24 @@ export default function HouseholdSelect({
   required?: boolean;
   className?: string;
 }) {
-  const [internalValue, setInternalValue] = useState("");
-  const value = controlledValue ?? internalValue;
+  // A parent can pass `value` two different ways: with `onChange`, meaning
+  // it truly owns the selection (e.g. OCR auto-match) and every render
+  // should reflect its current value; or without `onChange`, meaning it's
+  // only seeding the *initial* selection (e.g. from a URL param) and this
+  // component should own it from then on — otherwise `value` would never
+  // stop overriding what the user types.
+  const isControlled = onChange !== undefined;
+  const [internalValue, setInternalValue] = useState(controlledValue ?? "");
+  const value = isControlled ? (controlledValue ?? "") : internalValue;
   const setValue = onChange ?? setInternalValue;
 
   const [query, setQuery] = useState(() => labelFor(households, value));
   // Keep the displayed text in sync when `value` changes from outside (e.g.
   // OCR auto-match setting householdId in a parent form) — adjusted during
   // render rather than in an effect, per React's guidance for state that
-  // depends on a prop.
+  // depends on a prop. Only relevant in the truly-controlled case above.
   const [syncedValue, setSyncedValue] = useState(value);
-  if (value !== syncedValue) {
+  if (isControlled && value !== syncedValue) {
     setSyncedValue(value);
     setQuery(labelFor(households, value));
   }

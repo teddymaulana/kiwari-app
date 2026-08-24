@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import { getCurrentUser } from "@/lib/auth";
+import { getCurrentUser, CONTRIBUTION_DELETERS } from "@/lib/auth";
 
 export async function addContribution(formData: FormData) {
   const user = await getCurrentUser();
@@ -48,6 +48,7 @@ export async function addContribution(formData: FormData) {
 export async function deleteContribution(id: string) {
   const user = await getCurrentUser();
   if (user?.role !== "pengurus") return;
+  if (!CONTRIBUTION_DELETERS.includes(user.email)) return;
 
   const supabase = await createClient();
 

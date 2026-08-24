@@ -1,7 +1,8 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import { getCurrentUser } from "@/lib/auth";
+import { getCurrentUser, CONTRIBUTION_DELETERS } from "@/lib/auth";
 import { addContribution, deleteContribution } from "./actions";
+import DeleteContributionButton from "./DeleteContributionButton";
 import SumbanganTabs from "./SumbanganTabs";
 import type { Contribution, Household } from "@/lib/types";
 import { formatRupiah, KAS_LABELS, compareUnitNo } from "@/lib/types";
@@ -15,10 +16,18 @@ type ContributionRow = Contribution & {
 export default async function ContributionsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ year?: string; success?: string }>;
+  searchParams: Promise<{
+    year?: string;
+    success?: string;
+    household?: string;
+    tab?: string;
+  }>;
 }) {
   const sp = await searchParams;
   const year = Number(sp.year) || new Date().getFullYear();
+  const householdFilter = sp.household || null;
+  const activeTab: "warga" | "kelola" | "lain" =
+    sp.tab === "kelola" || sp.tab === "lain" ? sp.tab : "warga";
 
   const user = await getCurrentUser();
   if (user?.role !== "pengurus") redirect("/dashboard");
@@ -56,9 +65,16 @@ export default async function ContributionsPage({
 
   units.sort((a, b) => compareUnitNo(a.unit_no, b.unit_no));
   activeHouseholds.sort((a, b) => compareUnitNo(a.unit_no, b.unit_no));
+  (households ?? []).sort((a, b) => compareUnitNo(a.unit_no, b.unit_no));
 
   const householdEntries = detailRows.filter((c) => c.household_id);
   const externalDetailRows = detailRows.filter((c) => !c.household_id);
+  const filteredHouseholdEntries = householdFilter
+    ? householdEntries.filter((c) => c.household_id === householdFilter)
+    : householdEntries;
+  const filterUnit = householdFilter
+    ? units.find((u) => u.id === householdFilter) ?? null
+    : null;
 
   // Distinct acara among household-linked entries, in the order they first
   // appear (entries are fetched oldest-first) — becomes the grid's columns.
@@ -97,6 +113,10 @@ export default async function ContributionsPage({
           Sumbangan {year}
         </h1>
         <form className="flex gap-2 items-center text-sm" action="/contributions">
+          {householdFilter && (
+            <input type="hidden" name="household" value={householdFilter} />
+          )}
+          {sp.tab && <input type="hidden" name="tab" value={sp.tab} />}
           <input
             type="number"
             name="year"
@@ -181,6 +201,7 @@ export default async function ContributionsPage({
       </div>
 
       <SumbanganTabs
+        defaultTab={activeTab}
         warga={
           <div className="bg-white border border-gray-200 rounded-lg overflow-x-auto">
             <table className="text-xs">
@@ -279,14 +300,12 @@ export default async function ContributionsPage({
                           {KAS_LABELS[c.kas_type]}
                         </td>
                         <td className="px-4 py-2 text-right">
-                          <form action={deleteContribution.bind(null, c.id)}>
-                            <button
-                              type="submit"
-                              className="text-xs text-red-600 hover:text-red-700 transition"
-                            >
-                              Hapus
-                            </button>
-                          </form>
+                          {CONTRIBUTION_DELETERS.includes(user.email) && (
+                            <DeleteContributionButton
+                              action={deleteContribution.bind(null, c.id)}
+                              description={`${c.event_name} - ${c.source_name || "—"}`}
+                            />
+                          )}
                         </td>
                       </tr>
                     ))}
@@ -304,11 +323,46 @@ export default async function ContributionsPage({
                 </table>
               </div>
             </div>
-
+          </div>
+        }
+        kelola={
+          <div>
             <div>
-              <h2 className="text-sm font-medium text-gray-700 mb-2">
-                Kelola Sumbangan Warga
-              </h2>
+              <div className="flex flex-wrap items-center justify-between gap-3 mb-2">
+                <h2 className="text-sm font-medium text-gray-700">
+                  Kelola Sumbangan Warga
+                </h2>
+                <form
+                  className="flex gap-2 items-center text-sm"
+                  action="/contributions"
+                >
+                  <input type="hidden" name="year" value={year} />
+                  <input type="hidden" name="tab" value="kelola" />
+                  <div className="w-56">
+                    <HouseholdSelect
+                      households={households ?? []}
+                      name="household"
+                      value={householdFilter ?? undefined}
+                      placeholder="Filter per warga..."
+                      className="w-full rounded border border-gray-300 px-2 py-1 text-sm"
+                    />
+                  </div>
+                  <button
+                    type="submit"
+                    className="rounded border border-gray-300 px-3 py-1 hover:bg-gray-50"
+                  >
+                    Filter
+                  </button>
+                  {householdFilter && (
+                    <a
+                      href={`/contributions?year=${year}&tab=kelola`}
+                      className="text-xs text-blue-600 hover:underline whitespace-nowrap"
+                    >
+                      Semua Warga
+                    </a>
+                  )}
+                </form>
+              </div>
               <div className="bg-white border border-gray-200 rounded-lg overflow-hidden">
                 <table className="w-full text-sm">
                   <thead className="bg-gray-50 text-gray-500 text-left">
@@ -322,7 +376,7 @@ export default async function ContributionsPage({
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-100">
-                    {householdEntries.map((c) => (
+                    {filteredHouseholdEntries.map((c) => (
                       <tr key={c.id}>
                         <td className="px-4 py-2 whitespace-nowrap">
                           {new Date(c.contribution_date).toLocaleDateString("id-ID")}
@@ -338,21 +392,21 @@ export default async function ContributionsPage({
                           {KAS_LABELS[c.kas_type]}
                         </td>
                         <td className="px-4 py-2 text-right">
-                          <form action={deleteContribution.bind(null, c.id)}>
-                            <button
-                              type="submit"
-                              className="text-xs text-red-600 hover:text-red-700 transition"
-                            >
-                              Hapus
-                            </button>
-                          </form>
+                          {CONTRIBUTION_DELETERS.includes(user.email) && (
+                            <DeleteContributionButton
+                              action={deleteContribution.bind(null, c.id)}
+                              description={`${c.event_name} - ${c.households?.unit_no} ${c.households?.name}`}
+                            />
+                          )}
                         </td>
                       </tr>
                     ))}
-                    {householdEntries.length === 0 && (
+                    {filteredHouseholdEntries.length === 0 && (
                       <tr>
                         <td colSpan={6} className="px-4 py-6 text-center text-gray-400">
-                          Belum ada sumbangan warga tercatat tahun ini.
+                          {filterUnit
+                            ? `Belum ada sumbangan dari ${filterUnit.label} tahun ini.`
+                            : "Belum ada sumbangan warga tercatat tahun ini."}
                         </td>
                       </tr>
                     )}

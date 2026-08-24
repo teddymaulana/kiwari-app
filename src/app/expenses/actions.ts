@@ -2,19 +2,36 @@
 
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
-import { getCurrentUser } from "@/lib/auth";
+import { createAdminClient } from "@/lib/supabase/admin";
+import { getCurrentUser, EXPENSE_RECORDERS } from "@/lib/auth";
 
 export async function addExpense(formData: FormData) {
   const user = await getCurrentUser();
   if (user?.role !== "pengurus") return;
+  if (!EXPENSE_RECORDERS.includes(user.email)) return;
 
   const description = String(formData.get("description") || "").trim();
   const amount = Number(formData.get("amount"));
   const expense_date = String(formData.get("expense_date") || "");
   const kas_type = String(formData.get("kas_type") || "bri");
+  const receipt = formData.get("receipt") as File | null;
 
   if (!description || !amount || amount <= 0) return;
   if (kas_type !== "tunai" && kas_type !== "bri") return;
+
+  // Storage has no policy on this private bucket (see schema.sql), so
+  // uploading needs the service role — same as bukti-transfer for
+  // payments (paymentClaim.ts).
+  let receipt_path: string | null = null;
+  if (receipt && receipt.size > 0) {
+    const admin = createAdminClient();
+    const ext = receipt.name.split(".").pop() || "jpg";
+    const path = `${Date.now()}-${crypto.randomUUID()}.${ext}`;
+    const { error: uploadError } = await admin.storage
+      .from("bukti-pengeluaran")
+      .upload(path, receipt, { contentType: receipt.type });
+    if (!uploadError) receipt_path = path;
+  }
 
   const supabase = await createClient();
 
@@ -23,6 +40,7 @@ export async function addExpense(formData: FormData) {
     amount,
     expense_date: expense_date || undefined,
     kas_type,
+    receipt_path,
     recorded_by: user.email,
   });
 
@@ -95,6 +113,7 @@ export async function releaseAllDrafts(formData: FormData) {
 export async function deleteExpense(id: string) {
   const user = await getCurrentUser();
   if (user?.role !== "pengurus") return;
+  if (!EXPENSE_RECORDERS.includes(user.email)) return;
 
   const supabase = await createClient();
 

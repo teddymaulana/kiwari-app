@@ -49,18 +49,18 @@ export default function ReleaseAllDraftsButton({
               >
                 Batal
               </button>
-              <form action={action}>
-                {ids.map((id) => (
-                  <input key={id} type="hidden" name="ids" value={id} />
-                ))}
-                <button
-                  type="submit"
-                  onClick={() => setOpen(false)}
-                  className="rounded bg-blue-600 px-3 py-1.5 text-sm text-white hover:bg-blue-700 transition"
-                >
-                  Rilis Semua
-                </button>
-              </form>
+              <button
+                type="button"
+                onClick={async () => {
+                  const formData = new FormData();
+                  ids.forEach((id) => formData.append("ids", id));
+                  await action(formData);
+                  setOpen(false);
+                }}
+                className="rounded bg-blue-600 px-3 py-1.5 text-sm text-white hover:bg-blue-700 transition"
+              >
+                Rilis Semua
+              </button>
             </div>
           </div>
         </div>

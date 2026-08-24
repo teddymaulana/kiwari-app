@@ -20,12 +20,14 @@ export default async function ReportPage({
   const sp = await searchParams;
   const now = new Date();
   const year = YEAR;
-  const selectedMonth = Number(sp.month) || null;
   const currentMonth =
     year === now.getFullYear() ? now.getMonth() + 1 : null;
 
   const user = await getCurrentUser();
   const isPengurus = user?.role === "pengurus";
+  // Warga always land on a specific month (defaulting to the current one)
+  // — only pengurus can pick "Semua Bulan".
+  const selectedMonth = Number(sp.month) || (isPengurus ? null : currentMonth);
 
   const supabase = await createClient();
 
@@ -159,17 +161,25 @@ export default async function ReportPage({
   // itself is shown separately below ("Piutang Personel") — deliberately
   // not folded into Kas Saat Ini, since an outstanding loan isn't liquid
   // cash.
+  // personnel_loans is pengurus-only end to end (RLS blocks warga from
+  // reading it at all), so a real warga session already gets an empty
+  // allLoans here — this isPengurus check exists only so a pengurus
+  // previewing "Lihat sebagai Warga" (whose underlying session still has
+  // full read access) sees the same, deliberately loan-effect-free, Kas
+  // Saat Ini a real warga would.
   let piutangPersonel = 0;
-  (allLoans ?? []).forEach((l) => {
-    const amount = Number(l.amount);
-    if (l.transaction_type === "pinjam") {
-      if (l.affects_kas) kasBalance[l.kas_type as KasType] -= amount;
-      piutangPersonel += amount;
-    } else {
-      if (l.affects_kas) kasBalance[l.kas_type as KasType] += amount;
-      piutangPersonel -= amount;
-    }
-  });
+  if (isPengurus) {
+    (allLoans ?? []).forEach((l) => {
+      const amount = Number(l.amount);
+      if (l.transaction_type === "pinjam") {
+        if (l.affects_kas) kasBalance[l.kas_type as KasType] -= amount;
+        piutangPersonel += amount;
+      } else {
+        if (l.affects_kas) kasBalance[l.kas_type as KasType] += amount;
+        piutangPersonel -= amount;
+      }
+    });
+  }
   const kasSaatIni = kasBalance.tunai + kasBalance.bri;
 
   // Only warga-linked acara show in the IPL/Sumbangan card below — an
@@ -285,7 +295,7 @@ export default async function ReportPage({
               defaultValue={selectedMonth ?? ""}
               className="rounded border border-gray-300 px-2 py-1"
             >
-              <option value="">Semua Bulan</option>
+              {isPengurus && <option value="">Semua Bulan</option>}
               {MONTH_NAMES.map((m, i) => (
                 <option key={m} value={i + 1}>
                   {m}
@@ -313,43 +323,45 @@ export default async function ReportPage({
         </div>
       </div>
 
-      <div className="flex flex-wrap gap-4 mb-6">
-        {isPengurus && (
-          <div className="bg-white border border-gray-200 rounded-lg p-4 w-full sm:w-55">
-            <p className="text-xs text-gray-500 mb-1">Kas Saat Ini</p>
-            <p
-              className={`text-2xl font-semibold ${
-                kasSaatIni < 0 ? "text-red-600" : "text-emerald-600"
-              }`}
-            >
-              {formatRupiah(kasSaatIni)}
-            </p>
-            <div className="mt-3 pt-3 border-t border-gray-100 space-y-1">
-              {(Object.keys(kasBalance) as KasType[]).map((kasType) => (
-                <div key={kasType} className="flex items-center justify-between text-xs">
-                  <span className="text-gray-500">{KAS_LABELS[kasType]}</span>
-                  <span
-                    className={
-                      kasBalance[kasType] < 0 ? "text-red-600" : "text-gray-700"
-                    }
-                  >
-                    {formatRupiah(kasBalance[kasType])}
-                  </span>
-                </div>
-              ))}
-            </div>
-            {/* An outstanding loan isn't liquid cash, so it's never summed
-                into Kas Saat Ini above — just noted here as where else the
-                association's money is. */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
+        <div className="bg-white border border-gray-200 rounded-lg p-4 w-full">
+          <p className="text-xs text-gray-500 mb-1">Kas Saat Ini</p>
+          <p
+            className={`text-2xl font-semibold ${
+              kasSaatIni < 0 ? "text-red-600" : "text-emerald-600"
+            }`}
+          >
+            {formatRupiah(kasSaatIni)}
+          </p>
+          <div className="mt-3 pt-3 border-t border-gray-100 space-y-1">
+            {(Object.keys(kasBalance) as KasType[]).map((kasType) => (
+              <div key={kasType} className="flex items-center justify-between text-xs">
+                <span className="text-gray-500">{KAS_LABELS[kasType]}</span>
+                <span
+                  className={
+                    kasBalance[kasType] < 0 ? "text-red-600" : "text-gray-700"
+                  }
+                >
+                  {formatRupiah(kasBalance[kasType])}
+                </span>
+              </div>
+            ))}
+          </div>
+          {/* An outstanding loan isn't liquid cash, so it's never summed
+              into Kas Saat Ini above — just noted here as where else the
+              association's money is. Pengurus-only: /piutang itself
+              redirects warga away, and the underlying figure relies on
+              personnel_loans, which RLS keeps pengurus-only end to end. */}
+          {isPengurus && (
             <p className="text-xs text-gray-400 mt-2 pt-2 border-t border-gray-100">
               + Piutang Personel {formatRupiah(piutangPersonel)} (di luar kas) —{" "}
               <a href="/piutang" className="text-blue-600 hover:underline">
                 lihat
               </a>
             </p>
-          </div>
-        )}
-        <div className="bg-white border border-gray-200 rounded-lg p-4 w-full sm:w-87.5">
+          )}
+        </div>
+        <div className="bg-white border border-gray-200 rounded-lg p-4 w-full">
           <p className="text-xs text-gray-500 mb-1">Total Terkumpul {periodLabel}</p>
           <p className="text-2xl font-semibold text-gray-900">
             {formatRupiah(cardTotalTerkumpul)}
@@ -376,18 +388,20 @@ export default async function ReportPage({
             )}
           </div>
         </div>
-        <div className="bg-white border border-gray-200 rounded-lg p-4 w-full sm:w-87.5">
+        <div className="bg-white border border-gray-200 rounded-lg p-4 w-full">
           <p className="text-xs text-gray-500 mb-1">Total Pengeluaran {periodLabel}</p>
           <p className="text-2xl font-semibold text-gray-900">
             {formatRupiah(cardExpenseTotal)}
           </p>
           <p className="text-xs text-gray-400 mt-2 pt-2 border-t border-gray-100">
-            <a
-              href="/expenses"
-              className="text-blue-600 hover:underline"
-            >
-              Lihat detail
-            </a>
+            {isPengurus && (
+              <a
+                href="/expenses"
+                className="text-blue-600 hover:underline"
+              >
+                Lihat detail
+              </a>
+            )}
           </p>
         </div>
       </div>

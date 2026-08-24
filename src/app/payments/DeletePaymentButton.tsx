@@ -2,26 +2,23 @@
 
 import { useState } from "react";
 
-export default function ToggleActiveButton({
+export default function DeletePaymentButton({
   action,
-  householdLabel,
-  isActive,
+  description,
 }: {
   action: () => Promise<void>;
-  householdLabel: string;
-  isActive: boolean;
+  description: string;
 }) {
   const [open, setOpen] = useState(false);
-  const label = isActive ? "Nonaktifkan" : "Aktifkan";
 
   return (
     <>
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className="text-xs text-gray-500 hover:text-blue-600 transition"
+        className="text-xs text-red-600 hover:text-red-700 transition"
       >
-        {label}
+        Hapus
       </button>
 
       {open && (
@@ -36,12 +33,11 @@ export default function ToggleActiveButton({
             onClick={(e) => e.stopPropagation()}
           >
             <h3 className="text-sm font-semibold text-gray-900">
-              {label} warga?
+              Hapus pembayaran?
             </h3>
             <p className="mt-2 text-sm text-gray-500">
-              {isActive
-                ? `${householdLabel} akan ditandai nonaktif.`
-                : `${householdLabel} akan diaktifkan kembali.`}
+              &ldquo;{description}&rdquo; akan dihapus permanen dan tidak
+              bisa dikembalikan. Kas Saat Ini akan otomatis menyesuaikan.
             </p>
             <div className="mt-5 flex justify-end gap-2">
               <button
@@ -57,9 +53,9 @@ export default function ToggleActiveButton({
                   await action();
                   setOpen(false);
                 }}
-                className="rounded bg-blue-600 px-3 py-1.5 text-sm text-white hover:bg-blue-700 transition"
+                className="rounded bg-red-600 px-3 py-1.5 text-sm text-white hover:bg-red-700 transition"
               >
-                {label}
+                Hapus
               </button>
             </div>
           </div>

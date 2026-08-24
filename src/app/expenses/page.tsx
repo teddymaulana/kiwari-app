@@ -1,6 +1,8 @@
 import { Fragment } from "react";
+import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import { getCurrentUser } from "@/lib/auth";
+import { createAdminClient } from "@/lib/supabase/admin";
+import { getCurrentUser, EXPENSE_RECORDERS } from "@/lib/auth";
 import { addExpense, deleteExpense, releaseExpense, releaseAllDrafts } from "./actions";
 import DeleteExpenseButton from "./DeleteExpenseButton";
 import KeteranganCell from "./KeteranganCell";
@@ -17,28 +19,23 @@ export default async function ExpensesPage({
 }: {
   searchParams: Promise<{ month?: string; draft?: string }>;
 }) {
+  const user = await getCurrentUser();
+  // Pengurus-only — warga get the same per-month totals on Laporan
+  // (/report) instead, without the itemized/draft-review detail here.
+  if (user?.role !== "pengurus") redirect("/report");
+
   const sp = await searchParams;
   const month = Number(sp.month) || null;
-
-  const user = await getCurrentUser();
-  const isPengurus = user?.role === "pengurus";
-  const draftOnly = isPengurus && sp.draft === "1";
+  const draftOnly = sp.draft === "1";
 
   const supabase = await createClient();
-  let expensesQuery = supabase
+  const { data: yearExpenses } = await supabase
     .from("expenses")
     .select("*")
     .gte("expense_date", `${YEAR}-01-01`)
     .lte("expense_date", `${YEAR}-12-31`)
-    .order("expense_date", { ascending: false });
-  // RLS already blocks a real warga from seeing drafts, but a pengurus
-  // previewing "Lihat sebagai Warga" is still their own real session — the
-  // filter has to be explicit here too so the preview matches what warga
-  // actually see (see EXPENSE_STATUS_LABELS / viewAs.ts).
-  if (!isPengurus) {
-    expensesQuery = expensesQuery.eq("status", "released");
-  }
-  const { data: yearExpenses } = await expensesQuery.returns<Expense[]>();
+    .order("expense_date", { ascending: false })
+    .returns<Expense[]>();
 
   const monthStr = month ? String(month).padStart(2, "0") : null;
   const expenses = (yearExpenses ?? [])
@@ -54,6 +51,19 @@ export default async function ExpensesPage({
     const m = Number(e.expense_date.slice(5, 7));
     monthTotals.set(m, (monthTotals.get(m) ?? 0) + Number(e.amount));
   });
+
+  const admin = createAdminClient();
+  const receiptUrls = new Map<string, string>();
+  await Promise.all(
+    expenses
+      .filter((e) => e.receipt_path)
+      .map(async (e) => {
+        const { data } = await admin.storage
+          .from("bukti-pengeluaran")
+          .createSignedUrl(e.receipt_path!, 60 * 10);
+        if (data?.signedUrl) receiptUrls.set(e.id, data.signedUrl);
+      })
+  );
 
   return (
     <div className="max-w-4xl mx-auto px-4 py-8">
@@ -91,7 +101,7 @@ export default async function ExpensesPage({
         Total pengeluaran {periodLabel}: <strong>{formatRupiah(periodTotal)}</strong>
       </p>
 
-      {isPengurus && (
+      {EXPENSE_RECORDERS.includes(user.email) && (
         <div className="bg-white border border-gray-200 rounded-lg p-6 mb-8">
           <h2 className="text-sm font-medium text-gray-700 mb-4">
             Catat Pengeluaran
@@ -124,6 +134,17 @@ export default async function ExpensesPage({
               <option value="bri">Kas BRI</option>
               <option value="tunai">Petty Cash</option>
             </select>
+            <div className="sm:col-span-5">
+              <label className="block text-xs text-gray-500 mb-1">
+                Bukti Pengeluaran (opsional)
+              </label>
+              <input
+                type="file"
+                name="receipt"
+                accept="image/*"
+                className="w-full text-sm text-gray-600 file:mr-3 file:py-1.5 file:px-3 file:rounded file:border-0 file:bg-gray-100 file:text-sm file:text-gray-700"
+              />
+            </div>
             <button
               type="submit"
               className="sm:col-span-5 bg-blue-600 text-white rounded px-4 py-2 text-sm font-medium hover:bg-blue-700 transition"
@@ -134,23 +155,21 @@ export default async function ExpensesPage({
         </div>
       )}
 
-      {isPengurus && (
-        <div className="flex flex-wrap gap-2 items-center mb-3">
-          <a
-            href={`/expenses?${month ? `month=${month}&` : ""}${
-              draftOnly ? "" : "draft=1"
-            }`}
-            className={
-              draftOnly
-                ? "text-sm rounded bg-gray-700 text-white px-3 py-1.5 hover:bg-gray-800 transition"
-                : "text-sm rounded border border-gray-300 px-3 py-1.5 hover:bg-gray-50 transition"
-            }
-          >
-            {draftOnly ? "Tampilkan Semua" : "Draft Saja"}
-          </a>
-          <ReleaseAllDraftsButton action={releaseAllDrafts} ids={draftIds} />
-        </div>
-      )}
+      <div className="flex flex-wrap gap-2 items-center mb-3">
+        <a
+          href={`/expenses?${month ? `month=${month}&` : ""}${
+            draftOnly ? "" : "draft=1"
+          }`}
+          className={
+            draftOnly
+              ? "text-sm rounded bg-gray-700 text-white px-3 py-1.5 hover:bg-gray-800 transition"
+              : "text-sm rounded border border-gray-300 px-3 py-1.5 hover:bg-gray-50 transition"
+          }
+        >
+          {draftOnly ? "Tampilkan Semua" : "Draft Saja"}
+        </a>
+        <ReleaseAllDraftsButton action={releaseAllDrafts} ids={draftIds} />
+      </div>
 
       <div className="bg-white border border-gray-200 rounded-lg overflow-x-auto">
         <table className="w-full text-sm">
@@ -159,10 +178,11 @@ export default async function ExpensesPage({
               <th className="px-4 py-2 font-medium">Tanggal</th>
               <th className="px-4 py-2 font-medium">Keterangan</th>
               <th className="px-4 py-2 font-medium">Jumlah</th>
-              {isPengurus && <th className="px-4 py-2 font-medium">Kas</th>}
-              {isPengurus && <th className="px-4 py-2 font-medium">Status</th>}
-              {isPengurus && <th className="px-4 py-2 font-medium"></th>}
-              {isPengurus && <th className="px-4 py-2 font-medium"></th>}
+              <th className="px-4 py-2 font-medium">Kas</th>
+              <th className="px-4 py-2 font-medium">Bukti</th>
+              <th className="px-4 py-2 font-medium">Status</th>
+              <th className="px-4 py-2 font-medium"></th>
+              <th className="px-4 py-2 font-medium"></th>
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-100">
@@ -176,7 +196,7 @@ export default async function ExpensesPage({
                   {showMonthDivider && (
                     <tr>
                       <td
-                        colSpan={isPengurus ? 7 : 3}
+                        colSpan={8}
                         className="px-4 py-1.5 bg-gray-200 text-xs font-semibold text-gray-700 uppercase tracking-wide"
                       >
                         {MONTH_NAMES[monthNum - 1]} —{" "}
@@ -192,56 +212,61 @@ export default async function ExpensesPage({
                     <td className="px-4 py-2 text-gray-500">
                       {formatRupiah(Number(e.amount))}
                     </td>
-                    {isPengurus && (
-                      <td className="px-4 py-2 text-gray-500 whitespace-nowrap">
-                        {KAS_LABELS[e.kas_type]}
-                      </td>
-                    )}
-                    {isPengurus && (
-                      <td className="px-4 py-2">
-                        <span
-                          className={
-                            e.status === "released"
-                              ? "text-xs rounded-full bg-emerald-50 text-emerald-700 px-2 py-0.5"
-                              : "text-xs rounded-full bg-gray-100 text-gray-500 px-2 py-0.5"
-                          }
+                    <td className="px-4 py-2 text-gray-500 whitespace-nowrap">
+                      {KAS_LABELS[e.kas_type]}
+                    </td>
+                    <td className="px-4 py-2 whitespace-nowrap">
+                      {receiptUrls.has(e.id) ? (
+                        <a
+                          href={receiptUrls.get(e.id)}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-xs text-blue-600 hover:text-blue-700 transition"
                         >
-                          {EXPENSE_STATUS_LABELS[e.status]}
-                        </span>
-                      </td>
-                    )}
-                    {isPengurus && (
-                      <td className="px-4 py-2 text-right">
-                        {e.status === "draft" && (
-                          <form action={releaseExpense.bind(null, e.id)}>
-                            <button
-                              type="submit"
-                              className="text-xs text-blue-600 hover:text-blue-700 transition"
-                            >
-                              Rilis ke Warga
-                            </button>
-                          </form>
-                        )}
-                      </td>
-                    )}
-                    {isPengurus && (
-                      <td className="px-4 py-2 text-right">
+                          Lihat
+                        </a>
+                      ) : (
+                        <span className="text-xs text-gray-300">—</span>
+                      )}
+                    </td>
+                    <td className="px-4 py-2">
+                      <span
+                        className={
+                          e.status === "released"
+                            ? "text-xs rounded-full bg-emerald-50 text-emerald-700 px-2 py-0.5"
+                            : "text-xs rounded-full bg-gray-100 text-gray-500 px-2 py-0.5"
+                        }
+                      >
+                        {EXPENSE_STATUS_LABELS[e.status]}
+                      </span>
+                    </td>
+                    <td className="px-4 py-2 text-right">
+                      {e.status === "draft" && (
+                        <form action={releaseExpense.bind(null, e.id)}>
+                          <button
+                            type="submit"
+                            className="text-xs text-blue-600 hover:text-blue-700 transition"
+                          >
+                            Rilis ke Warga
+                          </button>
+                        </form>
+                      )}
+                    </td>
+                    <td className="px-4 py-2 text-right">
+                      {EXPENSE_RECORDERS.includes(user.email) && (
                         <DeleteExpenseButton
                           action={deleteExpense.bind(null, e.id)}
                           description={e.description}
                         />
-                      </td>
-                    )}
+                      )}
+                    </td>
                   </tr>
                 </Fragment>
               );
             })}
             {(expenses ?? []).length === 0 && (
               <tr>
-                <td
-                  colSpan={isPengurus ? 7 : 3}
-                  className="px-4 py-6 text-center text-gray-400"
-                >
+                <td colSpan={8} className="px-4 py-6 text-center text-gray-400">
                   {draftOnly
                     ? `Tidak ada pengeluaran draft ${month ? "bulan ini" : "tahun ini"}.`
                     : `Belum ada pengeluaran tercatat ${month ? "bulan ini" : "tahun ini"}.`}

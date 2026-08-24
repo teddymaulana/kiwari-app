@@ -84,6 +84,13 @@ insert into storage.buckets (id, name, public)
 values ('bukti-transfer', 'bukti-transfer', false)
 on conflict (id) do nothing;
 
+-- Same treatment as bukti-transfer above, but for Pengeluaran receipts —
+-- private, service_role-only, viewed via signed URLs on demand from
+-- /expenses.
+insert into storage.buckets (id, name, public)
+values ('bukti-pengeluaran', 'bukti-pengeluaran', false)
+on conflict (id) do nothing;
+
 create table if not exists activity_log (
   id uuid primary key default gen_random_uuid(),
   actor_email text,
@@ -322,6 +329,10 @@ alter table expenses add column if not exists kas_type text
 -- (see "authenticated read expenses" policy below).
 alter table expenses add column if not exists status text
   not null default 'draft' check (status in ('draft', 'released'));
+
+-- Storage object path for an uploaded bukti pengeluaran (receipt/proof of
+-- spend), if any — same treatment as payments.receipt_path.
+alter table expenses add column if not exists receipt_path text;
 
 alter table expenses enable row level security;
 

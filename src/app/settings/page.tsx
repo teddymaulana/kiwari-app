@@ -2,7 +2,6 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentUser } from "@/lib/auth";
 import {
-  updateMonthlyAmount,
   updateOpeningBalance,
   createWargaUser,
   sendTestWhatsApp,
@@ -62,25 +61,15 @@ export default async function SettingsPage({
             Nominal Iuran Bulanan
           </h2>
           <p className="text-xs text-gray-400 mb-4">
-            Saat ini: {formatRupiah(settings?.monthly_amount ?? 0)}. Ini
-            hanya dipakai sebagai nilai default saat mencatat pembayaran
-            baru — tidak mengubah data yang sudah tercatat.
+            Saat ini: {formatRupiah(settings?.monthly_amount ?? 0)}. Nilai
+            ini dikunci dan tidak bisa diubah dari sini.
           </p>
-          <form action={updateMonthlyAmount} className="flex gap-3">
-            <input
-              type="number"
-              name="monthly_amount"
-              step="1000"
-              defaultValue={settings?.monthly_amount ?? 0}
-              className="flex-1 rounded border border-gray-300 px-3 py-2 text-sm"
-            />
-            <button
-              type="submit"
-              className="bg-blue-600 text-white rounded px-4 py-2 text-sm font-medium hover:bg-blue-700 transition"
-            >
-              Simpan
-            </button>
-          </form>
+          <input
+            type="text"
+            disabled
+            value={formatRupiah(settings?.monthly_amount ?? 0)}
+            className="w-full rounded border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-500 cursor-not-allowed"
+          />
         </div>
       </div>
 

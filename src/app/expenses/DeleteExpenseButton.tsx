@@ -47,15 +47,16 @@ export default function DeleteExpenseButton({
               >
                 Batal
               </button>
-              <form action={action}>
-                <button
-                  type="submit"
-                  onClick={() => setOpen(false)}
-                  className="rounded bg-red-600 px-3 py-1.5 text-sm text-white hover:bg-red-700 transition"
-                >
-                  Hapus
-                </button>
-              </form>
+              <button
+                type="button"
+                onClick={async () => {
+                  await action();
+                  setOpen(false);
+                }}
+                className="rounded bg-red-600 px-3 py-1.5 text-sm text-white hover:bg-red-700 transition"
+              >
+                Hapus
+              </button>
             </div>
           </div>
         </div>

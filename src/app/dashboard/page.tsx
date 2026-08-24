@@ -388,7 +388,15 @@ export default async function DashboardPage({
                   const p = paidByHousehold.get(h.id);
                   return (
                     <tr key={h.id}>
-                      <td className="px-4 py-2">{h.unit_no}</td>
+                      <td className="px-4 py-2">
+                        <Link
+                          href={`/payments?household=${h.id}`}
+                          className="hover:underline hover:text-blue-600"
+                          title="Lihat & kelola riwayat pembayaran"
+                        >
+                          {h.unit_no}
+                        </Link>
+                      </td>
                       <td className="px-4 py-2">{h.name}</td>
                       <td className="px-4 py-2">
                         <span

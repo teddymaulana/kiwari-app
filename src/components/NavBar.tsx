@@ -10,9 +10,10 @@ const links = [
   { href: "/report", label: "Laporan" },
   { href: "/dashboard", label: "IPL" },
   { href: "/payments/new", label: "Catat Pembayaran", pengurusOnly: true },
+  { href: "/payments", label: "Kelola Pembayaran", pengurusOnly: true },
   { href: "/households", label: "Warga", pengurusOnly: true },
   { href: "/contributions", label: "Sumbangan", pengurusOnly: true },
-  { href: "/expenses", label: "Pengeluaran" },
+  { href: "/expenses", label: "Pengeluaran", pengurusOnly: true },
   { href: "/piutang", label: "Piutang", pengurusOnly: true },
   { href: "/settings", label: "Pengaturan", pengurusOnly: true },
 ];
@@ -43,19 +44,21 @@ export default function NavBar({
               </span>
             )}
           </span>
-          <nav className="hidden sm:flex gap-4 text-sm text-gray-600">
-            {visibleLinks.map((l) => (
-              <Link
-                key={l.href}
-                href={l.href}
-                className={`hover:text-blue-600 transition whitespace-nowrap ${
-                  pathname === l.href ? "font-semibold text-gray-900" : ""
-                }`}
-              >
-                {l.label}
-              </Link>
-            ))}
-          </nav>
+          {role !== "pengurus" && (
+            <nav className="hidden sm:flex gap-4 text-sm text-gray-600">
+              {visibleLinks.map((l) => (
+                <Link
+                  key={l.href}
+                  href={l.href}
+                  className={`hover:text-blue-600 transition whitespace-nowrap ${
+                    pathname === l.href ? "font-semibold text-gray-900" : ""
+                  }`}
+                >
+                  {l.label}
+                </Link>
+              ))}
+            </nav>
+          )}
         </div>
         <div className="flex items-center gap-3 text-sm text-gray-500 shrink-0">
           {actualRole === "pengurus" && (
@@ -104,19 +107,25 @@ export default function NavBar({
           </form>
         </div>
       </div>
-      <nav className="sm:hidden flex gap-4 text-sm text-gray-600 px-4 pb-3 overflow-x-auto">
-        {visibleLinks.map((l) => (
-          <Link
-            key={l.href}
-            href={l.href}
-            className={`hover:text-blue-600 transition shrink-0 whitespace-nowrap ${
-              pathname === l.href ? "font-semibold text-gray-900" : ""
-            }`}
-          >
-            {l.label}
-          </Link>
-        ))}
-      </nav>
+      <div className="max-w-5xl mx-auto px-4">
+        <nav
+          className={`flex gap-4 text-sm text-gray-600 pb-3 overflow-x-auto ${
+            role === "pengurus" ? "" : "sm:hidden"
+          }`}
+        >
+          {visibleLinks.map((l) => (
+            <Link
+              key={l.href}
+              href={l.href}
+              className={`hover:text-blue-600 transition shrink-0 whitespace-nowrap ${
+                pathname === l.href ? "font-semibold text-gray-900" : ""
+              }`}
+            >
+              {l.label}
+            </Link>
+          ))}
+        </nav>
+      </div>
     </header>
   );
 }

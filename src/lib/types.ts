@@ -57,6 +57,7 @@ export type Expense = {
   recorded_by: string | null;
   kas_type: KasType;
   status: "draft" | "released";
+  receipt_path: string | null;
   created_at: string;
 };
 
