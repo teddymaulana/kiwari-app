@@ -32,6 +32,11 @@ export default async function ProfilePage({
     <div className="max-w-md mx-auto px-4 py-8">
       <h1 className="text-lg font-semibold text-gray-900 mb-6">Profil</h1>
 
+      <div className="bg-white border border-gray-200 rounded-lg p-6 mb-6">
+        <p className="text-xs text-gray-500 mb-1">Email Login</p>
+        <p className="text-sm text-gray-900">{user?.email}</p>
+      </div>
+
       {user?.householdId ? (
         <div className="bg-white border border-gray-200 rounded-lg p-6 space-y-4">
           <div>

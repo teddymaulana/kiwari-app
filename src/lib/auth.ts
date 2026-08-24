@@ -37,6 +37,12 @@ export const CONTRIBUTION_DELETERS = ["18g@kiwari.local"];
 // and again in the server action (payments/actions.ts).
 export const PAYMENT_DELETERS = ["18g@kiwari.local"];
 
+// Toggling a household's Aktif/Nonaktif status (on /households) is
+// restricted to this one pengurus account, checked both in the UI
+// (households/page.tsx) and again in the server action
+// (households/actions.ts).
+export const HOUSEHOLD_TOGGLERS = ["18g@kiwari.local"];
+
 export type CurrentUser = {
   id: string;
   email: string;

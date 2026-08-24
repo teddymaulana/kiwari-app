@@ -130,24 +130,32 @@ function matchHousehold(
   return null;
 }
 
-// Picks the largest "Rp"/"IDR"-prefixed number in the OCR text. Indonesian
-// bank apps format amounts with "." as thousands separator and "," as
-// decimal (e.g. "Rp200.000,00") — receipts often also show a smaller admin
-// fee, so "largest Rp-prefixed number" is a simple heuristic for picking
-// the actual transfer amount over the fee.
+// Picks a "Rp"/"IDR"-prefixed number from the OCR text. Indonesian bank
+// apps format amounts with "." as thousands separator and "," as decimal
+// (e.g. "Rp200.000,00") — receipts often also show the fee-inclusive total
+// (e.g. "Rp502.500" = Rp500.000 transfer + Rp2.500 admin fee), so among
+// several candidates a "round" one (last 4 digits zero, e.g. 500.000) is
+// preferred over one that isn't, since IPL/kas amounts are always round
+// and a non-round total is a strong signal it includes a fee. Falls back
+// to the largest candidate if none are round.
 function extractAmount(ocrText: string): number | null {
   const matches = ocrText.matchAll(/(?:rp|idr)\.?\s*([\d.,]{3,})/gi);
-  let best: number | null = null;
+  const amounts: number[] = [];
 
   for (const m of matches) {
     const normalized = m[1].replace(/\./g, "").replace(/,\d{1,2}$/, "").replace(/,/g, "");
     const value = parseInt(normalized, 10);
     if (!isNaN(value) && value >= 1000 && value <= 1_000_000_000) {
-      if (best === null || value > best) best = value;
+      amounts.push(value);
     }
   }
 
-  return best;
+  if (amounts.length === 0) return null;
+
+  const round = amounts.filter((v) => v % 10000 === 0);
+  const pool = round.length > 0 ? round : amounts;
+
+  return Math.max(...pool);
 }
 
 export async function POST(request: NextRequest) {

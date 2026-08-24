@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { submitPaymentClaim } from "./actions";
 import type { Household } from "@/lib/types";
 import { MONTH_NAMES, formatRupiah } from "@/lib/types";
@@ -19,12 +19,15 @@ export default function BayarIplForm({
   year: number;
 }) {
   const now = new Date();
+  const currentMonth = now.getMonth() + 1;
   const [householdId, setHouseholdId] = useState("");
   const [suggestion, setSuggestion] = useState<HouseholdOption | null>(null);
+  const [detectedAmount, setDetectedAmount] = useState<number | null>(null);
   const [checking, setChecking] = useState(false);
   const [checkNote, setCheckNote] = useState<string | null>(null);
   const [unpaidMonths, setUnpaidMonths] = useState<number[] | null>(null);
   const [selectedMonths, setSelectedMonths] = useState<number[]>([]);
+  const noteRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (!householdId) return;
@@ -36,7 +39,6 @@ export default function BayarIplForm({
         if (cancelled) return;
         const months: number[] = data.unpaidMonths ?? [];
         setUnpaidMonths(months);
-        const currentMonth = now.getMonth() + 1;
         setSelectedMonths(months.includes(currentMonth) ? [currentMonth] : []);
       });
 
@@ -52,19 +54,48 @@ export default function BayarIplForm({
     setSelectedMonths([]);
   }
 
+  // From the current month onward, months must be picked in order, oldest
+  // first — a warga can't pick October without September also selected.
+  // Past/arrears months (before the current month) are exempt — those can
+  // be left unpaid and picked independently, in any combination, since
+  // forcing a full backlog catch-up here would be bad UX.
+  function canToggle(month: number): boolean {
+    if (selectedMonths.includes(month)) return true;
+    if (month < currentMonth) return true;
+    if (!unpaidMonths) return false;
+    const idx = unpaidMonths.indexOf(month);
+    return unpaidMonths
+      .slice(0, idx)
+      .filter((m) => m >= currentMonth)
+      .every((m) => selectedMonths.includes(m));
+  }
+
   function toggleMonth(month: number) {
-    setSelectedMonths((prev) =>
-      prev.includes(month)
-        ? prev.filter((m) => m !== month)
-        : [...prev, month].sort((a, b) => a - b)
-    );
+    if (!canToggle(month)) return;
+    setSelectedMonths((prev) => {
+      if (!prev.includes(month)) {
+        return [...prev, month].sort((a, b) => a - b);
+      }
+      if (month < currentMonth) {
+        return prev.filter((m) => m !== month);
+      }
+      // Cascade-unselect later current/future months too, since they'd no
+      // longer form a contiguous run — past months are always < month
+      // here, so they're untouched by this filter.
+      return prev.filter((m) => m < month);
+    });
   }
 
   const total = defaultAmount * selectedMonths.length;
+  // How much of the detected transfer is left after accounting for the
+  // months picked so far — goes negative (shown in red) if more months
+  // are selected than the detected amount actually covers.
+  const remaining = detectedAmount !== null ? detectedAmount - total : null;
 
   async function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     setSuggestion(null);
+    setDetectedAmount(null);
     setCheckNote(null);
     if (!file) return;
 
@@ -78,10 +109,17 @@ export default function BayarIplForm({
       });
       const data = await res.json();
 
+      if (typeof data.amount === "number") {
+        setDetectedAmount(data.amount);
+      }
+
       if (data.match) {
         setSuggestion(data.match);
         selectHousehold(data.match.id);
       } else {
+        // Clear any previously-selected household too — a new receipt that
+        // fails to match shouldn't leave a stale pick from an earlier one.
+        selectHousehold("");
         setCheckNote(
           "Rumah tidak terdeteksi otomatis dari gambar, pilih secara manual di bawah."
         );
@@ -93,8 +131,26 @@ export default function BayarIplForm({
     }
   }
 
+  // Flags a claim for pengurus when the detected transfer amount looks
+  // short of the total being claimed — folded into the existing note
+  // field (already shown in Verifikasi Pembayaran) rather than a new
+  // column, so it needs no schema/backend change. This is informational
+  // only: the actual recorded amount always comes from settings server-
+  // side (see paymentClaim.ts), never from this client-detected figure.
+  function handleSubmit() {
+    if (remaining === null || remaining >= 0 || !noteRef.current) return;
+    const warning = `[Nominal transfer terdeteksi ${formatRupiah(detectedAmount!)}, kurang ${formatRupiah(Math.abs(remaining))} dari total klaim]`;
+    noteRef.current.value = noteRef.current.value
+      ? `${warning} ${noteRef.current.value}`
+      : warning;
+  }
+
   return (
-    <form action={submitPaymentClaim} className="space-y-4">
+    <form
+      action={submitPaymentClaim}
+      onSubmit={handleSubmit}
+      className="space-y-4"
+    >
       <div>
         <label className="block text-sm font-medium text-gray-700 mb-1">
           Bukti Transfer (opsional)
@@ -151,29 +207,54 @@ export default function BayarIplForm({
           </p>
         ) : (
           <div className="grid grid-cols-3 gap-2">
-            {unpaidMonths.map((m) => (
-              <label
-                key={m}
-                className={`flex items-center gap-1.5 text-sm rounded border px-2 py-1.5 cursor-pointer ${
-                  selectedMonths.includes(m)
-                    ? "border-blue-500 bg-blue-50 text-blue-700"
-                    : "border-gray-300 text-gray-700"
-                }`}
-              >
-                <input
-                  type="checkbox"
-                  name="period_months"
-                  value={m}
-                  checked={selectedMonths.includes(m)}
-                  onChange={() => toggleMonth(m)}
-                  className="accent-blue-600"
-                />
-                {MONTH_NAMES[m - 1]}
-              </label>
-            ))}
+            {unpaidMonths.map((m) => {
+              const selectable = canToggle(m);
+              return (
+                <label
+                  key={m}
+                  className={`flex items-center gap-1.5 text-sm rounded border px-2 py-1.5 ${
+                    selectedMonths.includes(m)
+                      ? "border-blue-500 bg-blue-50 text-blue-700 cursor-pointer"
+                      : selectable
+                        ? "border-gray-300 text-gray-700 cursor-pointer"
+                        : "border-gray-200 text-gray-300 cursor-not-allowed"
+                  }`}
+                >
+                  <input
+                    type="checkbox"
+                    name="period_months"
+                    value={m}
+                    checked={selectedMonths.includes(m)}
+                    disabled={!selectable}
+                    onChange={() => toggleMonth(m)}
+                    className="accent-blue-600"
+                  />
+                  {MONTH_NAMES[m - 1]}
+                </label>
+              );
+            })}
           </div>
         )}
       </div>
+
+      {detectedAmount !== null && (
+        <p
+          className={`text-xs ${
+            remaining !== null && remaining < 0
+              ? "text-red-600"
+              : "text-green-600"
+          }`}
+        >
+          Nominal terdeteksi di bukti transfer:{" "}
+          <strong>{formatRupiah(detectedAmount)}</strong>
+          {selectedMonths.length > 0 && remaining !== null && (
+            <>
+              <br />
+              Sisa: <strong>{formatRupiah(remaining)}</strong>
+            </>
+          )}
+        </p>
+      )}
 
       <div>
         <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -191,6 +272,7 @@ export default function BayarIplForm({
           Catatan (opsional)
         </label>
         <input
+          ref={noteRef}
           name="note"
           placeholder="mis. transfer BCA a.n. ..."
           className="w-full rounded border border-gray-300 px-3 py-2 text-sm"

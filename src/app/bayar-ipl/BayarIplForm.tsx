@@ -15,16 +15,40 @@ export default function BayarIplForm({
   unpaidMonths: number[];
 }) {
   const now = new Date();
+  const currentMonth = now.getMonth() + 1;
   const [selectedMonths, setSelectedMonths] = useState<number[]>(() =>
-    unpaidMonths.includes(now.getMonth() + 1) ? [now.getMonth() + 1] : []
+    unpaidMonths.includes(currentMonth) ? [currentMonth] : []
   );
 
+  // From the current month onward, months must be picked in order, oldest
+  // first — a warga can't pick October without September also selected.
+  // Past/arrears months (before the current month) are exempt — those can
+  // be left unpaid and picked independently, in any combination, since
+  // forcing a full backlog catch-up here would be bad UX.
+  function canToggle(month: number): boolean {
+    if (selectedMonths.includes(month)) return true;
+    if (month < currentMonth) return true;
+    const idx = unpaidMonths.indexOf(month);
+    return unpaidMonths
+      .slice(0, idx)
+      .filter((m) => m >= currentMonth)
+      .every((m) => selectedMonths.includes(m));
+  }
+
   function toggleMonth(month: number) {
-    setSelectedMonths((prev) =>
-      prev.includes(month)
-        ? prev.filter((m) => m !== month)
-        : [...prev, month].sort((a, b) => a - b)
-    );
+    if (!canToggle(month)) return;
+    setSelectedMonths((prev) => {
+      if (!prev.includes(month)) {
+        return [...prev, month].sort((a, b) => a - b);
+      }
+      if (month < currentMonth) {
+        return prev.filter((m) => m !== month);
+      }
+      // Cascade-unselect later current/future months too, since they'd no
+      // longer form a contiguous run — past months are always < month
+      // here, so they're untouched by this filter.
+      return prev.filter((m) => m < month);
+    });
   }
 
   const total = defaultAmount * selectedMonths.length;
@@ -55,26 +79,32 @@ export default function BayarIplForm({
           </p>
         ) : (
           <div className="grid grid-cols-3 gap-2">
-            {unpaidMonths.map((m) => (
-              <label
-                key={m}
-                className={`flex items-center gap-1.5 text-sm rounded border px-2 py-1.5 cursor-pointer ${
-                  selectedMonths.includes(m)
-                    ? "border-blue-500 bg-blue-50 text-blue-700"
-                    : "border-gray-300 text-gray-700"
-                }`}
-              >
-                <input
-                  type="checkbox"
-                  name="period_months"
-                  value={m}
-                  checked={selectedMonths.includes(m)}
-                  onChange={() => toggleMonth(m)}
-                  className="accent-blue-600"
-                />
-                {MONTH_NAMES[m - 1]}
-              </label>
-            ))}
+            {unpaidMonths.map((m) => {
+              const selectable = canToggle(m);
+              return (
+                <label
+                  key={m}
+                  className={`flex items-center gap-1.5 text-sm rounded border px-2 py-1.5 ${
+                    selectedMonths.includes(m)
+                      ? "border-blue-500 bg-blue-50 text-blue-700 cursor-pointer"
+                      : selectable
+                        ? "border-gray-300 text-gray-700 cursor-pointer"
+                        : "border-gray-200 text-gray-300 cursor-not-allowed"
+                  }`}
+                >
+                  <input
+                    type="checkbox"
+                    name="period_months"
+                    value={m}
+                    checked={selectedMonths.includes(m)}
+                    disabled={!selectable}
+                    onChange={() => toggleMonth(m)}
+                    className="accent-blue-600"
+                  />
+                  {MONTH_NAMES[m - 1]}
+                </label>
+              );
+            })}
           </div>
         )}
       </div>

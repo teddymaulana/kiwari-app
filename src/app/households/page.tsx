@@ -2,7 +2,7 @@ import fs from "fs";
 import path from "path";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import { getCurrentUser } from "@/lib/auth";
+import { getCurrentUser, HOUSEHOLD_TOGGLERS } from "@/lib/auth";
 import { addHousehold, toggleHouseholdActive, sendLoginInvite } from "./actions";
 import ToggleActiveButton from "./ToggleActiveButton";
 import SubmitButton from "@/components/SubmitButton";
@@ -174,15 +174,17 @@ export default async function HouseholdsPage({
                       </form>
                     </>
                   )}
-                  <ToggleActiveButton
-                    action={toggleHouseholdActive.bind(
-                      null,
-                      h.id,
-                      h.is_active
-                    )}
-                    householdLabel={`${h.unit_no} - ${h.name}`}
-                    isActive={h.is_active}
-                  />
+                  {HOUSEHOLD_TOGGLERS.includes(user.email) && (
+                    <ToggleActiveButton
+                      action={toggleHouseholdActive.bind(
+                        null,
+                        h.id,
+                        h.is_active
+                      )}
+                      householdLabel={`${h.unit_no} - ${h.name}`}
+                      isActive={h.is_active}
+                    />
+                  )}
                 </td>
               </tr>
             ))}
