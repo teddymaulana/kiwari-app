@@ -379,18 +379,21 @@ create policy "pengurus write cash_transfers" on cash_transfers
   for all to authenticated using (is_pengurus()) with check (is_pengurus());
 
 -- Loans (hutang/piutang) the kas has extended to personnel, and
--- their repayments — a running per-person receivable ("Piutang"). The net
--- outstanding total ("Piutang") is folded directly into Petty Cash in the
--- Kas Saat Ini breakdown on /report, treated as still-liquid money rather
--- than cash that's left the kas — see kasBalance.tunai adjustment there.
--- affects_kas/kas_type predate that change and are no longer read by that
--- calculation; kept as-is rather than migrated away, since existing rows
--- still carry them. Row-level detail (who borrowed what, via
--- personnel_loans directly) stays pengurus-only end to end (/piutang
--- redirects warga away) — both read and write are gated by is_pengurus()
--- below. Only the net aggregate is exposed to warga, via
--- personnel_loans_public further down, for the Piutang line in the Kas
--- Saat Ini breakdown.
+-- their repayments — a running per-person receivable ("Piutang"). Giving a
+-- loan is normally real cash leaving Kas BRI/Tunai (same treatment as an
+-- expense, via kas_type), and a repayment is cash coming back in — so
+-- both normally feed into the Kas Tunai/Kas BRI totals on /report exactly
+-- like expenses do. affects_kas is the escape hatch for a loan that
+-- predates this app's tracking (the cash already left the kas before any
+-- opening balance/expense was recorded here) — set it false so the
+-- outstanding amount still counts in the Piutang total without being
+-- double-subtracted from Kas Saat Ini. The Piutang page always inserts
+-- affects_kas = true; false is only ever set via a one-off backfill script.
+-- The outstanding total itself ("Piutang Personel") is shown as separate
+-- info on /report, deliberately never summed into "Kas Saat Ini" — it
+-- isn't liquid cash, it's money owed back. Unlike expenses, this is
+-- pengurus-only end to end (/piutang redirects warga away) — both read and
+-- write are gated by is_pengurus() below.
 create table if not exists personnel_loans (
   id uuid primary key default gen_random_uuid(),
   person_name text not null,
@@ -418,15 +421,3 @@ drop policy if exists "authenticated read personnel_loans" on personnel_loans;
 drop policy if exists "pengurus write personnel_loans" on personnel_loans;
 create policy "pengurus read write personnel_loans" on personnel_loans
   for all to authenticated using (is_pengurus()) with check (is_pengurus());
-
--- Public-safe cut for the Piutang line in Kas Saat Ini's breakdown —
--- strips person_name/note/recorded_by/kas_type/dates, keeping only what's
--- needed to compute the net outstanding total (amount, transaction_type).
--- Same treatment as payments_public/contributions_public: the view runs
--- as its owner, bypassing personnel_loans' pengurus-only RLS, which is
--- intentional since the view itself already strips every sensitive
--- column — individual loan details (who borrowed what) stay pengurus-only
--- via the base table.
-create or replace view personnel_loans_public as
-select amount, transaction_type from personnel_loans;
-grant select on personnel_loans_public to authenticated;

@@ -126,9 +126,7 @@ export default async function ReportPage({
           .select("amount, kas_type, expense_date")
           .eq("status", "released"),
     supabase.from("cash_transfers").select("amount, direction"),
-    isPengurus
-      ? supabase.from("personnel_loans").select("amount, transaction_type")
-      : supabase.from("personnel_loans_public").select("amount, transaction_type"),
+    supabase.from("personnel_loans").select("amount, kas_type, transaction_type, affects_kas"),
     supabase.from("settings").select("*").eq("id", 1).single<Settings>(),
   ]);
 
@@ -155,24 +153,33 @@ export default async function ReportPage({
       kasBalance.bri += amount;
     }
   });
-  // Loans to personnel are treated as still-liquid Petty Cash rather than
-  // cash that's left the kas — giving/repaying a loan no longer moves
-  // kasBalance at all; instead the net outstanding balance is folded
-  // straight into Petty Cash below, since it's considered recoverable
-  // money still effectively on hand. Warga see the same net total (via
-  // personnel_loans_public, which strips person_name/note/etc.) so Kas
-  // Saat Ini matches exactly what pengurus sees — individual loan detail
-  // (who borrowed what) stays pengurus-only via the base table.
+  // Loans to personnel are normally real cash leaving/returning to the kas
+  // (same as an expense) — except a backfilled loan that predates this
+  // app's tracking (affects_kas = false), which already left the kas
+  // before any opening balance/expense was recorded here and would
+  // double-subtract if applied again. Either way, the outstanding balance
+  // itself is shown separately below ("Piutang Personel") — deliberately
+  // not folded into Kas Saat Ini, since an outstanding loan isn't liquid
+  // cash.
+  // personnel_loans is pengurus-only end to end (RLS blocks warga from
+  // reading it at all), so a real warga session already gets an empty
+  // allLoans here — this isPengurus check exists only so a pengurus
+  // previewing "Lihat sebagai Warga" (whose underlying session still has
+  // full read access) sees the same, deliberately loan-effect-free, Kas
+  // Saat Ini a real warga would.
   let piutangPersonel = 0;
-  (allLoans ?? []).forEach((l) => {
-    const amount = Number(l.amount);
-    if (l.transaction_type === "pinjam") {
-      piutangPersonel += amount;
-    } else {
-      piutangPersonel -= amount;
-    }
-  });
-  kasBalance.tunai += piutangPersonel;
+  if (isPengurus) {
+    (allLoans ?? []).forEach((l) => {
+      const amount = Number(l.amount);
+      if (l.transaction_type === "pinjam") {
+        if (l.affects_kas) kasBalance[l.kas_type as KasType] -= amount;
+        piutangPersonel += amount;
+      } else {
+        if (l.affects_kas) kasBalance[l.kas_type as KasType] += amount;
+        piutangPersonel -= amount;
+      }
+    });
+  }
   const kasSaatIni = kasBalance.tunai + kasBalance.bri;
 
   // Every Sumbangan this year, warga-linked or external (Lain-lain, e.g.
@@ -337,26 +344,20 @@ export default async function ReportPage({
                 </span>
               </div>
             ))}
-            {/* Already folded into Petty Cash above (see kasBalance.tunai
-                adjustment), shown here too so it's broken out — not an
-                addition on top of Kas Saat Ini. The net total is visible
-                to everyone (personnel_loans_public strips who-borrowed-
-                what detail for warga); only the /piutang drill-down link
-                itself stays pengurus-only, since that page redirects
-                warga away. */}
-            <div className="flex items-center justify-between text-xs">
-              {isPengurus ? (
-                <a href="/piutang" className="text-gray-500 hover:underline">
-                  Piutang
-                </a>
-              ) : (
-                <span className="text-gray-500">Piutang</span>
-              )}
-              <span className="text-gray-700">
-                {formatRupiah(piutangPersonel)}
-              </span>
-            </div>
           </div>
+          {/* An outstanding loan isn't liquid cash, so it's never summed
+              into Kas Saat Ini above — just noted here as where else the
+              association's money is. Pengurus-only: /piutang itself
+              redirects warga away, and the underlying figure relies on
+              personnel_loans, which RLS keeps pengurus-only end to end. */}
+          {isPengurus && (
+            <p className="text-xs text-gray-400 mt-2 pt-2 border-t border-gray-100">
+              + Piutang Personel {formatRupiah(piutangPersonel)} (di luar kas) —{" "}
+              <a href="/piutang" className="text-blue-600 hover:underline">
+                lihat
+              </a>
+            </p>
+          )}
         </div>
         <div className="bg-white border border-gray-200 rounded-lg p-4 w-full">
           <p className="text-xs text-gray-500 mb-1">Total Terkumpul {periodLabel}</p>
