@@ -391,9 +391,13 @@ create policy "pengurus write cash_transfers" on cash_transfers
 -- affects_kas = true; false is only ever set via a one-off backfill script.
 -- The outstanding total itself ("Piutang Personel") is shown as separate
 -- info on /report, deliberately never summed into "Kas Saat Ini" — it
--- isn't liquid cash, it's money owed back. Unlike expenses, this is
--- pengurus-only end to end (/piutang redirects warga away) — both read and
--- write are gated by is_pengurus() below.
+-- isn't liquid cash, it's money owed back. Row-level detail (who borrowed
+-- what, via personnel_loans directly) stays pengurus-only end to end
+-- (/piutang redirects warga away) — both read and write are gated by
+-- is_pengurus() below. The kas-balance *effect* of loans (amount,
+-- kas_type, transaction_type, affects_kas — no person_name) is still
+-- exposed to warga via personnel_loans_public further down, so Kas Saat
+-- Ini's Petty Cash/Kas BRI split matches exactly what pengurus see.
 create table if not exists personnel_loans (
   id uuid primary key default gen_random_uuid(),
   person_name text not null,
@@ -421,3 +425,22 @@ drop policy if exists "authenticated read personnel_loans" on personnel_loans;
 drop policy if exists "pengurus write personnel_loans" on personnel_loans;
 create policy "pengurus read write personnel_loans" on personnel_loans
   for all to authenticated using (is_pengurus()) with check (is_pengurus());
+
+-- Public-safe cut so warga's Kas Saat Ini reflects the same kas-balance
+-- effect of personnel loans that pengurus see — strips person_name/note/
+-- recorded_by/transaction_date, keeping only what's needed to apply the
+-- same per-loan kas adjustment (amount, kas_type, transaction_type,
+-- affects_kas). Same treatment as payments_public/contributions_public:
+-- the view runs as its owner, bypassing personnel_loans' pengurus-only
+-- RLS, which is intentional since the view itself already strips every
+-- identifying column — who borrowed what stays pengurus-only via the
+-- base table.
+--
+-- Dropped and recreated rather than "create or replace" — an earlier,
+-- since-reverted version of this view only had (amount, transaction_type),
+-- and Postgres won't let create-or-replace insert a column (kas_type)
+-- ahead of an existing one, only append at the end.
+drop view if exists personnel_loans_public;
+create view personnel_loans_public as
+select amount, kas_type, transaction_type, affects_kas from personnel_loans;
+grant select on personnel_loans_public to authenticated;
