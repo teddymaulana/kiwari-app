@@ -1,5 +1,12 @@
 import { createAdminClient } from "@/lib/supabase/admin";
-import { MONTH_NAMES } from "@/lib/types";
+import { sendWhatsAppMessage } from "@/lib/fonnte";
+import { MONTH_NAMES, formatRupiah } from "@/lib/types";
+
+// Unit whose kepala keluarga gets pinged on every new claim so verification
+// doesn't wait for someone to happen to check Verifikasi Pembayaran —
+// mirrors the account-allowlist convention elsewhere (18g@kiwari.local is
+// this same unit's pengurus login).
+const CLAIM_NOTIFY_UNIT = "18G";
 
 // Shared by the public "Bayar IPL" form on /login (no session) and the
 // logged-in warga's version on /dashboard (household comes from the
@@ -99,6 +106,34 @@ export async function createPendingPaymentClaim({
   let message = `Klaim terkirim untuk ${claimedLabel} ${periodYear}.`;
   if (failed.length > 0) {
     message += ` Gagal: ${failed.map((f) => f.message).join("; ")}`;
+  }
+
+  // Best-effort notification to the designated unit so a new pending claim
+  // gets verified promptly — must never fail the claim itself, which has
+  // already succeeded above.
+  const [{ data: submitterHousehold }, { data: notifyHousehold }] = await Promise.all([
+    admin
+      .from("households")
+      .select("unit_no, name")
+      .eq("id", householdId)
+      .single<{ unit_no: string; name: string }>(),
+    admin
+      .from("households")
+      .select("phone")
+      .ilike("unit_no", CLAIM_NOTIFY_UNIT)
+      .single<{ phone: string | null }>(),
+  ]);
+
+  if (notifyHousehold?.phone && submitterHousehold) {
+    const notifyMessage = `Halo, ada klaim pembayaran IPL baru dari ${submitterHousehold.unit_no} - ${submitterHousehold.name} untuk ${claimedLabel} ${periodYear} (${formatRupiah(amount * claimed.length)}), menunggu verifikasi.`;
+    const result = await sendWhatsAppMessage(notifyHousehold.phone, notifyMessage);
+    await admin.from("activity_log").insert({
+      actor_email: actorEmail,
+      action: result.success ? "whatsapp.send" : "whatsapp.send_failed",
+      detail: result.success
+        ? `notif klaim baru -> ${notifyHousehold.phone}`
+        : `notif klaim baru -> ${notifyHousehold.phone} - ${result.reason}`,
+    });
   }
 
   return { success: true, message };
