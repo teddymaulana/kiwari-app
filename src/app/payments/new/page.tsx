@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { getCurrentUser, PAYMENT_RECORDERS } from "@/lib/auth";
+import { getCurrentUser, PAYMENT_RECORDERS, PAYMENT_VERIFIERS } from "@/lib/auth";
 import { confirmPaymentClaim, rejectPaymentClaim } from "./actions";
 import RecordPaymentForm from "./RecordPaymentForm";
 import SubmitButton from "@/components/SubmitButton";
@@ -109,22 +109,26 @@ export default async function NewPaymentPage({
                     Lihat Bukti
                   </a>
                 )}
-                <form action={confirmPaymentClaim.bind(null, c.id)}>
-                  <SubmitButton
-                    pendingText="Memproses..."
-                    className="text-xs bg-green-600 text-white rounded px-3 py-1.5 hover:bg-green-700 transition"
-                  >
-                    Konfirmasi
-                  </SubmitButton>
-                </form>
-                <form action={rejectPaymentClaim.bind(null, c.id)}>
-                  <SubmitButton
-                    pendingText="Memproses..."
-                    className="text-xs text-red-600 border border-red-200 rounded px-3 py-1.5 hover:bg-red-50 transition"
-                  >
-                    Tolak
-                  </SubmitButton>
-                </form>
+                {PAYMENT_VERIFIERS.includes(user.email) && (
+                  <>
+                    <form action={confirmPaymentClaim.bind(null, c.id)}>
+                      <SubmitButton
+                        pendingText="Memproses..."
+                        className="text-xs bg-green-600 text-white rounded px-3 py-1.5 hover:bg-green-700 transition"
+                      >
+                        Konfirmasi
+                      </SubmitButton>
+                    </form>
+                    <form action={rejectPaymentClaim.bind(null, c.id)}>
+                      <SubmitButton
+                        pendingText="Memproses..."
+                        className="text-xs text-red-600 border border-red-200 rounded px-3 py-1.5 hover:bg-red-50 transition"
+                      >
+                        Tolak
+                      </SubmitButton>
+                    </form>
+                  </>
+                )}
               </div>
             </div>
           ))}

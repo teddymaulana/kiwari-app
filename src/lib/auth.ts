@@ -16,8 +16,15 @@ export const EXPENSE_RECORDERS = ["18g@kiwari.local", "19b@kiwari.local"];
 // restricted to these two pengurus accounts, checked both in the UI
 // (payments/new/page.tsx) and again in the server action
 // (payments/new/actions.ts). Doesn't apply to Verifikasi Pembayaran
-// (Konfirmasi/Tolak) on the same page — that stays open to any pengurus.
+// (Konfirmasi/Tolak) on the same page — see PAYMENT_VERIFIERS below.
 export const PAYMENT_RECORDERS = ["18g@kiwari.local", "19b@kiwari.local"];
+
+// Verifikasi Pembayaran (the pending-claims list on /payments/new) is
+// visible to every pengurus so anyone can see what's awaiting review, but
+// only this account can actually click Konfirmasi/Tolak — checked both in
+// the UI (payments/new/page.tsx) and again in the server actions
+// (payments/new/actions.ts).
+export const PAYMENT_VERIFIERS = ["18g@kiwari.local"];
 
 // Recording a Sumbangan (Catat Sumbangan on /contributions) is restricted
 // to this one pengurus account, checked both in the UI

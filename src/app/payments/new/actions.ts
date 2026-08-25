@@ -3,7 +3,7 @@
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
-import { getCurrentUser, PAYMENT_RECORDERS } from "@/lib/auth";
+import { getCurrentUser, PAYMENT_RECORDERS, PAYMENT_VERIFIERS } from "@/lib/auth";
 import { sendWhatsAppMessage } from "@/lib/fonnte";
 import { MONTH_NAMES, formatRupiah } from "@/lib/types";
 
@@ -92,6 +92,7 @@ export async function recordPayments(formData: FormData) {
 export async function confirmPaymentClaim(id: string) {
   const user = await getCurrentUser();
   if (user?.role !== "pengurus") return;
+  if (!PAYMENT_VERIFIERS.includes(user.email)) return;
 
   const supabase = await createClient();
 
@@ -159,6 +160,7 @@ export async function confirmPaymentClaim(id: string) {
 export async function rejectPaymentClaim(id: string) {
   const user = await getCurrentUser();
   if (user?.role !== "pengurus") return;
+  if (!PAYMENT_VERIFIERS.includes(user.email)) return;
 
   const supabase = await createClient();
 
