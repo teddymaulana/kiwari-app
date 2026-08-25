@@ -3,8 +3,14 @@ import path from "path";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentUser, HOUSEHOLD_TOGGLERS } from "@/lib/auth";
-import { addHousehold, toggleHouseholdActive, sendLoginInvite } from "./actions";
+import {
+  addHousehold,
+  toggleHouseholdActive,
+  sendLoginInvite,
+  updateHouseholdContact,
+} from "./actions";
 import ToggleActiveButton from "./ToggleActiveButton";
+import EditHouseholdButton from "./EditHouseholdButton";
 import SubmitButton from "@/components/SubmitButton";
 import type { Household } from "@/lib/types";
 import { compareUnitNo } from "@/lib/types";
@@ -156,6 +162,11 @@ export default async function HouseholdsPage({
                   </span>
                 </td>
                 <td className="px-4 py-2 text-right whitespace-nowrap space-x-3">
+                  <EditHouseholdButton
+                    action={updateHouseholdContact.bind(null, h.id)}
+                    name={h.name}
+                    phone={h.phone}
+                  />
                   {pengurusHouseholdIds.has(h.id) && credentialUnits.has(h.unit_no) && h.phone && (
                     <>
                       {h.login_invite_sent_at && (

@@ -61,6 +61,38 @@ export async function addHousehold(formData: FormData) {
   revalidatePath("/households");
 }
 
+// Lets a pengurus correct a warga's name or No. HP after the fact (e.g. a
+// typo from import, or a resident switching numbers) — open to any
+// pengurus, same as addHousehold, unlike toggleHouseholdActive which is
+// restricted to HOUSEHOLD_TOGGLERS.
+export async function updateHouseholdContact(
+  id: string,
+  formData: FormData
+) {
+  const user = await getCurrentUser();
+  if (user?.role !== "pengurus") return;
+
+  const name = String(formData.get("name") || "").trim();
+  const phone = String(formData.get("phone") || "").trim();
+
+  if (!name) return;
+
+  const supabase = await createClient();
+
+  await supabase
+    .from("households")
+    .update({ name, phone: phone || null })
+    .eq("id", id);
+
+  await supabase.from("activity_log").insert({
+    actor_email: user.email,
+    action: "household.update_contact",
+    detail: `${id} -> ${name} / ${phone || "-"}`,
+  });
+
+  revalidatePath("/households");
+}
+
 export async function toggleHouseholdActive(id: string, isActive: boolean) {
   const user = await getCurrentUser();
   if (user?.role !== "pengurus") return;
