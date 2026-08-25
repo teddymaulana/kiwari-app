@@ -158,6 +158,28 @@ function extractAmount(ocrText: string): number | null {
   return Math.max(...pool);
 }
 
+// Standalone month-name keywords to look for in the OCR text (e.g. a
+// warga's transfer note reading "Agustus" or "IPL Agus") — a match auto-
+// selects that month below. Keys are checked against normalize()'d,
+// whitespace-tokenized text, so a keyword only matches as its own token,
+// never as part of a longer word (e.g. "agus" won't match inside
+// "agustinus"). Only Agustus/September for now — more months added here
+// once this is validated.
+const MONTH_KEYWORDS: Record<number, string[]> = {
+  8: ["agu", "agus", "agust", "agustus", "agst"],
+  9: ["sep", "sept", "september"],
+};
+
+function extractMonth(ocrText: string): number | null {
+  const tokens = new Set(normalize(ocrText).split(" ").filter(Boolean));
+
+  for (const [month, keywords] of Object.entries(MONTH_KEYWORDS)) {
+    if (keywords.some((k) => tokens.has(k))) return Number(month);
+  }
+
+  return null;
+}
+
 export async function POST(request: NextRequest) {
   const formData = await request.formData();
   const file = formData.get("file");
@@ -224,6 +246,7 @@ export async function POST(request: NextRequest) {
 
   const match = matchHousehold(text, households ?? []);
   const amount = extractAmount(text);
+  const month = extractMonth(text);
 
-  return NextResponse.json({ match, amount });
+  return NextResponse.json({ match, amount, month });
 }

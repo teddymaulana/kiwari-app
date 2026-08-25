@@ -9,6 +9,25 @@ import SubmitButton from "@/components/SubmitButton";
 
 type HouseholdOption = Pick<Household, "id" | "unit_no" | "name">;
 
+// Whether `month` can be selected given what's already selected — the
+// sequential-order rule (current month onward, oldest-unpaid-first; past
+// months exempt). Factored out so both direct checkbox clicks and the
+// receipt-detected auto-selection use identical logic.
+function monthIsUnlocked(
+  month: number,
+  selected: number[],
+  unpaid: number[],
+  currentMonth: number
+): boolean {
+  if (selected.includes(month)) return true;
+  if (month < currentMonth) return true;
+  const idx = unpaid.indexOf(month);
+  return unpaid
+    .slice(0, idx)
+    .filter((m) => m >= currentMonth)
+    .every((m) => selected.includes(m));
+}
+
 export default function BayarIplForm({
   households,
   defaultAmount,
@@ -23,6 +42,7 @@ export default function BayarIplForm({
   const [householdId, setHouseholdId] = useState("");
   const [suggestion, setSuggestion] = useState<HouseholdOption | null>(null);
   const [detectedAmount, setDetectedAmount] = useState<number | null>(null);
+  const [detectedMonth, setDetectedMonth] = useState<number | null>(null);
   const [checking, setChecking] = useState(false);
   const [checkNote, setCheckNote] = useState<string | null>(null);
   const [unpaidMonths, setUnpaidMonths] = useState<number[] | null>(null);
@@ -48,6 +68,22 @@ export default function BayarIplForm({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [householdId, year]);
 
+  // Auto-selects a month detected from the receipt's text (e.g. "Agustus")
+  // once the household's unpaid months are known — runs independently of
+  // the fetch above since the two requests (OCR, unpaid-months) can
+  // resolve in either order.
+  useEffect(() => {
+    if (detectedMonth === null || unpaidMonths === null) return;
+    if (!unpaidMonths.includes(detectedMonth)) return;
+    setSelectedMonths((prev) =>
+      monthIsUnlocked(detectedMonth, prev, unpaidMonths, currentMonth)
+        ? prev.includes(detectedMonth)
+          ? prev
+          : [...prev, detectedMonth].sort((a, b) => a - b)
+        : prev
+    );
+  }, [detectedMonth, unpaidMonths, currentMonth]);
+
   function selectHousehold(id: string) {
     setHouseholdId(id);
     setUnpaidMonths(null);
@@ -60,14 +96,8 @@ export default function BayarIplForm({
   // be left unpaid and picked independently, in any combination, since
   // forcing a full backlog catch-up here would be bad UX.
   function canToggle(month: number): boolean {
-    if (selectedMonths.includes(month)) return true;
-    if (month < currentMonth) return true;
     if (!unpaidMonths) return false;
-    const idx = unpaidMonths.indexOf(month);
-    return unpaidMonths
-      .slice(0, idx)
-      .filter((m) => m >= currentMonth)
-      .every((m) => selectedMonths.includes(m));
+    return monthIsUnlocked(month, selectedMonths, unpaidMonths, currentMonth);
   }
 
   function toggleMonth(month: number) {
@@ -96,6 +126,7 @@ export default function BayarIplForm({
     const file = e.target.files?.[0];
     setSuggestion(null);
     setDetectedAmount(null);
+    setDetectedMonth(null);
     setCheckNote(null);
     if (!file) return;
 
@@ -111,6 +142,9 @@ export default function BayarIplForm({
 
       if (typeof data.amount === "number") {
         setDetectedAmount(data.amount);
+      }
+      if (typeof data.month === "number") {
+        setDetectedMonth(data.month);
       }
 
       if (data.match) {
