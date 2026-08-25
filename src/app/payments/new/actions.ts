@@ -105,14 +105,18 @@ export async function confirmPaymentClaim(id: string) {
     .eq("id", id)
     .eq("status", "pending")
     .select(
-      "household_id, period_year, period_month, amount, households(unit_no, phone)"
+      "household_id, period_year, period_month, amount, households(unit_no, phone, phone_pasangan)"
     )
     .single<{
       household_id: string;
       period_year: number;
       period_month: number;
       amount: number;
-      households: { unit_no: string; phone: string | null } | null;
+      households: {
+        unit_no: string;
+        phone: string | null;
+        phone_pasangan: string | null;
+      } | null;
     }>();
 
   if (claim) {
@@ -124,16 +128,23 @@ export async function confirmPaymentClaim(id: string) {
 
     // Best-effort notification — a WhatsApp failure (no phone on file,
     // Fonnte device disconnected, etc.) must never block the confirmation
-    // itself, which has already succeeded above.
-    if (claim.households?.phone) {
-      const message = `Halo, pembayaran IPL ${MONTH_NAMES[claim.period_month - 1]} ${claim.period_year} untuk ${claim.households.unit_no} sebesar ${formatRupiah(Number(claim.amount))} telah dikonfirmasi pengurus. Terima kasih!`;
-      const result = await sendWhatsAppMessage(claim.households.phone, message);
+    // itself, which has already succeeded above. Sent to both numbers on
+    // file (kepala keluarga and pasangan) when both are set — a Set drops
+    // the duplicate if they happen to be the same number.
+    const phones = new Set(
+      [claim.households?.phone, claim.households?.phone_pasangan].filter(
+        (p): p is string => !!p
+      )
+    );
+    for (const phone of phones) {
+      const message = `Halo, pembayaran IPL ${MONTH_NAMES[claim.period_month - 1]} ${claim.period_year} untuk ${claim.households!.unit_no} sebesar ${formatRupiah(Number(claim.amount))} telah dikonfirmasi pengurus. Terima kasih!`;
+      const result = await sendWhatsAppMessage(phone, message);
       await supabase.from("activity_log").insert({
         actor_email: user.email,
         action: result.success ? "whatsapp.send" : "whatsapp.send_failed",
         detail: result.success
-          ? `notif konfirmasi pembayaran -> ${claim.households.phone}`
-          : `notif konfirmasi pembayaran -> ${claim.households.phone} - ${result.reason}`,
+          ? `notif konfirmasi pembayaran -> ${phone}`
+          : `notif konfirmasi pembayaran -> ${phone} - ${result.reason}`,
       });
     }
   }
@@ -157,14 +168,18 @@ export async function rejectPaymentClaim(id: string) {
     .eq("id", id)
     .eq("status", "pending")
     .select(
-      "household_id, period_year, period_month, amount, households(unit_no, phone)"
+      "household_id, period_year, period_month, amount, households(unit_no, phone, phone_pasangan)"
     )
     .single<{
       household_id: string;
       period_year: number;
       period_month: number;
       amount: number;
-      households: { unit_no: string; phone: string | null } | null;
+      households: {
+        unit_no: string;
+        phone: string | null;
+        phone_pasangan: string | null;
+      } | null;
     }>();
 
   if (claim) {
@@ -175,16 +190,23 @@ export async function rejectPaymentClaim(id: string) {
     });
 
     // Best-effort notification — a WhatsApp failure must never block the
-    // rejection itself, which has already succeeded above.
-    if (claim.households?.phone) {
-      const message = `Halo, klaim pembayaran IPL ${MONTH_NAMES[claim.period_month - 1]} ${claim.period_year} untuk ${claim.households.unit_no} sebesar ${formatRupiah(Number(claim.amount))} ditolak pengurus. Jika ini kesalahan, silakan kirim ulang klaim dengan bukti transfer yang jelas atau hubungi pengurus. Terima kasih!`;
-      const result = await sendWhatsAppMessage(claim.households.phone, message);
+    // rejection itself, which has already succeeded above. Sent to both
+    // numbers on file (kepala keluarga and pasangan) when both are set — a
+    // Set drops the duplicate if they happen to be the same number.
+    const phones = new Set(
+      [claim.households?.phone, claim.households?.phone_pasangan].filter(
+        (p): p is string => !!p
+      )
+    );
+    for (const phone of phones) {
+      const message = `Halo, klaim pembayaran IPL ${MONTH_NAMES[claim.period_month - 1]} ${claim.period_year} untuk ${claim.households!.unit_no} sebesar ${formatRupiah(Number(claim.amount))} ditolak pengurus. Jika ini kesalahan, silakan kirim ulang klaim dengan bukti transfer yang jelas atau hubungi pengurus. Terima kasih!`;
+      const result = await sendWhatsAppMessage(phone, message);
       await supabase.from("activity_log").insert({
         actor_email: user.email,
         action: result.success ? "whatsapp.send" : "whatsapp.send_failed",
         detail: result.success
-          ? `notif penolakan pembayaran -> ${claim.households.phone}`
-          : `notif penolakan pembayaran -> ${claim.households.phone} - ${result.reason}`,
+          ? `notif penolakan pembayaran -> ${phone}`
+          : `notif penolakan pembayaran -> ${phone} - ${result.reason}`,
       });
     }
   }
