@@ -14,15 +14,13 @@ const YEAR = 2026;
 
 // Dana pending with Bu Yane (a previous pengurus) — not backed by any
 // payments/expenses/cash_transfers row, so it's hardcoded here rather than
-// modeled in the DB. Subtracted from Kas Saat Ini's total directly (not
-// mutated into kasBalance.tunai) so the Petty Cash breakdown below can
-// show it as its own line instead of silently baking it into the number.
+// modeled in the DB. Only shown in the pengurus-only Cash breakdown below
+// (Petty Cash's displayed total and Kas Saat Ini are unaffected by it).
 const PENDING_DANA_BU_YANE = 1_000_000;
 
 // Leftover cash from the THR/Halal bi Halal + Kurban events — held
 // separately from day-to-day Petty Cash, same treatment as
-// PENDING_DANA_BU_YANE above (hardcoded, subtracted from Cash and from
-// Kas Saat Ini's total).
+// PENDING_DANA_BU_YANE above.
 const SISA_KAS_THR_HALBIL_KURBAN = 458_000;
 
 export default async function ReportPage({
@@ -202,12 +200,11 @@ export default async function ReportPage({
       piutangPersonel -= amount;
     }
   });
-  const kasSaatIni =
-    kasBalance.tunai +
-    kasBalance.bri +
-    piutangPersonel -
-    PENDING_DANA_BU_YANE -
-    SISA_KAS_THR_HALBIL_KURBAN;
+  // Petty Cash here matches the displayed line below exactly (kasBalance.
+  // tunai + piutangPersonel) — Kas Saat Ini is always exactly this plus
+  // Kas BRI.
+  const pettyCash = kasBalance.tunai + piutangPersonel;
+  const kasSaatIni = pettyCash + kasBalance.bri;
 
   // Every Sumbangan this year, warga-linked or external (Lain-lain, e.g.
   // "Sumbangan Developer") — all of it counts toward Total Terkumpul.
@@ -370,14 +367,8 @@ export default async function ReportPage({
                 just kasBalance.tunai on its own. */}
             <div className="flex items-center justify-between text-xs">
               <span className="text-gray-500">{KAS_LABELS.tunai}</span>
-              <span
-                className={
-                  kasBalance.tunai + piutangPersonel < 0
-                    ? "text-red-600"
-                    : "text-gray-700"
-                }
-              >
-                {formatRupiah(kasBalance.tunai + piutangPersonel)}
+              <span className={pettyCash < 0 ? "text-red-600" : "text-gray-700"}>
+                {formatRupiah(pettyCash)}
               </span>
             </div>
             {/* Decomposes Petty Cash for pengurus: Piutang Personel is
