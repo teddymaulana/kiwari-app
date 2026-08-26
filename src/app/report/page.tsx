@@ -12,6 +12,13 @@ type PaidEntry = { household_id: string; period_month: number; amount: number };
 // free input — swap this back to an editable field once other years exist.
 const YEAR = 2026;
 
+// Dana pending handed over from the previous pengurus — not backed by any
+// payments/expenses/cash_transfers row, so it's hardcoded here rather than
+// modeled in the DB. Comes straight out of Petty Cash (and so out of Kas
+// Saat Ini's total too, since that's tunai + bri + piutang) until it's
+// resolved, at which point this constant should just be deleted.
+const PENDING_DANA_TUNAI = 1_000_000;
+
 export default async function ReportPage({
   searchParams,
 }: {
@@ -189,6 +196,7 @@ export default async function ReportPage({
       piutangPersonel -= amount;
     }
   });
+  kasBalance.tunai -= PENDING_DANA_TUNAI;
   const kasSaatIni = kasBalance.tunai + kasBalance.bri + piutangPersonel;
 
   // Every Sumbangan this year, warga-linked or external (Lain-lain, e.g.
@@ -373,6 +381,15 @@ export default async function ReportPage({
               </>
             )}
           </p>
+          {/* PENDING_DANA_TUNAI is already subtracted from Petty Cash (and
+              so from kasSaatIni) above — this just explains why, and is
+              pengurus-only since it's about an internal handover issue,
+              not something warga need surfaced. */}
+          {isPengurus && (
+            <p className="text-xs text-gray-400 mt-2 pt-2 border-t border-gray-100">
+              Dana pending {formatRupiah(PENDING_DANA_TUNAI)}
+            </p>
+          )}
         </div>
         <div className="bg-white border border-gray-200 rounded-lg p-4 w-full">
           <p className="text-xs text-gray-500 mb-1">Total Terkumpul {periodLabel}</p>
