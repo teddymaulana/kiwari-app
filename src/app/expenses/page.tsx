@@ -18,7 +18,7 @@ const YEAR = 2026;
 export default async function ExpensesPage({
   searchParams,
 }: {
-  searchParams: Promise<{ month?: string; draft?: string }>;
+  searchParams: Promise<{ month?: string; draft?: string; error?: string }>;
 }) {
   const user = await getCurrentUser();
   // Pengurus-only — warga get the same per-month totals on Laporan
@@ -101,6 +101,12 @@ export default async function ExpensesPage({
       <p className="text-sm text-gray-500 mb-6">
         Total pengeluaran {periodLabel}: <strong>{formatRupiah(periodTotal)}</strong>
       </p>
+
+      {sp.error && (
+        <div className="mb-6 text-sm text-red-700 bg-red-50 border border-red-200 rounded px-3 py-2">
+          {sp.error}
+        </div>
+      )}
 
       {EXPENSE_RECORDERS.includes(user.email) && (
         <div className="bg-white border border-gray-200 rounded-lg p-6 mb-8">

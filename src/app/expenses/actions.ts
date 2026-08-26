@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getCurrentUser, EXPENSE_RECORDERS } from "@/lib/auth";
@@ -16,8 +17,12 @@ export async function addExpense(formData: FormData) {
   const kas_type = String(formData.get("kas_type") || "bri");
   const receipt = formData.get("receipt") as File | null;
 
-  if (!description || !amount || amount <= 0) return;
-  if (kas_type !== "tunai" && kas_type !== "bri") return;
+  if (!description || !amount || amount <= 0) {
+    redirect("/expenses?error=" + encodeURIComponent("Keterangan dan jumlah wajib diisi"));
+  }
+  if (kas_type !== "tunai" && kas_type !== "bri") {
+    redirect("/expenses?error=" + encodeURIComponent("Sumber kas tidak valid"));
+  }
 
   // Storage has no policy on this private bucket (see schema.sql), so
   // uploading needs the service role — same as bukti-transfer for
@@ -35,7 +40,7 @@ export async function addExpense(formData: FormData) {
 
   const supabase = await createClient();
 
-  await supabase.from("expenses").insert({
+  const { error } = await supabase.from("expenses").insert({
     description,
     amount,
     expense_date: expense_date || undefined,
@@ -43,6 +48,10 @@ export async function addExpense(formData: FormData) {
     receipt_path,
     recorded_by: user.email,
   });
+
+  if (error) {
+    redirect("/expenses?error=" + encodeURIComponent(error.message));
+  }
 
   await supabase.from("activity_log").insert({
     actor_email: user.email,
