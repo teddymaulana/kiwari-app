@@ -359,23 +359,32 @@ export default async function ReportPage({
             {formatRupiah(kasSaatIni)}
           </p>
           <div className="mt-3 pt-3 border-t border-gray-100 space-y-1">
-            {(["bri", "tunai"] as KasType[]).map((kasType) => (
-              <div key={kasType} className="flex items-center justify-between text-xs">
-                <span className="text-gray-500">{KAS_LABELS[kasType]}</span>
-                <span
-                  className={
-                    kasBalance[kasType] < 0 ? "text-red-600" : "text-gray-700"
-                  }
-                >
-                  {formatRupiah(kasBalance[kasType])}
-                </span>
-              </div>
-            ))}
-            {/* Decomposes Petty Cash for pengurus: the raw kasBalance.tunai
-                figure above still includes personnel loans (Piutang) and
-                money held separately from day-to-day cash (Bu Yane, THR/
-                Kurban leftovers) — Cash is what's really physically on
-                hand once all of that is backed out. Pengurus-only since
+            <div className="flex items-center justify-between text-xs">
+              <span className="text-gray-500">{KAS_LABELS.bri}</span>
+              <span className={kasBalance.bri < 0 ? "text-red-600" : "text-gray-700"}>
+                {formatRupiah(kasBalance.bri)}
+              </span>
+            </div>
+            {/* Petty Cash here is the total book value — physical cash
+                plus the outstanding Piutang Personel receivable — not
+                just kasBalance.tunai on its own. */}
+            <div className="flex items-center justify-between text-xs">
+              <span className="text-gray-500">{KAS_LABELS.tunai}</span>
+              <span
+                className={
+                  kasBalance.tunai + piutangPersonel < 0
+                    ? "text-red-600"
+                    : "text-gray-700"
+                }
+              >
+                {formatRupiah(kasBalance.tunai + piutangPersonel)}
+              </span>
+            </div>
+            {/* Decomposes Petty Cash for pengurus: Piutang Personel is
+                already folded into the Petty Cash total above, and money
+                held separately from day-to-day cash (Bu Yane, THR/Kurban
+                leftovers) is hardcoded — Cash is what's really physically
+                on hand once both are backed out. Pengurus-only since
                 warga only need the Petty Cash total, not this internal
                 reconciliation. */}
             {isPengurus && (
@@ -385,7 +394,6 @@ export default async function ReportPage({
                   <span>
                     {formatRupiah(
                       kasBalance.tunai -
-                        piutangPersonel -
                         PENDING_DANA_BU_YANE -
                         SISA_KAS_THR_HALBIL_KURBAN
                     )}
