@@ -12,6 +12,19 @@ type PaidEntry = { household_id: string; period_month: number; amount: number };
 // free input — swap this back to an editable field once other years exist.
 const YEAR = 2026;
 
+// Dana pending with Bu Yane (a previous pengurus) — not backed by any
+// payments/expenses/cash_transfers row, so it's hardcoded here rather than
+// modeled in the DB. Subtracted from Kas Saat Ini's total directly (not
+// mutated into kasBalance.tunai) so the Petty Cash breakdown below can
+// show it as its own line instead of silently baking it into the number.
+const PENDING_DANA_BU_YANE = 1_000_000;
+
+// Leftover cash from the THR/Halal bi Halal + Kurban events — held
+// separately from day-to-day Petty Cash, same treatment as
+// PENDING_DANA_BU_YANE above (hardcoded, subtracted from Cash and from
+// Kas Saat Ini's total).
+const SISA_KAS_THR_HALBIL_KURBAN = 458_000;
+
 export default async function ReportPage({
   searchParams,
 }: {
@@ -189,7 +202,12 @@ export default async function ReportPage({
       piutangPersonel -= amount;
     }
   });
-  const kasSaatIni = kasBalance.tunai + kasBalance.bri + piutangPersonel;
+  const kasSaatIni =
+    kasBalance.tunai +
+    kasBalance.bri +
+    piutangPersonel -
+    PENDING_DANA_BU_YANE -
+    SISA_KAS_THR_HALBIL_KURBAN;
 
   // Every Sumbangan this year, warga-linked or external (Lain-lain, e.g.
   // "Sumbangan Developer") — all of it counts toward Total Terkumpul.
@@ -341,7 +359,7 @@ export default async function ReportPage({
             {formatRupiah(kasSaatIni)}
           </p>
           <div className="mt-3 pt-3 border-t border-gray-100 space-y-1">
-            {(Object.keys(kasBalance) as KasType[]).map((kasType) => (
+            {(["bri", "tunai"] as KasType[]).map((kasType) => (
               <div key={kasType} className="flex items-center justify-between text-xs">
                 <span className="text-gray-500">{KAS_LABELS[kasType]}</span>
                 <span
@@ -353,26 +371,46 @@ export default async function ReportPage({
                 </span>
               </div>
             ))}
-          </div>
-          {/* Piutang Personel is already folded into Kas Saat Ini above
-              (kasSaatIni includes it, though the Petty Cash/Kas BRI
-              breakdown lines don't, since it isn't tied to either kas_type)
-              — noted here so the figure isn't a mystery. Shown to warga too
-              now (via personnel_loans_public), but the "lihat" link to
-              /piutang stays pengurus-only since that page still redirects
-              warga away and shows row-level (who-borrowed-what) detail. */}
-          <p className="text-xs text-gray-400 mt-2 pt-2 border-t border-gray-100">
-            Termasuk Piutang Personel {formatRupiah(piutangPersonel)}
+            {/* Decomposes Petty Cash for pengurus: the raw kasBalance.tunai
+                figure above still includes personnel loans (Piutang) and
+                money held separately from day-to-day cash (Bu Yane, THR/
+                Kurban leftovers) — Cash is what's really physically on
+                hand once all of that is backed out. Pengurus-only since
+                warga only need the Petty Cash total, not this internal
+                reconciliation. */}
             {isPengurus && (
-              <>
-                {" "}
-                —{" "}
-                <a href="/piutang" className="text-blue-600 hover:underline">
-                  lihat
-                </a>
-              </>
+              <div className="ml-2 pl-2 border-l-2 border-gray-100 space-y-1">
+                <div className="flex items-center justify-between text-xs text-gray-400">
+                  <span>Cash</span>
+                  <span>
+                    {formatRupiah(
+                      kasBalance.tunai -
+                        piutangPersonel -
+                        PENDING_DANA_BU_YANE -
+                        SISA_KAS_THR_HALBIL_KURBAN
+                    )}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between text-xs text-gray-400">
+                  <span>
+                    Piutang Personel —{" "}
+                    <a href="/piutang" className="text-blue-600 hover:underline">
+                      lihat
+                    </a>
+                  </span>
+                  <span>{formatRupiah(piutangPersonel)}</span>
+                </div>
+                <div className="flex items-center justify-between text-xs text-gray-400">
+                  <span>Pending di Bu Yane</span>
+                  <span>{formatRupiah(PENDING_DANA_BU_YANE)}</span>
+                </div>
+                <div className="flex items-center justify-between text-xs text-gray-400">
+                  <span>Sisa Kas THR Halbil + Kurban</span>
+                  <span>{formatRupiah(SISA_KAS_THR_HALBIL_KURBAN)}</span>
+                </div>
+              </div>
             )}
-          </p>
+          </div>
         </div>
         <div className="bg-white border border-gray-200 rounded-lg p-4 w-full">
           <p className="text-xs text-gray-500 mb-1">Total Terkumpul {periodLabel}</p>
