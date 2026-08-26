@@ -47,6 +47,7 @@ export default async function ReportPage({
         .select("*")
         .eq("period_year", year)
         .eq("status", "confirmed")
+        .eq("excluded", false)
         .returns<Payment[]>(),
     ]);
     units = (households ?? []).map((h) => ({
@@ -108,12 +109,17 @@ export default async function ReportPage({
     { data: settings },
   ] = await Promise.all([
     isPengurus
-      ? supabase.from("payments").select("amount, kas_type").eq("status", "confirmed")
+      ? supabase
+          .from("payments")
+          .select("amount, kas_type")
+          .eq("status", "confirmed")
+          .eq("excluded", false)
       : supabase.from("payments_public").select("amount, kas_type"),
     isPengurus
       ? supabase
           .from("contributions")
           .select("amount, kas_type, contribution_date, event_name, household_id")
+          .eq("excluded", false)
           .order("contribution_date", { ascending: true })
       : supabase
           .from("contributions_public")

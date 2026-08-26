@@ -84,6 +84,7 @@ export default async function DashboardPage({
       .eq("period_year", year)
       .eq("period_month", month)
       .eq("status", "confirmed")
+      .eq("excluded", false)
       .returns<Payment[]>(),
     supabase.from("settings").select("*").eq("id", 1).single<Settings>(),
     user?.householdId

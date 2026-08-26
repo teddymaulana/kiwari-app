@@ -29,6 +29,9 @@ export type Payment = {
   status: "pending" | "confirmed";
   receipt_path: string | null;
   kas_type: KasType;
+  // Pulls this payment out of every Lunas/total calculation without
+  // deleting it — see the excluded column comment in schema.sql.
+  excluded: boolean;
   created_at: string;
 };
 
@@ -47,6 +50,10 @@ export type Contribution = {
   note: string | null;
   recorded_by: string | null;
   kas_type: KasType;
+  // Pulls this contribution out of Total Terkumpul/Kas Saat Ini without
+  // deleting it — see payments.excluded / contributions.excluded in
+  // schema.sql.
+  excluded: boolean;
   created_at: string;
 };
 

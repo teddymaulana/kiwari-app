@@ -23,6 +23,7 @@ export async function GET(request: NextRequest) {
       .select("*")
       .eq("period_year", year)
       .eq("status", "confirmed")
+      .eq("excluded", false)
       .returns<Payment[]>(),
   ]);
 

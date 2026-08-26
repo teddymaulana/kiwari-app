@@ -74,3 +74,67 @@ export async function deleteContribution(id: string) {
   revalidatePath("/contributions");
   revalidatePath("/report");
 }
+
+// Pulls a contribution out of Total Terkumpul/Kas Saat Ini without
+// deleting it — e.g. while reconciling a discrepancy against an older
+// manual (pre-app) report. Same permission as deleteContribution.
+export async function excludeContribution(id: string) {
+  const user = await getCurrentUser();
+  if (user?.role !== "pengurus") return;
+  if (!CONTRIBUTION_DELETERS.includes(user.email)) return;
+
+  const supabase = await createClient();
+
+  const { data: contribution } = await supabase
+    .from("contributions")
+    .update({ excluded: true })
+    .eq("id", id)
+    .select("household_id, source_name, event_name, amount")
+    .single();
+
+  if (contribution) {
+    const origin = contribution.household_id
+      ? `household ${contribution.household_id}`
+      : `source "${contribution.source_name}"`;
+    await supabase.from("activity_log").insert({
+      actor_email: user.email,
+      action: "contribution.exclude",
+      detail: `${origin} - ${contribution.event_name} - ${contribution.amount}`,
+    });
+  }
+
+  revalidatePath("/contributions");
+  revalidatePath("/payments");
+  revalidatePath("/report");
+}
+
+// Reverses excludeContribution.
+export async function includeContribution(id: string) {
+  const user = await getCurrentUser();
+  if (user?.role !== "pengurus") return;
+  if (!CONTRIBUTION_DELETERS.includes(user.email)) return;
+
+  const supabase = await createClient();
+
+  const { data: contribution } = await supabase
+    .from("contributions")
+    .update({ excluded: false })
+    .eq("id", id)
+    .select("household_id, source_name, event_name, amount")
+    .single();
+
+  if (contribution) {
+    const origin = contribution.household_id
+      ? `household ${contribution.household_id}`
+      : `source "${contribution.source_name}"`;
+    await supabase.from("activity_log").insert({
+      actor_email: user.email,
+      action: "contribution.include",
+      detail: `${origin} - ${contribution.event_name} - ${contribution.amount}`,
+    });
+  }
+
+  revalidatePath("/contributions");
+  revalidatePath("/payments");
+  revalidatePath("/report");
+}

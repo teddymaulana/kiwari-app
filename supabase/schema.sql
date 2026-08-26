@@ -30,7 +30,8 @@ create table if not exists households (
   name text not null,              -- head of household
   phone text,
   phone_pasangan text,             -- spouse/emergency contact number
-  -- Comma-separated other names who might send the transfer (e.g. spouse)
+  -- Cnvm use 24
+  omma-separated other names who might send the transfer (e.g. spouse)
   -- — a unit can have one registered head of household but several people
   -- actually paying, and the bank receipt shows whoever sent it. Used by
   -- the "Bayar IPL" receipt OCR matcher on /login as extra name candidates.
@@ -80,6 +81,14 @@ alter table payments add column if not exists status text
 alter table payments add column if not exists receipt_path text;
 alter table payments add column if not exists kas_type text
   not null default 'bri' check (kas_type in ('tunai', 'bri'));
+
+-- Temporary correction switch for Kelola Pembayaran: lets a pengurus pull
+-- one confirmed payment out of every Lunas/total calculation (dashboard,
+-- report, CSV export) without touching the row itself — e.g. while
+-- reconciling a discrepancy against an older manual (pre-app) report. The
+-- record and its status stay exactly as recorded; this only gates whether
+-- it's counted, and is meant to be flipped back once resolved.
+alter table payments add column if not exists excluded boolean not null default false;
 
 -- Private bucket for uploaded payment receipts ("bukti transfer"). No public
 -- read policy — only the service_role key (server-side) can read/write, so
@@ -245,7 +254,7 @@ grant select on households_public to authenticated;
 create or replace view payments_public as
 select household_id, period_year, period_month, amount, kas_type
 from payments
-where status = 'confirmed';
+where status = 'confirmed' and not excluded;
 grant select on payments_public to authenticated;
 
 -- Other income collected from residents beyond the recurring monthly IPL —
@@ -280,6 +289,12 @@ create index if not exists contributions_date_idx on contributions (contribution
 alter table contributions alter column household_id drop not null;
 alter table contributions add column if not exists source_name text;
 
+-- Same temporary correction switch as payments.excluded (see comment
+-- there) — lets a pengurus pull a contribution out of Total
+-- Terkumpul/Kas Saat Ini without deleting it, e.g. while reconciling
+-- against an older manual report.
+alter table contributions add column if not exists excluded boolean not null default false;
+
 alter table contributions enable row level security;
 
 drop policy if exists "authenticated read contributions" on contributions;
@@ -306,7 +321,8 @@ create policy "pengurus write contributions" on contributions
 drop view if exists contributions_public;
 create view contributions_public as
 select household_id, source_name, event_name, amount, kas_type, contribution_date
-from contributions;
+from contributions
+where not excluded;
 grant select on contributions_public to authenticated;
 
 -- Community expenses (Pengeluaran) — e.g. keamanan, kebersihan, perbaikan.

@@ -1,8 +1,14 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentUser, CONTRIBUTION_RECORDERS, CONTRIBUTION_DELETERS } from "@/lib/auth";
-import { addContribution, deleteContribution } from "./actions";
+import {
+  addContribution,
+  deleteContribution,
+  excludeContribution,
+  includeContribution,
+} from "./actions";
 import DeleteContributionButton from "./DeleteContributionButton";
+import ExcludeToggleButton from "@/components/ExcludeToggleButton";
 import SumbanganTabs from "./SumbanganTabs";
 import type { Contribution, Household } from "@/lib/types";
 import { formatRupiah, KAS_LABELS, compareUnitNo } from "@/lib/types";
@@ -58,8 +64,13 @@ export default async function ContributionsPage({
     label: `${h.unit_no} - ${h.name}`,
   }));
   const activeHouseholds = activeHh ?? [];
+  // Every contribution this year, including excluded ones — the Kelola/
+  // Lain-lain listings below need to keep showing excluded rows so they
+  // can be toggled back. Only the grid/total figures (activeRows) leave
+  // excluded rows out, matching /report.
   const detailRows = contributions ?? [];
-  const allEntries = detailRows.map((c) => ({
+  const activeRows = detailRows.filter((c) => !c.excluded);
+  const allEntries = activeRows.map((c) => ({
     household_id: c.household_id,
     amount: Number(c.amount),
   }));
@@ -69,6 +80,7 @@ export default async function ContributionsPage({
   (households ?? []).sort((a, b) => compareUnitNo(a.unit_no, b.unit_no));
 
   const householdEntries = detailRows.filter((c) => c.household_id);
+  const activeHouseholdEntries = activeRows.filter((c) => c.household_id);
   const externalDetailRows = detailRows.filter((c) => !c.household_id);
   const filteredHouseholdEntries = householdFilter
     ? householdEntries.filter((c) => c.household_id === householdFilter)
@@ -77,15 +89,16 @@ export default async function ContributionsPage({
     ? units.find((u) => u.id === householdFilter) ?? null
     : null;
 
-  // Distinct acara among household-linked entries, in the order they first
-  // appear (entries are fetched oldest-first) — becomes the grid's columns.
+  // Distinct acara among active (non-excluded) household-linked entries,
+  // in the order they first appear (entries are fetched oldest-first) —
+  // becomes the grid's columns.
   const eventNames: string[] = [];
-  householdEntries.forEach((e) => {
+  activeHouseholdEntries.forEach((e) => {
     if (!eventNames.includes(e.event_name)) eventNames.push(e.event_name);
   });
 
   const amountMap = new Map<string, number>();
-  householdEntries.forEach((e) => {
+  activeHouseholdEntries.forEach((e) => {
     const key = `${e.household_id}|${e.event_name}`;
     amountMap.set(key, (amountMap.get(key) ?? 0) + Number(e.amount));
   });
@@ -97,7 +110,7 @@ export default async function ContributionsPage({
     );
 
   const eventTotals = new Map<string, number>();
-  householdEntries.forEach((e) => {
+  activeHouseholdEntries.forEach((e) => {
     eventTotals.set(
       e.event_name,
       (eventTotals.get(e.event_name) ?? 0) + Number(e.amount)
@@ -295,19 +308,35 @@ export default async function ContributionsPage({
                           {new Date(c.contribution_date).toLocaleDateString("id-ID")}
                         </td>
                         <td className="px-4 py-2">{c.source_name || "—"}</td>
-                        <td className="px-4 py-2">{c.event_name}</td>
+                        <td className="px-4 py-2">
+                          {c.event_name}
+                          {c.excluded && (
+                            <span className="ml-1 text-xs rounded-full bg-gray-100 text-gray-500 px-2 py-0.5">
+                              Dikecualikan
+                            </span>
+                          )}
+                        </td>
                         <td className="px-4 py-2 text-gray-500">
                           {formatRupiah(Number(c.amount))}
                         </td>
                         <td className="px-4 py-2 text-gray-500">
                           {KAS_LABELS[c.kas_type]}
                         </td>
-                        <td className="px-4 py-2 text-right">
+                        <td className="px-4 py-2 text-right space-x-3 whitespace-nowrap">
                           {CONTRIBUTION_DELETERS.includes(user.email) && (
-                            <DeleteContributionButton
-                              action={deleteContribution.bind(null, c.id)}
-                              description={`${c.event_name} - ${c.source_name || "—"}`}
-                            />
+                            <>
+                              <ExcludeToggleButton
+                                action={(c.excluded
+                                  ? includeContribution
+                                  : excludeContribution
+                                ).bind(null, c.id)}
+                                excluded={c.excluded}
+                              />
+                              <DeleteContributionButton
+                                action={deleteContribution.bind(null, c.id)}
+                                description={`${c.event_name} - ${c.source_name || "—"}`}
+                              />
+                            </>
                           )}
                         </td>
                       </tr>
@@ -387,19 +416,35 @@ export default async function ContributionsPage({
                         <td className="px-4 py-2">
                           {c.households?.unit_no} - {c.households?.name}
                         </td>
-                        <td className="px-4 py-2">{c.event_name}</td>
+                        <td className="px-4 py-2">
+                          {c.event_name}
+                          {c.excluded && (
+                            <span className="ml-1 text-xs rounded-full bg-gray-100 text-gray-500 px-2 py-0.5">
+                              Dikecualikan
+                            </span>
+                          )}
+                        </td>
                         <td className="px-4 py-2 text-gray-500">
                           {formatRupiah(Number(c.amount))}
                         </td>
                         <td className="px-4 py-2 text-gray-500">
                           {KAS_LABELS[c.kas_type]}
                         </td>
-                        <td className="px-4 py-2 text-right">
+                        <td className="px-4 py-2 text-right space-x-3 whitespace-nowrap">
                           {CONTRIBUTION_DELETERS.includes(user.email) && (
-                            <DeleteContributionButton
-                              action={deleteContribution.bind(null, c.id)}
-                              description={`${c.event_name} - ${c.households?.unit_no} ${c.households?.name}`}
-                            />
+                            <>
+                              <ExcludeToggleButton
+                                action={(c.excluded
+                                  ? includeContribution
+                                  : excludeContribution
+                                ).bind(null, c.id)}
+                                excluded={c.excluded}
+                              />
+                              <DeleteContributionButton
+                                action={deleteContribution.bind(null, c.id)}
+                                description={`${c.event_name} - ${c.households?.unit_no} ${c.households?.name}`}
+                              />
+                            </>
                           )}
                         </td>
                       </tr>
