@@ -241,9 +241,9 @@ export default async function DashboardPage({
                   )}
                   <Link
                     href="/bayar-ipl"
-                    className="inline-block text-xs text-blue-600 hover:text-blue-700 mt-2"
+                    className="block text-center bg-blue-600 text-white rounded py-1.5 text-sm font-medium hover:bg-blue-700 transition mt-3"
                   >
-                    + Bayar IPL
+                    Bayar IPL
                   </Link>
                 </div>
               );
