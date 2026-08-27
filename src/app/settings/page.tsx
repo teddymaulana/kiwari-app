@@ -1,6 +1,10 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import { getCurrentUser } from "@/lib/auth";
+import {
+  getCurrentUser,
+  CASH_TRANSFER_RECORDERS,
+  WHATSAPP_TEST_SENDERS,
+} from "@/lib/auth";
 import {
   updateOpeningBalance,
   createWargaUser,
@@ -74,66 +78,68 @@ export default async function SettingsPage({
         </div>
       </div>
 
-      <div>
-        <h2 className="text-sm font-medium text-gray-700 mb-1">
-          Transfer Kas
-        </h2>
-        <p className="text-xs text-gray-400 mb-4">
-          Catat perpindahan uang antar kas — mis. tarik tunai dari Kas BRI
-          untuk mengisi kas tunai, atau setor kas tunai ke Kas BRI. Tidak
-          menambah/mengurangi total kas, hanya memindahkan saldo antar
-          keduanya.
-        </p>
+      {CASH_TRANSFER_RECORDERS.includes(user.email) && (
+        <div>
+          <h2 className="text-sm font-medium text-gray-700 mb-1">
+            Transfer Kas
+          </h2>
+          <p className="text-xs text-gray-400 mb-4">
+            Catat perpindahan uang antar kas — mis. tarik tunai dari Kas BRI
+            untuk mengisi kas tunai, atau setor kas tunai ke Kas BRI. Tidak
+            menambah/mengurangi total kas, hanya memindahkan saldo antar
+            keduanya.
+          </p>
 
-        {kas_error && (
-          <div className="mb-4 text-sm text-red-700 bg-red-50 border border-red-200 rounded px-3 py-2">
-            {kas_error}
-          </div>
-        )}
-        {kas_success && (
-          <div className="mb-4 text-sm text-green-700 bg-green-50 border border-green-200 rounded px-3 py-2">
-            Transfer kas berhasil dicatat.
-          </div>
-        )}
+          {kas_error && (
+            <div className="mb-4 text-sm text-red-700 bg-red-50 border border-red-200 rounded px-3 py-2">
+              {kas_error}
+            </div>
+          )}
+          {kas_success && (
+            <div className="mb-4 text-sm text-green-700 bg-green-50 border border-green-200 rounded px-3 py-2">
+              Transfer kas berhasil dicatat.
+            </div>
+          )}
 
-        <form
-          action={recordCashTransfer}
-          className="bg-white border border-gray-200 rounded-lg p-6 grid sm:grid-cols-4 gap-3"
-        >
-          <select
-            name="direction"
-            defaultValue="bri_to_tunai"
-            className="rounded border border-gray-300 px-3 py-2 text-sm sm:col-span-2"
+          <form
+            action={recordCashTransfer}
+            className="bg-white border border-gray-200 rounded-lg p-6 grid sm:grid-cols-4 gap-3"
           >
-            <option value="bri_to_tunai">Tarik Tunai (Kas BRI → Petty Cash)</option>
-            <option value="tunai_to_bri">Setor Tunai (Petty Cash → Kas BRI)</option>
-          </select>
-          <input
-            type="number"
-            name="amount"
-            placeholder="Jumlah (Rp)"
-            required
-            className="rounded border border-gray-300 px-3 py-2 text-sm"
-          />
-          <input
-            type="date"
-            name="transfer_date"
-            defaultValue={new Date().toISOString().slice(0, 10)}
-            className="rounded border border-gray-300 px-3 py-2 text-sm"
-          />
-          <input
-            name="note"
-            placeholder="Catatan (opsional)"
-            className="rounded border border-gray-300 px-3 py-2 text-sm sm:col-span-3"
-          />
-          <SubmitButton
-            pendingText="Menyimpan..."
-            className="bg-blue-600 text-white rounded px-4 py-2 text-sm font-medium hover:bg-blue-700 transition"
-          >
-            Simpan
-          </SubmitButton>
-        </form>
-      </div>
+            <select
+              name="direction"
+              defaultValue="bri_to_tunai"
+              className="rounded border border-gray-300 px-3 py-2 text-sm sm:col-span-2"
+            >
+              <option value="bri_to_tunai">Tarik Tunai (Kas BRI → Petty Cash)</option>
+              <option value="tunai_to_bri">Setor Tunai (Petty Cash → Kas BRI)</option>
+            </select>
+            <input
+              type="number"
+              name="amount"
+              placeholder="Jumlah (Rp)"
+              required
+              className="rounded border border-gray-300 px-3 py-2 text-sm"
+            />
+            <input
+              type="date"
+              name="transfer_date"
+              defaultValue={new Date().toISOString().slice(0, 10)}
+              className="rounded border border-gray-300 px-3 py-2 text-sm"
+            />
+            <input
+              name="note"
+              placeholder="Catatan (opsional)"
+              className="rounded border border-gray-300 px-3 py-2 text-sm sm:col-span-3"
+            />
+            <SubmitButton
+              pendingText="Menyimpan..."
+              className="bg-blue-600 text-white rounded px-4 py-2 text-sm font-medium hover:bg-blue-700 transition"
+            >
+              Simpan
+            </SubmitButton>
+          </form>
+        </div>
+      )}
 
       <div>
         <h2 className="text-sm font-medium text-gray-700 mb-1">
@@ -186,52 +192,54 @@ export default async function SettingsPage({
         </form>
       </div>
 
-      <div>
-        <h2 className="text-sm font-medium text-gray-700 mb-1">
-          Kirim Pesan WhatsApp
-        </h2>
-        <p className="text-xs text-gray-400 mb-4">
-          Uji coba integrasi WhatsApp (Fonnte) — kirim pesan manual ke satu
-          nomor. Butuh <code>FONNTE_TOKEN</code> di environment variables
-          (lihat README).
-        </p>
+      {WHATSAPP_TEST_SENDERS.includes(user.email) && (
+        <div>
+          <h2 className="text-sm font-medium text-gray-700 mb-1">
+            Kirim Pesan WhatsApp
+          </h2>
+          <p className="text-xs text-gray-400 mb-4">
+            Uji coba integrasi WhatsApp (Fonnte) — kirim pesan manual ke satu
+            nomor. Butuh <code>FONNTE_TOKEN</code> di environment variables
+            (lihat README).
+          </p>
 
-        {wa_error && (
-          <div className="mb-4 text-sm text-red-700 bg-red-50 border border-red-200 rounded px-3 py-2">
-            {wa_error}
-          </div>
-        )}
-        {wa_success && (
-          <div className="mb-4 text-sm text-green-700 bg-green-50 border border-green-200 rounded px-3 py-2">
-            Pesan berhasil dikirim.
-          </div>
-        )}
+          {wa_error && (
+            <div className="mb-4 text-sm text-red-700 bg-red-50 border border-red-200 rounded px-3 py-2">
+              {wa_error}
+            </div>
+          )}
+          {wa_success && (
+            <div className="mb-4 text-sm text-green-700 bg-green-50 border border-green-200 rounded px-3 py-2">
+              Pesan berhasil dikirim.
+            </div>
+          )}
 
-        <form
-          action={sendTestWhatsApp}
-          className="bg-white border border-gray-200 rounded-lg p-6 space-y-3"
-        >
-          <input
-            name="phone"
-            placeholder="No. HP (mis. 08123456789)"
-            required
-            className="w-full rounded border border-gray-300 px-3 py-2 text-sm"
-          />
-          <textarea
-            name="message"
-            placeholder="Pesan"
-            required
-            rows={3}
-            className="w-full rounded border border-gray-300 px-3 py-2 text-sm"
-          />
-          <SubmitButton
-            pendingText="Mengirim..."
-            className="bg-blue-600 text-white rounded px-4 py-2 text-sm font-medium hover:bg-blue-700 transition"
+          <form
+            action={sendTestWhatsApp}
+            className="bg-white border border-gray-200 rounded-lg p-6 space-y-3"
           >
-            Kirim
-          </SubmitButton>
-        </form>
-      </div>
+            <input
+              name="phone"
+              placeholder="No. HP (mis. 08123456789)"
+              required
+              className="w-full rounded border border-gray-300 px-3 py-2 text-sm"
+            />
+            <textarea
+              name="message"
+              placeholder="Pesan"
+              required
+              rows={3}
+              className="w-full rounded border border-gray-300 px-3 py-2 text-sm"
+            />
+            <SubmitButton
+              pendingText="Mengirim..."
+              className="bg-blue-600 text-white rounded px-4 py-2 text-sm font-medium hover:bg-blue-700 transition"
+            >
+              Kirim
+            </SubmitButton>
+          </form>
+        </div>
+      )}
 
       <div>
         <h2 className="text-sm font-medium text-gray-700 mb-1">

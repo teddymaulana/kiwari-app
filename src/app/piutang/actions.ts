@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
-import { getCurrentUser } from "@/lib/auth";
+import { getCurrentUser, PERSONNEL_LOAN_DELETERS } from "@/lib/auth";
 
 export async function addPersonnelLoan(formData: FormData) {
   const user = await getCurrentUser();
@@ -44,6 +44,7 @@ export async function addPersonnelLoan(formData: FormData) {
 export async function deletePersonnelLoan(id: string) {
   const user = await getCurrentUser();
   if (user?.role !== "pengurus") return;
+  if (!PERSONNEL_LOAN_DELETERS.includes(user.email)) return;
 
   const supabase = await createClient();
 

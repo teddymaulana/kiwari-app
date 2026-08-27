@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import { getCurrentUser } from "@/lib/auth";
+import { getCurrentUser, PERSONNEL_LOAN_DELETERS } from "@/lib/auth";
 import { addPersonnelLoan, deletePersonnelLoan } from "./actions";
 import type { PersonnelLoan } from "@/lib/types";
 import { formatRupiah, KAS_LABELS } from "@/lib/types";
@@ -196,14 +196,16 @@ export default async function PiutangPage() {
                   {KAS_LABELS[l.kas_type]}
                 </td>
                 <td className="px-4 py-2 text-right">
-                  <form action={deletePersonnelLoan.bind(null, l.id)}>
-                    <SubmitButton
-                      pendingText="Menghapus..."
-                      className="text-xs text-red-600 hover:text-red-700 transition"
-                    >
-                      Hapus
-                    </SubmitButton>
-                  </form>
+                  {PERSONNEL_LOAN_DELETERS.includes(user.email) && (
+                    <form action={deletePersonnelLoan.bind(null, l.id)}>
+                      <SubmitButton
+                        pendingText="Menghapus..."
+                        className="text-xs text-red-600 hover:text-red-700 transition"
+                      >
+                        Hapus
+                      </SubmitButton>
+                    </form>
+                  )}
                 </td>
               </tr>
             ))}

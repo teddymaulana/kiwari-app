@@ -33,22 +33,43 @@ export const PAYMENT_VERIFIERS = ["18g@kiwari.local"];
 export const CONTRIBUTION_RECORDERS = ["18g@kiwari.local"];
 
 // Deleting a Sumbangan (contribution) entry — warga-linked or external
-// ("Lain-lain") — is restricted to this one pengurus account, checked both
-// in the UI (contributions/page.tsx) and again in the server action
+// ("Lain-lain") — is restricted to these two pengurus accounts, checked
+// both in the UI (contributions/page.tsx) and again in the server action
 // (contributions/actions.ts).
-export const CONTRIBUTION_DELETERS = ["18g@kiwari.local"];
+export const CONTRIBUTION_DELETERS = ["18g@kiwari.local", "19b@kiwari.local"];
 
 // Deleting a recorded IPL payment (e.g. entered by mistake, or a bank
 // transfer claim that turned out not to have gone through) is restricted
-// to this one pengurus account, checked both in the UI (payments/page.tsx)
-// and again in the server action (payments/actions.ts).
-export const PAYMENT_DELETERS = ["18g@kiwari.local"];
+// to these two pengurus accounts, checked both in the UI
+// (payments/page.tsx) and again in the server action (payments/actions.ts).
+export const PAYMENT_DELETERS = ["18g@kiwari.local", "19b@kiwari.local"];
+
+// Deleting a Piutang Personel (personnel loan) entry is restricted to
+// these two pengurus accounts, checked both in the UI (piutang/page.tsx)
+// and again in the server action (piutang/actions.ts).
+export const PERSONNEL_LOAN_DELETERS = ["18g@kiwari.local", "19b@kiwari.local"];
 
 // Toggling a household's Aktif/Nonaktif status (on /households) is
 // restricted to this one pengurus account, checked both in the UI
 // (households/page.tsx) and again in the server action
 // (households/actions.ts).
 export const HOUSEHOLD_TOGGLERS = ["18g@kiwari.local"];
+
+// Adding a new household (Tambah warga baru on /households) is restricted
+// to this one pengurus account, checked both in the UI (households/page.tsx)
+// and again in the server action (households/actions.ts).
+export const HOUSEHOLD_CREATORS = ["18g@kiwari.local"];
+
+// Recording a Transfer Kas (moving balance between Kas BRI and Petty Cash
+// on /settings) is restricted to this one pengurus account, checked both
+// in the UI (settings/page.tsx) and again in the server action
+// (settings/actions.ts).
+export const CASH_TRANSFER_RECORDERS = ["18g@kiwari.local"];
+
+// Sending a test WhatsApp message (Kirim Pesan WhatsApp on /settings) is
+// restricted to this one pengurus account, checked both in the UI
+// (settings/page.tsx) and again in the server action (settings/actions.ts).
+export const WHATSAPP_TEST_SENDERS = ["18g@kiwari.local"];
 
 export type CurrentUser = {
   id: string;

@@ -2,7 +2,7 @@ import fs from "fs";
 import path from "path";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import { getCurrentUser, HOUSEHOLD_TOGGLERS } from "@/lib/auth";
+import { getCurrentUser, HOUSEHOLD_TOGGLERS, HOUSEHOLD_CREATORS } from "@/lib/auth";
 import {
   addHousehold,
   toggleHouseholdActive,
@@ -80,48 +80,50 @@ export default async function HouseholdsPage({
         </div>
       )}
 
-      <div className="bg-white border border-gray-200 rounded-lg p-6 mb-8">
-        <h2 className="text-sm font-medium text-gray-700 mb-4">
-          Tambah warga baru
-        </h2>
-        <form action={addHousehold} className="space-y-3">
-          <div className="grid sm:grid-cols-4 gap-3">
+      {HOUSEHOLD_CREATORS.includes(user.email) && (
+        <div className="bg-white border border-gray-200 rounded-lg p-6 mb-8">
+          <h2 className="text-sm font-medium text-gray-700 mb-4">
+            Tambah warga baru
+          </h2>
+          <form action={addHousehold} className="space-y-3">
+            <div className="grid sm:grid-cols-4 gap-3">
+              <input
+                name="unit_no"
+                placeholder="No. Rumah (mis. Blok A-12)"
+                required
+                className="rounded border border-gray-300 px-3 py-2 text-sm"
+              />
+              <input
+                name="name"
+                placeholder="Nama Kepala Keluarga"
+                required
+                className="rounded border border-gray-300 px-3 py-2 text-sm"
+              />
+              <input
+                name="phone"
+                placeholder="No. HP (opsional)"
+                className="rounded border border-gray-300 px-3 py-2 text-sm"
+              />
+              <input
+                name="phone_pasangan"
+                placeholder="No. HP Pasangan (opsional)"
+                className="rounded border border-gray-300 px-3 py-2 text-sm"
+              />
+            </div>
             <input
-              name="unit_no"
-              placeholder="No. Rumah (mis. Blok A-12)"
-              required
-              className="rounded border border-gray-300 px-3 py-2 text-sm"
+              name="alt_names"
+              placeholder="Nama lain yang bisa transfer, pisahkan koma (mis. istri/suami — opsional)"
+              className="w-full rounded border border-gray-300 px-3 py-2 text-sm"
             />
-            <input
-              name="name"
-              placeholder="Nama Kepala Keluarga"
-              required
-              className="rounded border border-gray-300 px-3 py-2 text-sm"
-            />
-            <input
-              name="phone"
-              placeholder="No. HP (opsional)"
-              className="rounded border border-gray-300 px-3 py-2 text-sm"
-            />
-            <input
-              name="phone_pasangan"
-              placeholder="No. HP Pasangan (opsional)"
-              className="rounded border border-gray-300 px-3 py-2 text-sm"
-            />
-          </div>
-          <input
-            name="alt_names"
-            placeholder="Nama lain yang bisa transfer, pisahkan koma (mis. istri/suami — opsional)"
-            className="w-full rounded border border-gray-300 px-3 py-2 text-sm"
-          />
-          <SubmitButton
-            pendingText="Menyimpan..."
-            className="bg-blue-600 text-white rounded px-4 py-2 text-sm font-medium hover:bg-blue-700 transition"
-          >
-            Tambah
-          </SubmitButton>
-        </form>
-      </div>
+            <SubmitButton
+              pendingText="Menyimpan..."
+              className="bg-blue-600 text-white rounded px-4 py-2 text-sm font-medium hover:bg-blue-700 transition"
+            >
+              Tambah
+            </SubmitButton>
+          </form>
+        </div>
+      )}
 
       <div className="bg-white border border-gray-200 rounded-lg overflow-x-auto">
         <table className="w-full text-sm">

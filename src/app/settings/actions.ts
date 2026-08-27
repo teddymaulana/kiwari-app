@@ -4,7 +4,11 @@ import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { getCurrentUser } from "@/lib/auth";
+import {
+  getCurrentUser,
+  CASH_TRANSFER_RECORDERS,
+  WHATSAPP_TEST_SENDERS,
+} from "@/lib/auth";
 import { sendWhatsAppMessage } from "@/lib/fonnte";
 
 // Kas balance carried over from before this app existed — not income, so
@@ -98,6 +102,7 @@ export async function createWargaUser(formData: FormData) {
 export async function sendTestWhatsApp(formData: FormData) {
   const user = await getCurrentUser();
   if (user?.role !== "pengurus") redirect("/dashboard");
+  if (!WHATSAPP_TEST_SENDERS.includes(user.email)) redirect("/settings");
 
   const phone = String(formData.get("phone") || "").trim();
   const message = String(formData.get("message") || "").trim();
@@ -134,6 +139,7 @@ export async function sendTestWhatsApp(formData: FormData) {
 export async function recordCashTransfer(formData: FormData) {
   const user = await getCurrentUser();
   if (user?.role !== "pengurus") redirect("/dashboard");
+  if (!CASH_TRANSFER_RECORDERS.includes(user.email)) redirect("/settings");
 
   const amount = Number(formData.get("amount"));
   const direction = String(formData.get("direction") || "");

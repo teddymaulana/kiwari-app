@@ -5,7 +5,7 @@ import path from "path";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import { getCurrentUser, HOUSEHOLD_TOGGLERS } from "@/lib/auth";
+import { getCurrentUser, HOUSEHOLD_TOGGLERS, HOUSEHOLD_CREATORS } from "@/lib/auth";
 import { sendWhatsAppMessage } from "@/lib/fonnte";
 
 // Looks up a unit's login credentials from warga_credentials.csv — the
@@ -33,6 +33,7 @@ function findCredential(unitNo: string): { email: string; password: string } | n
 export async function addHousehold(formData: FormData) {
   const user = await getCurrentUser();
   if (user?.role !== "pengurus") return;
+  if (!HOUSEHOLD_CREATORS.includes(user.email)) return;
 
   const unit_no = String(formData.get("unit_no") || "").trim();
   const name = String(formData.get("name") || "").trim();
