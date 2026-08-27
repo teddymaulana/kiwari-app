@@ -126,14 +126,19 @@ export async function sendLoginInvite(id: string) {
   const supabase = await createClient();
 
   // Only applies to households actually linked to a pengurus-role login
-  // (profiles.role = 'pengurus') — not every warga.
-  const { data: pengurusProfile } = await supabase
+  // (profiles.role = 'pengurus') — deliberately not every warga yet (see
+  // households/page.tsx, which gates the button the same way). Not
+  // .maybeSingle(): a pengurus's household can have two linked profiles
+  // (their @kiwari.local pengurus login and their @kiwari.warga resident
+  // login) even though only one of those is role='pengurus', so this
+  // stays defensive rather than assuming exactly one row.
+  const { data: pengurusProfiles } = await supabase
     .from("profiles")
     .select("id")
     .eq("household_id", id)
     .eq("role", "pengurus")
-    .maybeSingle();
-  if (!pengurusProfile) return;
+    .limit(1);
+  if (!pengurusProfiles || pengurusProfiles.length === 0) return;
 
   const { data: household } = await supabase
     .from("households")

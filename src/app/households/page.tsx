@@ -58,7 +58,9 @@ export default async function HouseholdsPage({
 
   const credentialUnits = unitsWithCredentials();
   // "Kirim Info Login" only applies to households actually linked to a
-  // pengurus-role login (profiles.role = 'pengurus') — not every warga.
+  // pengurus-role login (profiles.role = 'pengurus') — deliberately not
+  // shown for every warga yet, to avoid an accidental click sending
+  // credentials to a resident before this is ready for general use.
   const pengurusHouseholdIds = new Set(
     (pengurusProfiles ?? []).map((p) => p.household_id)
   );
