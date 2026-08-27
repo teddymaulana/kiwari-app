@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useLinkStatus } from "next/link";
 import { usePathname } from "next/navigation";
 import { signOut } from "@/app/login/actions";
 import { setViewAsWarga, setViewAsPengurus } from "@/lib/viewAs";
@@ -17,6 +18,18 @@ const links = [
   { href: "/piutang", label: "Piutang", pengurusOnly: true },
   { href: "/settings", label: "Pengaturan", pengurusOnly: true },
 ];
+
+function NavLinkPendingHint() {
+  const { pending } = useLinkStatus();
+  return (
+    <span
+      aria-hidden
+      className={`inline-block h-2 w-2 shrink-0 rounded-full border-2 border-current border-t-transparent align-middle transition-opacity delay-150 ${
+        pending ? "animate-spin opacity-100" : "opacity-0"
+      }`}
+    />
+  );
+}
 
 export default function NavBar({
   role,
@@ -54,7 +67,7 @@ export default function NavBar({
                     pathname === l.href ? "font-semibold text-gray-900" : ""
                   }`}
                 >
-                  {l.label}
+                  {l.label} <NavLinkPendingHint />
                 </Link>
               ))}
             </nav>
@@ -121,7 +134,7 @@ export default function NavBar({
                 pathname === l.href ? "font-semibold text-gray-900" : ""
               }`}
             >
-              {l.label}
+              {l.label} <NavLinkPendingHint />
             </Link>
           ))}
         </nav>
