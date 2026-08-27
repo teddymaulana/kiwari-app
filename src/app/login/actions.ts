@@ -9,7 +9,7 @@ export async function signIn(formData: FormData) {
   const password = String(formData.get("password") || "");
 
   const supabase = await createClient();
-  const { error } = await supabase.auth.signInWithPassword({
+  const { data, error } = await supabase.auth.signInWithPassword({
     email,
     password,
   });
@@ -18,7 +18,15 @@ export async function signIn(formData: FormData) {
     redirect(`/login?error=${encodeURIComponent(error.message)}`);
   }
 
-  redirect("/report");
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("role")
+    .eq("id", data.user.id)
+    .single<{ role: "warga" | "pengurus" }>();
+
+  // Warga land on IPL (their main reason to log in); pengurus keep
+  // landing on the report/treasury overview.
+  redirect(profile?.role === "warga" ? "/dashboard" : "/report");
 }
 
 export async function signOut() {
