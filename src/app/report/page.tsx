@@ -51,6 +51,7 @@ export default async function ReportPage({
       supabase
         .from("households")
         .select("*")
+        .eq("is_active", true)
         .order("unit_no")
         .returns<Household[]>(),
       supabase
@@ -79,6 +80,7 @@ export default async function ReportPage({
       supabase
         .from("households_public")
         .select("id, unit_no")
+        .eq("is_active", true)
         .order("unit_no")
         .returns<{ id: string; unit_no: string }[]>(),
       supabase
