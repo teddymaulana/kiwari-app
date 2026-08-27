@@ -345,7 +345,12 @@ export default async function ReportPage({
         </div>
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
+      <div
+        className={`grid grid-cols-1 gap-4 mb-6 ${
+          isPengurus ? "sm:grid-cols-3" : "sm:grid-cols-2"
+        }`}
+      >
+        {isPengurus && (
         <div className="bg-white border border-gray-200 rounded-lg p-4 w-full">
           <p className="text-xs text-gray-500 mb-1">Kas Saat Ini</p>
           <p
@@ -411,6 +416,7 @@ export default async function ReportPage({
             )}
           </div>
         </div>
+        )}
         <div className="bg-white border border-gray-200 rounded-lg p-4 w-full">
           <p className="text-xs text-gray-500 mb-1">Total Terkumpul {periodLabel}</p>
           <p className="text-2xl font-semibold text-gray-900">
