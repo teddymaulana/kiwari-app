@@ -142,9 +142,9 @@ export async function sendLoginInvite(id: string) {
 
   const { data: household } = await supabase
     .from("households")
-    .select("unit_no, phone")
+    .select("unit_no, phone, phone_pasangan")
     .eq("id", id)
-    .single<{ unit_no: string; phone: string | null }>();
+    .single<{ unit_no: string; phone: string | null; phone_pasangan: string | null }>();
 
   if (!household?.phone) {
     redirect(
@@ -160,7 +160,7 @@ export async function sendLoginInvite(id: string) {
     );
   }
 
-  const message = `Halo, berikut info login akun Anda untuk aplikasi Kiwari Residence (IPL):\n\nUsername: ${credential!.email}\nPassword: ${credential!.password}\n\nLogin di: https://kiwari-app.vercel.app/`;
+  const message = `Halo, warga Kiwari! berikut info login akun Anda untuk aplikasi Kiwari Residence (IPL):\n\nUsername: ${credential!.email}\nPassword: ${credential!.password}\n\nLogin di: https://kiwari-app.vercel.app/`;
 
   const result = await sendWhatsAppMessage(household!.phone!, message);
 
@@ -178,6 +178,22 @@ export async function sendLoginInvite(id: string) {
       ? `info login -> ${household!.phone} (${household!.unit_no})`
       : `info login -> ${household!.phone} (${household!.unit_no}) - ${result.reason}`,
   });
+
+  // Best-effort: also notify the spouse's number if one's on file. Doesn't
+  // affect the redirect/error below — that stays tied to the main number.
+  if (household!.phone_pasangan) {
+    const pasanganResult = await sendWhatsAppMessage(
+      household!.phone_pasangan,
+      message
+    );
+    await supabase.from("activity_log").insert({
+      actor_email: user.email,
+      action: pasanganResult.success ? "whatsapp.send" : "whatsapp.send_failed",
+      detail: pasanganResult.success
+        ? `info login (pasangan) -> ${household!.phone_pasangan} (${household!.unit_no})`
+        : `info login (pasangan) -> ${household!.phone_pasangan} (${household!.unit_no}) - ${pasanganResult.reason}`,
+    });
+  }
 
   if (!result.success) {
     redirect(`/households?wa_error=${encodeURIComponent(result.reason)}`);
