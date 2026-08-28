@@ -174,7 +174,9 @@ export default async function HouseholdsPage({
                   {pengurusHouseholdIds.has(h.id) && credentialUnits.has(h.unit_no) && h.phone && (
                     <>
                       {h.login_invite_sent_at && (
-                        <span className="text-xs text-green-600">Sent</span>
+                        <span className="text-xs text-green-600">
+                          Terkirim {new Date(h.login_invite_sent_at).toLocaleDateString("id-ID")}
+                        </span>
                       )}
                       <form
                         action={sendLoginInvite.bind(null, h.id)}
@@ -182,9 +184,13 @@ export default async function HouseholdsPage({
                       >
                         <SubmitButton
                           pendingText="Mengirim..."
-                          className="text-xs text-blue-600 hover:text-blue-700 transition"
+                          className={`text-xs transition ${
+                            h.login_invite_sent_at
+                              ? "text-gray-500 hover:text-gray-700"
+                              : "text-blue-600 hover:text-blue-700"
+                          }`}
                         >
-                          Kirim Info Login
+                          {h.login_invite_sent_at ? "Kirim Ulang" : "Kirim Info Login"}
                         </SubmitButton>
                       </form>
                     </>
