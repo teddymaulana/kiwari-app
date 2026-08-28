@@ -41,7 +41,12 @@ export async function updateSession(request: NextRequest) {
     request.nextUrl.pathname.startsWith("/api/extract-receipt") ||
     request.nextUrl.pathname.startsWith("/api/unpaid-months");
 
-  if (!user && !isLoginPage && !isPublicApi) {
+  // Shareable how-to-pay guide (real screenshots of the public Bayar IPL
+  // form) — meant to be sent directly to residents, e.g. in the warga
+  // WhatsApp group, so it must be viewable without an account.
+  const isPublicPage = request.nextUrl.pathname.startsWith("/tutorial-bayar-ipl");
+
+  if (!user && !isLoginPage && !isPublicApi && !isPublicPage) {
     const url = request.nextUrl.clone();
     url.pathname = "/login";
     return NextResponse.redirect(url);
