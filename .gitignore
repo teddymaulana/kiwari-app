@@ -52,5 +52,11 @@ next-env.d.ts
 # plaintext warga login credentials, read by the "Kirim Info Login" action
 warga_credentials.csv
 
+# one-off data-import scripts/exports containing real resident PII (names,
+# phone numbers) — operational, not app code, kept local only
+update-warga-from-form.sql
+warga-nama-nohp.csv
+warga-pasangan-nohp.csv
+
 # QA data snapshot/restore scripts — operational, not app code, kept local only
 /supabase/qa/
