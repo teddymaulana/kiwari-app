@@ -110,6 +110,7 @@ export type Settings = {
   monthly_amount: number;
   opening_balance_bri: number;
   opening_balance_tunai: number;
+  whatsapp_provider: "fonnte" | "wablas" | "manual";
   updated_at: string;
 };
 

@@ -1,34 +1,16 @@
 "use server";
 
-import fs from "fs";
-import path from "path";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import { getCurrentUser, HOUSEHOLD_TOGGLERS, HOUSEHOLD_CREATORS } from "@/lib/auth";
-import { sendWhatsAppMessage } from "@/lib/fonnte";
-
-// Looks up a unit's login credentials from warga_credentials.csv — the
-// one-time output of the bulk warga-account-creation script (see
-// create_warga_users.js). Supabase Auth never stores plaintext passwords,
-// so this CSV is the only place they still exist; only units created by
-// that script (status "OK") have a row here.
-function findCredential(unitNo: string): { email: string; password: string } | null {
-  const csvPath = path.join(process.cwd(), "warga_credentials.csv");
-  let csv: string;
-  try {
-    csv = fs.readFileSync(csvPath, "utf8");
-  } catch {
-    return null;
-  }
-  for (const line of csv.split("\n").slice(1)) {
-    const m = line.match(/^([^,]+),"([^"]*)",([^,]+),([^,]*),(.+)$/);
-    if (m && m[1].trim() === unitNo && m[5].trim() === "OK") {
-      return { email: m[3].trim(), password: m[4].trim() };
-    }
-  }
-  return null;
-}
+import {
+  getCurrentUser,
+  HOUSEHOLD_TOGGLERS,
+  HOUSEHOLD_CREATORS,
+  LOGIN_INVITE_SENDERS,
+} from "@/lib/auth";
+import { sendWhatsAppMessage } from "@/lib/whatsapp";
+import { findCredential, loginInviteMessage } from "@/lib/wargaCredentials";
 
 export async function addHousehold(formData: FormData) {
   const user = await getCurrentUser();
@@ -115,13 +97,16 @@ export async function toggleHouseholdActive(id: string, isActive: boolean) {
   revalidatePath("/households");
 }
 
-// Sends a household's login username + password over WhatsApp — only ever
-// triggered by a pengurus clicking "Kirim Info Login" for that one row, never
-// automatic. Password comes from findCredential() (see above), not a reset,
-// so this only works for units created by the bulk script.
+// Sends a household's login username + password over WhatsApp via the
+// active gateway (Fonnte/Wablas) — only used when settings.whatsapp_provider
+// isn't "manual" (see households/page.tsx, which renders a different,
+// wa.me-based button for that case instead of this action). Password comes
+// from findCredential(), not a reset, so this only works for units created
+// by the bulk script.
 export async function sendLoginInvite(id: string) {
   const user = await getCurrentUser();
   if (user?.role !== "pengurus") return;
+  if (!LOGIN_INVITE_SENDERS.includes(user.email)) return;
 
   const supabase = await createClient();
 
@@ -160,7 +145,7 @@ export async function sendLoginInvite(id: string) {
     );
   }
 
-  const message = `Halo, warga Kiwari! berikut info login akun Anda untuk aplikasi Kiwari Residence (IPL):\n\nUsername: ${credential!.email}\nPassword: ${credential!.password}\n\nLogin di: https://kiwari-app.vercel.app/`;
+  const message = loginInviteMessage(credential!.email, credential!.password);
 
   const result = await sendWhatsAppMessage(household!.phone!, message);
 
@@ -202,4 +187,57 @@ export async function sendLoginInvite(id: string) {
   }
 
   redirect("/households?wa_success=1");
+}
+
+// Manual mode (settings.whatsapp_provider === "manual"): the message
+// itself is sent by the pengurus via a wa.me link opened client-side (see
+// KirimInfoLoginManualButton in households/page.tsx) — no gateway call
+// happens here at all. This action only records that it was opened, with
+// the same permission checks as sendLoginInvite above. Called directly
+// from the client (not a <form action>), so it returns a result instead
+// of redirecting.
+export async function markLoginInviteSent(
+  id: string,
+  target: "phone" | "phone_pasangan"
+): Promise<{ success: boolean }> {
+  const user = await getCurrentUser();
+  if (user?.role !== "pengurus") return { success: false };
+  if (!LOGIN_INVITE_SENDERS.includes(user.email)) return { success: false };
+
+  const supabase = await createClient();
+
+  const { data: pengurusProfiles } = await supabase
+    .from("profiles")
+    .select("id")
+    .eq("household_id", id)
+    .eq("role", "pengurus")
+    .limit(1);
+  if (!pengurusProfiles || pengurusProfiles.length === 0) return { success: false };
+
+  const { data: household } = await supabase
+    .from("households")
+    .select("unit_no, phone, phone_pasangan")
+    .eq("id", id)
+    .single<{ unit_no: string; phone: string | null; phone_pasangan: string | null }>();
+
+  const phone = target === "phone" ? household?.phone : household?.phone_pasangan;
+  if (!phone) return { success: false };
+
+  // Only the main number drives the "Terkirim"/"Kirim Ulang" status —
+  // pasangan is best-effort, same as the gateway path above.
+  if (target === "phone") {
+    await supabase
+      .from("households")
+      .update({ login_invite_sent_at: new Date().toISOString() })
+      .eq("id", id);
+  }
+
+  await supabase.from("activity_log").insert({
+    actor_email: user.email,
+    action: "whatsapp.manual_open",
+    detail: `info login${target === "phone_pasangan" ? " (pasangan)" : ""} -> ${phone} (${household!.unit_no}) [manual/wa.me]`,
+  });
+
+  revalidatePath("/households");
+  return { success: true };
 }

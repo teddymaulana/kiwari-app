@@ -24,6 +24,15 @@ insert into settings (id, monthly_amount) values (1, 50000)
 alter table settings add column if not exists opening_balance_bri numeric(12,2) not null default 0;
 alter table settings add column if not exists opening_balance_tunai numeric(12,2) not null default 0;
 
+-- Which WhatsApp gateway sendWhatsAppMessage (src/lib/whatsapp.ts) uses —
+-- toggleable from Pengaturan without a redeploy, since unofficial gateways
+-- like Fonnte/Wablas can silently stop delivering and switching provider
+-- is the quickest mitigation.
+alter table settings add column if not exists whatsapp_provider text not null default 'fonnte';
+alter table settings drop constraint if exists settings_whatsapp_provider_check;
+alter table settings add constraint settings_whatsapp_provider_check
+  check (whatsapp_provider in ('fonnte', 'wablas', 'manual'));
+
 create table if not exists households (
   id uuid primary key default gen_random_uuid(),
   unit_no text not null,           -- e.g. "Blok A No. 12"

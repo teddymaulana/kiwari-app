@@ -1,37 +1,27 @@
-import fs from "fs";
-import path from "path";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import { getCurrentUser, HOUSEHOLD_TOGGLERS, HOUSEHOLD_CREATORS } from "@/lib/auth";
+import {
+  getCurrentUser,
+  HOUSEHOLD_TOGGLERS,
+  HOUSEHOLD_CREATORS,
+  LOGIN_INVITE_SENDERS,
+} from "@/lib/auth";
+import { getWhatsAppProvider } from "@/lib/whatsapp";
+import { loadCredentials, loginInviteMessage } from "@/lib/wargaCredentials";
+import { buildWaMeUrl } from "@/lib/waMe";
 import {
   addHousehold,
   toggleHouseholdActive,
   sendLoginInvite,
+  markLoginInviteSent,
   updateHouseholdContact,
 } from "./actions";
 import ToggleActiveButton from "./ToggleActiveButton";
 import EditHouseholdButton from "./EditHouseholdButton";
 import SubmitButton from "@/components/SubmitButton";
+import OpenWaMeButton from "@/components/OpenWaMeButton";
 import type { Household } from "@/lib/types";
 import { compareUnitNo } from "@/lib/types";
-
-// Units with a retrievable login password (see actions.ts findCredential) —
-// used only to decide whether "Kirim Info Login" shows for a row.
-function unitsWithCredentials(): Set<string> {
-  const csvPath = path.join(process.cwd(), "warga_credentials.csv");
-  const units = new Set<string>();
-  let csv: string;
-  try {
-    csv = fs.readFileSync(csvPath, "utf8");
-  } catch {
-    return units;
-  }
-  csv.split("\n").slice(1).forEach((line) => {
-    const m = line.match(/^([^,]+),"([^"]*)",([^,]+),([^,]*),(.+)$/);
-    if (m && m[5].trim() === "OK") units.add(m[1].trim());
-  });
-  return units;
-}
 
 export default async function HouseholdsPage({
   searchParams,
@@ -44,7 +34,7 @@ export default async function HouseholdsPage({
   const { wa_success, wa_error } = await searchParams;
 
   const supabase = await createClient();
-  const [{ data: households }, { data: pengurusProfiles }] = await Promise.all([
+  const [{ data: households }, { data: pengurusProfiles }, provider] = await Promise.all([
     supabase.from("households").select("*").returns<Household[]>(),
     supabase
       .from("profiles")
@@ -52,11 +42,12 @@ export default async function HouseholdsPage({
       .eq("role", "pengurus")
       .not("household_id", "is", null)
       .returns<{ household_id: string }[]>(),
+    getWhatsAppProvider(),
   ]);
 
   households?.sort((a, b) => compareUnitNo(a.unit_no, b.unit_no));
 
-  const credentialUnits = unitsWithCredentials();
+  const credentials = loadCredentials();
   // "Kirim Info Login" only applies to households actually linked to a
   // pengurus-role login (profiles.role = 'pengurus') — deliberately not
   // shown for every warga yet, to avoid an accidental click sending
@@ -171,30 +162,68 @@ export default async function HouseholdsPage({
                     name={h.name}
                     phone={h.phone}
                   />
-                  {pengurusHouseholdIds.has(h.id) && credentialUnits.has(h.unit_no) && h.phone && (
-                    <>
-                      {h.login_invite_sent_at && (
-                        <span className="text-xs text-green-600">
-                          Terkirim {new Date(h.login_invite_sent_at).toLocaleDateString("id-ID")}
-                        </span>
-                      )}
-                      <form
-                        action={sendLoginInvite.bind(null, h.id)}
-                        className="inline"
-                      >
-                        <SubmitButton
-                          pendingText="Mengirim..."
-                          className={`text-xs transition ${
-                            h.login_invite_sent_at
-                              ? "text-gray-500 hover:text-gray-700"
-                              : "text-blue-600 hover:text-blue-700"
-                          }`}
-                        >
-                          {h.login_invite_sent_at ? "Kirim Ulang" : "Kirim Info Login"}
-                        </SubmitButton>
-                      </form>
-                    </>
-                  )}
+                  {(() => {
+                    const credential = credentials.get(h.unit_no);
+                    if (
+                      !LOGIN_INVITE_SENDERS.includes(user.email) ||
+                      !pengurusHouseholdIds.has(h.id) ||
+                      !credential ||
+                      !h.phone
+                    )
+                      return null;
+
+                    const sentLabel = h.login_invite_sent_at && (
+                      <span className="text-xs text-green-600">
+                        Terkirim {new Date(h.login_invite_sent_at).toLocaleDateString("id-ID")}
+                      </span>
+                    );
+
+                    if (provider === "manual") {
+                      const message = loginInviteMessage(credential.email, credential.password);
+                      const buttonClass = `text-xs transition ${
+                        h.login_invite_sent_at
+                          ? "text-gray-500 hover:text-gray-700"
+                          : "text-blue-600 hover:text-blue-700"
+                      }`;
+                      return (
+                        <>
+                          {sentLabel}
+                          <OpenWaMeButton
+                            urls={[buildWaMeUrl(h.phone, message)]}
+                            action={markLoginInviteSent.bind(null, h.id, "phone")}
+                            label={h.login_invite_sent_at ? "Kirim Ulang" : "Kirim Info Login"}
+                            className={buttonClass}
+                          />
+                          {h.phone_pasangan && (
+                            <OpenWaMeButton
+                              urls={[buildWaMeUrl(h.phone_pasangan, message)]}
+                              action={markLoginInviteSent.bind(null, h.id, "phone_pasangan")}
+                              label="Kirim ke Pasangan"
+                              className="text-xs text-gray-500 hover:text-gray-700 transition"
+                            />
+                          )}
+                        </>
+                      );
+                    }
+
+                    return (
+                      <>
+                        {sentLabel}
+                        <form action={sendLoginInvite.bind(null, h.id)} className="inline">
+                          <SubmitButton
+                            pendingText="Mengirim..."
+                            className={`text-xs transition ${
+                              h.login_invite_sent_at
+                                ? "text-gray-500 hover:text-gray-700"
+                                : "text-blue-600 hover:text-blue-700"
+                            }`}
+                          >
+                            {h.login_invite_sent_at ? "Kirim Ulang" : "Kirim Info Login"}
+                          </SubmitButton>
+                        </form>
+                      </>
+                    );
+                  })()}
                   {HOUSEHOLD_TOGGLERS.includes(user.email) && (
                     <ToggleActiveButton
                       action={toggleHouseholdActive.bind(

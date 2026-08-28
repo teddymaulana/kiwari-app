@@ -8,8 +8,9 @@ import {
   getCurrentUser,
   CASH_TRANSFER_RECORDERS,
   WHATSAPP_TEST_SENDERS,
+  WHATSAPP_PROVIDER_MANAGERS,
 } from "@/lib/auth";
-import { sendWhatsAppMessage } from "@/lib/fonnte";
+import { sendWhatsAppMessage } from "@/lib/whatsapp";
 
 // Kas balance carried over from before this app existed — not income, so
 // it's stored on settings (like monthly_amount) rather than as a
@@ -95,6 +96,33 @@ export async function createWargaUser(formData: FormData) {
 
   revalidatePath("/settings");
   redirect("/settings?success=1");
+}
+
+// Switches which WhatsApp gateway sendWhatsAppMessage (src/lib/whatsapp.ts)
+// uses — the quickest mitigation when Fonnte (or Wablas) silently stops
+// delivering, without a redeploy.
+export async function setWhatsAppProvider(formData: FormData) {
+  const user = await getCurrentUser();
+  if (user?.role !== "pengurus") redirect("/dashboard");
+  if (!WHATSAPP_PROVIDER_MANAGERS.includes(user.email)) redirect("/settings");
+
+  const provider = String(formData.get("provider") || "");
+  if (provider !== "fonnte" && provider !== "wablas" && provider !== "manual") return;
+
+  const supabase = await createClient();
+
+  await supabase
+    .from("settings")
+    .update({ whatsapp_provider: provider, updated_at: new Date().toISOString() })
+    .eq("id", 1);
+
+  await supabase.from("activity_log").insert({
+    actor_email: user.email,
+    action: "settings.set_whatsapp_provider",
+    detail: provider,
+  });
+
+  revalidatePath("/settings");
 }
 
 // Manual WhatsApp send, for testing the Fonnte integration before it's

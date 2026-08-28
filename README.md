@@ -97,6 +97,17 @@ cp .env.local.example .env.local
 # di fonnte.com, hubungkan nomor WhatsApp (scan QR), lalu ambil token dari
 # dashboard-nya. Tanpa ini, tombol "Kirim" di Pengaturan akan gagal dengan
 # pesan error yang jelas, fitur lain tetap jalan normal.
+#
+# opsional juga: isi WABLAS_TOKEN + WABLAS_BASE_URL untuk pakai Wablas
+# sebagai alternatif — gateway mana yang benar-benar dipakai diatur lewat
+# toggle "Layanan WhatsApp" di halaman Pengaturan (settings.whatsapp_provider
+# di database), bukan dari env ini. Berguna kalau Fonnte sedang tidak
+# mengirim dengan baik. WABLAS_BASE_URL adalah subdomain server akunmu
+# (terlihat di dashboard Wablas, mis. https://sby.wablas.com). Kalau Wablas
+# menolak dengan pesan "IP not authorized" (server ini tidak punya IP
+# tetap), isi juga WABLAS_SECRET_KEY (nilai terpisah di halaman yang sama
+# dengan token) — Wablas menerima permintaan dari IP manapun kalau secret
+# key ini disertakan.
 npm run dev
 ```
 

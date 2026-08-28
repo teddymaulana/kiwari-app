@@ -1,20 +1,18 @@
 // Fonnte WhatsApp gateway (fonnte.com) — one-way, system-to-warga messages
 // only. Server-side only: FONNTE_TOKEN must never reach the client.
 // API reference: https://docs.fonnte.com/api-send-message/
+//
+// One of two providers behind the toggle in src/lib/whatsapp.ts (the other
+// is wablas.ts) — call sites should import sendWhatsAppMessage from there,
+// not this file directly, so the settings.whatsapp_provider toggle is
+// respected.
 
-export type FonnteResult =
-  // `detail` is Fonnte's raw response body (stringified) — the top-level
-  // `status`/`reason` fields this module keys off don't capture everything
-  // Fonnte reports (e.g. per-target delivery info), so callers that want
-  // to troubleshoot a "shows sent but never arrived" report should log
-  // `detail` too rather than just success/failure.
-  | { success: true; detail: string }
-  | { success: false; reason: string; detail: string };
+import type { WhatsAppResult } from "./whatsappTypes";
 
-export async function sendWhatsAppMessage(
+export async function sendViaFonnte(
   target: string,
   message: string
-): Promise<FonnteResult> {
+): Promise<WhatsAppResult> {
   const token = process.env.FONNTE_TOKEN;
   if (!token) {
     return {

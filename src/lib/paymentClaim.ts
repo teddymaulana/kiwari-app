@@ -1,5 +1,5 @@
 import { createAdminClient } from "@/lib/supabase/admin";
-import { sendWhatsAppMessage } from "@/lib/fonnte";
+import { sendViaWablas } from "@/lib/wablas";
 import { MONTH_NAMES, formatRupiah } from "@/lib/types";
 
 // Unit whose kepala keluarga gets pinged on every new claim so verification
@@ -7,6 +7,13 @@ import { MONTH_NAMES, formatRupiah } from "@/lib/types";
 // mirrors the account-allowlist convention elsewhere (18g@kiwari.local is
 // this same unit's pengurus login).
 const CLAIM_NOTIFY_UNIT = "18G";
+
+// Deliberately not the settings.whatsapp_provider toggle (src/lib/
+// whatsapp.ts) — this fires from an anonymous public form submission with
+// no pengurus present, so it can never use the "manual" (wa.me,
+// click-to-send) option. Always Wablas regardless of what the toggle is
+// set to, so this specific notification keeps working no matter how the
+// toggle is set for the admin-attended flows.
 
 // Shared by the public "Bayar IPL" form on /login (no session) and the
 // logged-in warga's version on /dashboard (household comes from the
@@ -126,7 +133,7 @@ export async function createPendingPaymentClaim({
 
   if (notifyHousehold?.phone && submitterHousehold) {
     const notifyMessage = `Halo, ada klaim pembayaran IPL baru dari ${submitterHousehold.unit_no} - ${submitterHousehold.name} untuk ${claimedLabel} ${periodYear} (${formatRupiah(amount * claimed.length)}), menunggu verifikasi.`;
-    const result = await sendWhatsAppMessage(notifyHousehold.phone, notifyMessage);
+    const result = await sendViaWablas(notifyHousehold.phone, notifyMessage);
     await admin.from("activity_log").insert({
       actor_email: actorEmail,
       action: result.success ? "whatsapp.send" : "whatsapp.send_failed",

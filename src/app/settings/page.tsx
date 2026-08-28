@@ -4,12 +4,14 @@ import {
   getCurrentUser,
   CASH_TRANSFER_RECORDERS,
   WHATSAPP_TEST_SENDERS,
+  WHATSAPP_PROVIDER_MANAGERS,
 } from "@/lib/auth";
 import {
   updateOpeningBalance,
   createWargaUser,
   sendTestWhatsApp,
   recordCashTransfer,
+  setWhatsAppProvider,
 } from "./actions";
 import type { Household, Settings } from "@/lib/types";
 import { formatRupiah, compareUnitNo } from "@/lib/types";
@@ -192,15 +194,55 @@ export default async function SettingsPage({
         </form>
       </div>
 
+      {WHATSAPP_PROVIDER_MANAGERS.includes(user.email) && (
+        <div>
+          <h2 className="text-sm font-medium text-gray-700 mb-1">
+            Layanan WhatsApp
+          </h2>
+          <p className="text-xs text-gray-400 mb-4">
+            Fonnte/Wablas kirim otomatis lewat gateway. Manual membuka link
+            wa.me dari WhatsApp kamu sendiri untuk Kirim Info Login dan
+            konfirmasi pembayaran (kamu yang klik Kirim) — notifikasi klaim
+            baru ke 18G selalu tetap lewat Wablas berapa pun pilihan di sini,
+            karena itu terjadi tanpa ada yang standby untuk klik.
+          </p>
+          <div className="flex items-center rounded-full border border-gray-300 p-0.5 text-xs w-fit">
+            {(
+              [
+                ["fonnte", "Fonnte"],
+                ["wablas", "Wablas"],
+                ["manual", "Manual"],
+              ] as const
+            ).map(([value, label]) => (
+              <form action={setWhatsAppProvider} key={value}>
+                <input type="hidden" name="provider" value={value} />
+                <button
+                  type="submit"
+                  className={`px-3 py-1 rounded-full transition ${
+                    (settings?.whatsapp_provider ?? "fonnte") === value
+                      ? "bg-blue-600 text-white"
+                      : "text-gray-500 hover:text-gray-700"
+                  }`}
+                >
+                  {label}
+                </button>
+              </form>
+            ))}
+          </div>
+        </div>
+      )}
+
       {WHATSAPP_TEST_SENDERS.includes(user.email) && (
         <div>
           <h2 className="text-sm font-medium text-gray-700 mb-1">
             Kirim Pesan WhatsApp
           </h2>
           <p className="text-xs text-gray-400 mb-4">
-            Uji coba integrasi WhatsApp (Fonnte) — kirim pesan manual ke satu
-            nomor. Butuh <code>FONNTE_TOKEN</code> di environment variables
-            (lihat README).
+            Uji coba integrasi WhatsApp — kirim pesan manual ke satu nomor,
+            lewat gateway yang sedang aktif di atas. Butuh{" "}
+            <code>FONNTE_TOKEN</code> atau <code>WABLAS_TOKEN</code> +{" "}
+            <code>WABLAS_BASE_URL</code> di environment variables (lihat
+            README).
           </p>
 
           {wa_error && (

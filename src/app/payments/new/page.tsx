@@ -2,14 +2,18 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getCurrentUser, PAYMENT_RECORDERS, PAYMENT_VERIFIERS } from "@/lib/auth";
-import { confirmPaymentClaim, rejectPaymentClaim } from "./actions";
+import { getWhatsAppProvider } from "@/lib/whatsapp";
+import { buildWaMeUrl } from "@/lib/waMe";
+import { paymentConfirmedMessage } from "@/lib/paymentMessages";
+import { confirmPaymentClaim, confirmPaymentClaimManual, rejectPaymentClaim } from "./actions";
 import RecordPaymentForm from "./RecordPaymentForm";
 import SubmitButton from "@/components/SubmitButton";
+import OpenWaMeButton from "@/components/OpenWaMeButton";
 import type { Household, Payment, Settings } from "@/lib/types";
 import { MONTH_NAMES, formatRupiah, compareUnitNo } from "@/lib/types";
 
 type PendingClaim = Payment & {
-  households: Pick<Household, "unit_no" | "name"> | null;
+  households: Pick<Household, "unit_no" | "name" | "phone" | "phone_pasangan"> | null;
 };
 
 export default async function NewPaymentPage({
@@ -23,7 +27,7 @@ export default async function NewPaymentPage({
   const { error } = await searchParams;
   const supabase = await createClient();
 
-  const [{ data: households }, { data: settings }, { data: pendingClaims }] =
+  const [{ data: households }, { data: settings }, { data: pendingClaims }, provider] =
     await Promise.all([
       supabase
         .from("households")
@@ -33,10 +37,11 @@ export default async function NewPaymentPage({
       supabase.from("settings").select("*").eq("id", 1).single<Settings>(),
       supabase
         .from("payments")
-        .select("*, households(unit_no, name)")
+        .select("*, households(unit_no, name, phone, phone_pasangan)")
         .eq("status", "pending")
         .order("created_at", { ascending: false })
         .returns<PendingClaim[]>(),
+      getWhatsAppProvider(),
     ]);
 
   households?.sort((a, b) => compareUnitNo(a.unit_no, b.unit_no));
@@ -111,14 +116,36 @@ export default async function NewPaymentPage({
                 )}
                 {PAYMENT_VERIFIERS.includes(user.email) && (
                   <>
-                    <form action={confirmPaymentClaim.bind(null, c.id)}>
-                      <SubmitButton
-                        pendingText="Memproses..."
+                    {provider === "manual" ? (
+                      <OpenWaMeButton
+                        urls={[c.households?.phone, c.households?.phone_pasangan]
+                          .filter((p): p is string => !!p)
+                          .map((phone) =>
+                            buildWaMeUrl(
+                              phone,
+                              paymentConfirmedMessage(
+                                c.households!.unit_no,
+                                c.period_month,
+                                c.period_year,
+                                Number(c.amount)
+                              )
+                            )
+                          )}
+                        action={confirmPaymentClaimManual.bind(null, c.id)}
+                        label="Konfirmasi"
+                        pendingLabel="Memproses..."
                         className="text-xs bg-green-600 text-white rounded px-3 py-1.5 hover:bg-green-700 transition"
-                      >
-                        Konfirmasi
-                      </SubmitButton>
-                    </form>
+                      />
+                    ) : (
+                      <form action={confirmPaymentClaim.bind(null, c.id)}>
+                        <SubmitButton
+                          pendingText="Memproses..."
+                          className="text-xs bg-green-600 text-white rounded px-3 py-1.5 hover:bg-green-700 transition"
+                        >
+                          Konfirmasi
+                        </SubmitButton>
+                      </form>
+                    )}
                     <form action={rejectPaymentClaim.bind(null, c.id)}>
                       <SubmitButton
                         pendingText="Memproses..."

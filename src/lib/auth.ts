@@ -76,6 +76,18 @@ export const WHATSAPP_TEST_SENDERS = ["18g@kiwari.local"];
 // result down to NavBar as a plain boolean prop.
 export const DENAH_VIEWERS = ["18g@kiwari.local"];
 
+// Switching the WhatsApp gateway (Layanan WhatsApp on /settings, backing
+// src/lib/whatsapp.ts's provider toggle) is restricted to this one
+// pengurus account, checked both in the UI (settings/page.tsx) and again
+// in the server action (settings/actions.ts).
+export const WHATSAPP_PROVIDER_MANAGERS = ["18g@kiwari.local"];
+
+// Kirim Info Login (households/page.tsx, sending a resident's username +
+// password over WhatsApp — gateway or manual/wa.me) is restricted to this
+// one pengurus account, checked both in the UI and again in the server
+// actions (sendLoginInvite, markLoginInviteSent in households/actions.ts).
+export const LOGIN_INVITE_SENDERS = ["18g@kiwari.local"];
+
 export type CurrentUser = {
   id: string;
   email: string;

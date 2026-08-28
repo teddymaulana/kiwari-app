@@ -4,7 +4,8 @@ import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentUser, PAYMENT_RECORDERS, PAYMENT_VERIFIERS } from "@/lib/auth";
-import { sendWhatsAppMessage } from "@/lib/fonnte";
+import { sendWhatsAppMessage } from "@/lib/whatsapp";
+import { paymentConfirmedMessage } from "@/lib/paymentMessages";
 import { MONTH_NAMES, formatRupiah } from "@/lib/types";
 
 // Records one confirmed payment row per selected month — mirrors the
@@ -138,7 +139,12 @@ export async function confirmPaymentClaim(id: string) {
       )
     );
     for (const phone of phones) {
-      const message = `Halo, pembayaran IPL ${MONTH_NAMES[claim.period_month - 1]} ${claim.period_year} untuk ${claim.households!.unit_no} sebesar ${formatRupiah(Number(claim.amount))} telah dikonfirmasi pengurus. Terima kasih!`;
+      const message = paymentConfirmedMessage(
+        claim.households!.unit_no,
+        claim.period_month,
+        claim.period_year,
+        Number(claim.amount)
+      );
       const result = await sendWhatsAppMessage(phone, message);
       await supabase.from("activity_log").insert({
         actor_email: user.email,
@@ -152,6 +158,52 @@ export async function confirmPaymentClaim(id: string) {
 
   revalidatePath("/payments/new");
   revalidatePath("/report");
+}
+
+// Manual mode (settings.whatsapp_provider === "manual"): confirms the
+// claim exactly like confirmPaymentClaim above, but skips the
+// gateway-notify loop entirely — the pengurus notifies via a wa.me link
+// opened client-side instead (see ConfirmClaimButton in page.tsx, which
+// pre-builds that link from the same claim data already on the page, so
+// no network round trip is needed before opening it). Called directly
+// from the client, not a <form action>, so it returns a result instead of
+// redirecting.
+export async function confirmPaymentClaimManual(id: string): Promise<{ success: boolean }> {
+  const user = await getCurrentUser();
+  if (user?.role !== "pengurus") return { success: false };
+  if (!PAYMENT_VERIFIERS.includes(user.email)) return { success: false };
+
+  const supabase = await createClient();
+
+  const { data: claim } = await supabase
+    .from("payments")
+    .update({
+      status: "confirmed",
+      recorded_by: user.email,
+      paid_date: new Date().toISOString().slice(0, 10),
+    })
+    .eq("id", id)
+    .eq("status", "pending")
+    .select("household_id, period_year, period_month, amount")
+    .single<{
+      household_id: string;
+      period_year: number;
+      period_month: number;
+      amount: number;
+    }>();
+
+  if (!claim) return { success: false };
+
+  await supabase.from("activity_log").insert({
+    actor_email: user.email,
+    action: "payment.confirm_claim",
+    detail: `household ${claim.household_id} - ${claim.period_month}/${claim.period_year} - ${claim.amount} [manual/wa.me]`,
+  });
+
+  revalidatePath("/payments/new");
+  revalidatePath("/report");
+
+  return { success: true };
 }
 
 // Rejects a pending claim by deleting it — this frees up that period so
