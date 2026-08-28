@@ -24,7 +24,7 @@ export default async function RootLayout({
             canViewDenah={DENAH_VIEWERS.includes(user.email)}
           />
         )}
-        <main className="flex-1">{children}</main>
+        <main className="flex-1 bg-white">{children}</main>
       </body>
     </html>
   );

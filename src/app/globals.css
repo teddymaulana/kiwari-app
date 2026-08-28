@@ -22,3 +22,13 @@ body {
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
 }
+
+/* Form fields always use light backgrounds (bg-white/bg-gray-50) regardless
+   of the OS color scheme, so their text must stay black even when the dark
+   media query above turns body text near-white — otherwise it's invisible
+   against those light backgrounds. */
+input,
+textarea,
+select {
+  color: #000000;
+}
