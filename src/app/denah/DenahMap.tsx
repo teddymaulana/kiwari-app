@@ -43,7 +43,7 @@ const UNIT_GEOMETRY: UnitCell[] = [
   { unit_no: "19S", col: 13, row: 10, colspan: 1, rowspan: 4 },
   { unit_no: "19T", col: 14, row: 10, colspan: 1, rowspan: 4 },
   { unit_no: "19U", col: 15, row: 10, colspan: 1, rowspan: 4 },
-  { unit_no: "19V", col: 16, row: 10, colspan: 2, rowspan: 4 },
+  { unit_no: "19V", col: 16, row: 10, colspan: 1, rowspan: 4 },
   { unit_no: "9X", col: 1, row: 12, colspan: 2, rowspan: 2 },
   { unit_no: "9W", col: 1, row: 14, colspan: 2, rowspan: 2 },
   { unit_no: "18Q", col: 6, row: 14, colspan: 1, rowspan: 4 },
@@ -56,7 +56,7 @@ const UNIT_GEOMETRY: UnitCell[] = [
   { unit_no: "18X", col: 13, row: 14, colspan: 1, rowspan: 4 },
   { unit_no: "18Y", col: 14, row: 14, colspan: 1, rowspan: 4 },
   { unit_no: "18Z", col: 15, row: 14, colspan: 1, rowspan: 4 },
-  { unit_no: "18AA", col: 16, row: 14, colspan: 2, rowspan: 4 },
+  { unit_no: "18AA", col: 16, row: 14, colspan: 1, rowspan: 4 },
   { unit_no: "9V", col: 1, row: 16, colspan: 2, rowspan: 2 },
   { unit_no: "9U", col: 1, row: 18, colspan: 2, rowspan: 2 },
   { unit_no: "9T", col: 1, row: 20, colspan: 2, rowspan: 2 },
@@ -128,9 +128,8 @@ const GREEN_AREAS = [
   { col: 16, row: 1, colspan: 1, rowspan: 3 },
   { col: 6, row: 7, colspan: 9, rowspan: 1 },
   { col: 1, row: 10, colspan: 2, rowspan: 2 },
-  { col: 5, row: 10, colspan: 1, rowspan: 4 },
-  { col: 17, row: 18, colspan: 1, rowspan: 11 },
-  { col: 5, row: 20, colspan: 1, rowspan: 4 },
+  { col: 5, row: 10, colspan: 1, rowspan: 8 },
+  { col: 5, row: 20, colspan: 1, rowspan: 8 },
   { col: 14, row: 20, colspan: 2, rowspan: 8 },
   { col: 25, row: 36, colspan: 1, rowspan: 4 },
   { col: 1, row: 39, colspan: 1, rowspan: 2 },
@@ -151,12 +150,26 @@ type Wall = {
 const WALLS: Wall[] = [
   // Left side, 9X down to 9N.
   { side: "left", col: 1, row: 12, rowspan: 22 },
-  // Bottom side, 9N across the gap through 9M, 9L, 9K, 9J, 9I.
-  { side: "bottom", col: 1, row: 34, colspan: 10 },
-  // Left side, 9G down to 9A.
-  { side: "left", col: 11, row: 34, rowspan: 14 },
+  // Bottom side, 9N across the gap through 9M, 9L, 9K, 9J, 9I. Row 33, not
+  // 34: "bottom" aligns to the end of the row it's given, and 33 is the
+  // last row these units actually occupy (they end at the row-34 line) —
+  // using 34 here left a full row-height gap before the left wall above.
+  { side: "bottom", col: 1, row: 33, colspan: 10 },
+  // Left side, 9G down past 9A to the bottom of the plan.
+  { side: "left", col: 11, row: 34, rowspan: 20 },
   // Top side, 19K through 19A.
   { side: "top", col: 4, row: 1, colspan: 11 },
+  // Bottom side, 8A through 8E (Kiwari VII). Row 54, not 55: same
+  // last-occupied-row convention as the 9N-9I wall above.
+  { side: "bottom", col: 12, row: 54, colspan: 5 },
+  // Bottom side, 8L through 8R.
+  { side: "bottom", col: 17, row: 39, colspan: 8 },
+  // Right side of 8I (down through 8H, 8G, 8F) to the right side of 8E.
+  // col 17, not 16: 8I/8H/8G/8F each span cols 15-16 (colspan 2), so col
+  // 16 falls inside those boxes rather than at their edge.
+  { side: "left", col: 17, row: 40, rowspan: 11 },
+  // Right side of 19V down to the right side of 18A.
+  { side: "left", col: 17, row: 10, rowspan: 18 },
 ];
 
 // Approximate anchors for the "Kiwari" zone captions — the source draws
@@ -285,10 +298,10 @@ export default function DenahMap({ households }: { households: DenahHousehold[] 
               className="absolute z-10 -translate-x-1/2 mt-1 bg-white border border-gray-200 rounded-lg shadow-lg px-3 py-2 text-xs whitespace-nowrap"
             >
               <p className="font-semibold text-gray-900">{tooltip.unit_no}</p>
-              <p className="text-gray-600">Kepala keluarga: {tooltip.name}</p>
-              <p className="text-gray-600">
-                Pasangan: {tooltip.alt_names || "-"}
-              </p>
+              <p className="text-gray-600">{tooltip.name}</p>
+              {tooltip.alt_names && (
+                <p className="text-gray-600">{tooltip.alt_names}</p>
+              )}
             </div>
           )}
 
