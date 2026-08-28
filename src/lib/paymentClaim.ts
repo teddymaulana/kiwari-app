@@ -131,8 +131,8 @@ export async function createPendingPaymentClaim({
       actor_email: actorEmail,
       action: result.success ? "whatsapp.send" : "whatsapp.send_failed",
       detail: result.success
-        ? `notif klaim baru -> ${notifyHousehold.phone}`
-        : `notif klaim baru -> ${notifyHousehold.phone} - ${result.reason}`,
+        ? `notif klaim baru -> ${notifyHousehold.phone} - ${result.detail}`
+        : `notif klaim baru -> ${notifyHousehold.phone} - ${result.reason} - ${result.detail}`,
     });
   }
 

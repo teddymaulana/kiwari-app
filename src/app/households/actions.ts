@@ -164,19 +164,21 @@ export async function sendLoginInvite(id: string) {
 
   const result = await sendWhatsAppMessage(household!.phone!, message);
 
+  let updateError: string | null = null;
   if (result.success) {
-    await supabase
+    const { error } = await supabase
       .from("households")
       .update({ login_invite_sent_at: new Date().toISOString() })
       .eq("id", id);
+    if (error) updateError = error.message;
   }
 
   await supabase.from("activity_log").insert({
     actor_email: user.email,
     action: result.success ? "whatsapp.send" : "whatsapp.send_failed",
     detail: result.success
-      ? `info login -> ${household!.phone} (${household!.unit_no})`
-      : `info login -> ${household!.phone} (${household!.unit_no}) - ${result.reason}`,
+      ? `info login -> ${household!.phone} (${household!.unit_no}) - ${result.detail}${updateError ? ` - GAGAL UPDATE login_invite_sent_at: ${updateError}` : ""}`
+      : `info login -> ${household!.phone} (${household!.unit_no}) - ${result.reason} - ${result.detail}`,
   });
 
   // Best-effort: also notify the spouse's number if one's on file. Doesn't
@@ -190,8 +192,8 @@ export async function sendLoginInvite(id: string) {
       actor_email: user.email,
       action: pasanganResult.success ? "whatsapp.send" : "whatsapp.send_failed",
       detail: pasanganResult.success
-        ? `info login (pasangan) -> ${household!.phone_pasangan} (${household!.unit_no})`
-        : `info login (pasangan) -> ${household!.phone_pasangan} (${household!.unit_no}) - ${pasanganResult.reason}`,
+        ? `info login (pasangan) -> ${household!.phone_pasangan} (${household!.unit_no}) - ${pasanganResult.detail}`
+        : `info login (pasangan) -> ${household!.phone_pasangan} (${household!.unit_no}) - ${pasanganResult.reason} - ${pasanganResult.detail}`,
     });
   }
 

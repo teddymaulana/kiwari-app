@@ -121,8 +121,8 @@ export async function sendTestWhatsApp(formData: FormData) {
     actor_email: user.email,
     action: result.success ? "whatsapp.send" : "whatsapp.send_failed",
     detail: result.success
-      ? `${phone} - ${message}`
-      : `${phone} - ${result.reason}`,
+      ? `${phone} - ${message} - ${result.detail}`
+      : `${phone} - ${result.reason} - ${result.detail}`,
   });
 
   if (!result.success) {

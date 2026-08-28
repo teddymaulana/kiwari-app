@@ -144,8 +144,8 @@ export async function confirmPaymentClaim(id: string) {
         actor_email: user.email,
         action: result.success ? "whatsapp.send" : "whatsapp.send_failed",
         detail: result.success
-          ? `notif konfirmasi pembayaran -> ${phone}`
-          : `notif konfirmasi pembayaran -> ${phone} - ${result.reason}`,
+          ? `notif konfirmasi pembayaran -> ${phone} - ${result.detail}`
+          : `notif konfirmasi pembayaran -> ${phone} - ${result.reason} - ${result.detail}`,
       });
     }
   }
@@ -207,8 +207,8 @@ export async function rejectPaymentClaim(id: string) {
         actor_email: user.email,
         action: result.success ? "whatsapp.send" : "whatsapp.send_failed",
         detail: result.success
-          ? `notif penolakan pembayaran -> ${phone}`
-          : `notif penolakan pembayaran -> ${phone} - ${result.reason}`,
+          ? `notif penolakan pembayaran -> ${phone} - ${result.detail}`
+          : `notif penolakan pembayaran -> ${phone} - ${result.reason} - ${result.detail}`,
       });
     }
   }
