@@ -71,6 +71,11 @@ export const CASH_TRANSFER_RECORDERS = ["18g@kiwari.local"];
 // (settings/page.tsx) and again in the server action (settings/actions.ts).
 export const WHATSAPP_TEST_SENDERS = ["18g@kiwari.local"];
 
+// The Denah nav link (site plan) is only shown to this one account for
+// now, not every pengurus/warga — checked in layout.tsx, which passes the
+// result down to NavBar as a plain boolean prop.
+export const DENAH_VIEWERS = ["18g@kiwari.local"];
+
 export type CurrentUser = {
   id: string;
   email: string;

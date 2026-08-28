@@ -10,6 +10,7 @@ import type { Role } from "@/lib/auth";
 const links = [
   { href: "/report", label: "Laporan" },
   { href: "/dashboard", label: "IPL" },
+  { href: "/denah", label: "Denah", denahOnly: true },
   { href: "/payments/new", label: "Catat Pembayaran", pengurusOnly: true },
   { href: "/payments", label: "Kelola Pembayaran", pengurusOnly: true },
   { href: "/households", label: "Warga", pengurusOnly: true },
@@ -35,14 +36,18 @@ export default function NavBar({
   role,
   actualRole,
   unitNo,
+  canViewDenah,
 }: {
   role: Role;
   actualRole: Role;
   unitNo: string | null;
+  canViewDenah: boolean;
 }) {
   const pathname = usePathname();
   const visibleLinks = links.filter(
-    (l) => !l.pengurusOnly || role === "pengurus"
+    (l) =>
+      (!l.pengurusOnly || role === "pengurus") &&
+      (!l.denahOnly || canViewDenah)
   );
 
   return (
