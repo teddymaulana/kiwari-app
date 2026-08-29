@@ -34,27 +34,14 @@ export default async function HouseholdsPage({
   const { wa_success, wa_error } = await searchParams;
 
   const supabase = await createClient();
-  const [{ data: households }, { data: pengurusProfiles }, provider] = await Promise.all([
+  const [{ data: households }, provider] = await Promise.all([
     supabase.from("households").select("*").returns<Household[]>(),
-    supabase
-      .from("profiles")
-      .select("household_id")
-      .eq("role", "pengurus")
-      .not("household_id", "is", null)
-      .returns<{ household_id: string }[]>(),
     getWhatsAppProvider(),
   ]);
 
   households?.sort((a, b) => compareUnitNo(a.unit_no, b.unit_no));
 
   const credentials = loadCredentials();
-  // "Kirim Info Login" only applies to households actually linked to a
-  // pengurus-role login (profiles.role = 'pengurus') — deliberately not
-  // shown for every warga yet, to avoid an accidental click sending
-  // credentials to a resident before this is ready for general use.
-  const pengurusHouseholdIds = new Set(
-    (pengurusProfiles ?? []).map((p) => p.household_id)
-  );
 
   return (
     <div className="max-w-5xl mx-auto px-4 py-8">
@@ -161,12 +148,13 @@ export default async function HouseholdsPage({
                     action={updateHouseholdContact.bind(null, h.id)}
                     name={h.name}
                     phone={h.phone}
+                    altNames={h.alt_names}
+                    phonePasangan={h.phone_pasangan}
                   />
                   {(() => {
                     const credential = credentials.get(h.unit_no);
                     if (
                       !LOGIN_INVITE_SENDERS.includes(user.email) ||
-                      !pengurusHouseholdIds.has(h.id) ||
                       !credential ||
                       !h.phone
                     )

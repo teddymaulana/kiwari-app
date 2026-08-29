@@ -18,6 +18,12 @@
 
 import type { WhatsAppResult } from "./whatsappTypes";
 
+// Without this, an unresponsive Wablas server (connection accepted, no
+// reply) leaves the request pending forever — fetch has no default
+// timeout — which is exactly what makes "Kirim Info Login" look stuck on
+// "Mengirim..." indefinitely instead of eventually failing with a reason.
+const TIMEOUT_MS = 20_000;
+
 export async function sendViaWablas(
   target: string,
   message: string
@@ -36,14 +42,27 @@ export async function sendViaWablas(
 
   const authorization = secretKey ? `${token}.${secretKey}` : token;
 
-  const response = await fetch(`${baseUrl.replace(/\/$/, "")}/api/send-message`, {
-    method: "POST",
-    headers: {
-      Authorization: authorization,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({ phone: target, message }),
-  });
+  let response: Response;
+  try {
+    response = await fetch(`${baseUrl.replace(/\/$/, "")}/api/send-message`, {
+      method: "POST",
+      headers: {
+        Authorization: authorization,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ phone: target, message }),
+      signal: AbortSignal.timeout(TIMEOUT_MS),
+    });
+  } catch (err) {
+    const timedOut = err instanceof Error && err.name === "TimeoutError";
+    return {
+      success: false,
+      reason: timedOut
+        ? `Wablas tidak merespons dalam ${TIMEOUT_MS / 1000} detik`
+        : `Gagal terhubung ke Wablas: ${err instanceof Error ? err.message : String(err)}`,
+      detail: "",
+    };
+  }
 
   const rawBody = await response.text();
   let data: Record<string, unknown> = {};

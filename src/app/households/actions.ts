@@ -57,6 +57,8 @@ export async function updateHouseholdContact(
 
   const name = String(formData.get("name") || "").trim();
   const phone = String(formData.get("phone") || "").trim();
+  const alt_names = String(formData.get("alt_names") || "").trim();
+  const phone_pasangan = String(formData.get("phone_pasangan") || "").trim();
 
   if (!name) return;
 
@@ -64,13 +66,18 @@ export async function updateHouseholdContact(
 
   await supabase
     .from("households")
-    .update({ name, phone: phone || null })
+    .update({
+      name,
+      phone: phone || null,
+      alt_names: alt_names || null,
+      phone_pasangan: phone_pasangan || null,
+    })
     .eq("id", id);
 
   await supabase.from("activity_log").insert({
     actor_email: user.email,
     action: "household.update_contact",
-    detail: `${id} -> ${name} / ${phone || "-"}`,
+    detail: `${id} -> ${name} / ${phone || "-"} / ${alt_names || "-"} / ${phone_pasangan || "-"}`,
   });
 
   revalidatePath("/households");
@@ -110,21 +117,6 @@ export async function sendLoginInvite(id: string) {
 
   const supabase = await createClient();
 
-  // Only applies to households actually linked to a pengurus-role login
-  // (profiles.role = 'pengurus') — deliberately not every warga yet (see
-  // households/page.tsx, which gates the button the same way). Not
-  // .maybeSingle(): a pengurus's household can have two linked profiles
-  // (their @kiwari.local pengurus login and their @kiwari.warga resident
-  // login) even though only one of those is role='pengurus', so this
-  // stays defensive rather than assuming exactly one row.
-  const { data: pengurusProfiles } = await supabase
-    .from("profiles")
-    .select("id")
-    .eq("household_id", id)
-    .eq("role", "pengurus")
-    .limit(1);
-  if (!pengurusProfiles || pengurusProfiles.length === 0) return;
-
   const { data: household } = await supabase
     .from("households")
     .select("unit_no, phone, phone_pasangan")
@@ -149,6 +141,15 @@ export async function sendLoginInvite(id: string) {
 
   const result = await sendWhatsAppMessage(household!.phone!, message);
 
+  // Sent one after another (not concurrently — back-to-back requests risk
+  // the gateway flagging/rate-limiting the sends) with a pause between so
+  // the two messages don't land on WhatsApp back-to-back either.
+  let pasanganResult: Awaited<ReturnType<typeof sendWhatsAppMessage>> | null = null;
+  if (household!.phone_pasangan) {
+    await new Promise((resolve) => setTimeout(resolve, 60_000));
+    pasanganResult = await sendWhatsAppMessage(household!.phone_pasangan, message);
+  }
+
   let updateError: string | null = null;
   if (result.success) {
     const { error } = await supabase
@@ -166,13 +167,9 @@ export async function sendLoginInvite(id: string) {
       : `info login -> ${household!.phone} (${household!.unit_no}) - ${result.reason} - ${result.detail}`,
   });
 
-  // Best-effort: also notify the spouse's number if one's on file. Doesn't
-  // affect the redirect/error below — that stays tied to the main number.
-  if (household!.phone_pasangan) {
-    const pasanganResult = await sendWhatsAppMessage(
-      household!.phone_pasangan,
-      message
-    );
+  // Best-effort: doesn't affect the redirect/error below — that stays
+  // tied to the main number.
+  if (pasanganResult) {
     await supabase.from("activity_log").insert({
       actor_email: user.email,
       action: pasanganResult.success ? "whatsapp.send" : "whatsapp.send_failed",
@@ -205,14 +202,6 @@ export async function markLoginInviteSent(
   if (!LOGIN_INVITE_SENDERS.includes(user.email)) return { success: false };
 
   const supabase = await createClient();
-
-  const { data: pengurusProfiles } = await supabase
-    .from("profiles")
-    .select("id")
-    .eq("household_id", id)
-    .eq("role", "pengurus")
-    .limit(1);
-  if (!pengurusProfiles || pengurusProfiles.length === 0) return { success: false };
 
   const { data: household } = await supabase
     .from("households")

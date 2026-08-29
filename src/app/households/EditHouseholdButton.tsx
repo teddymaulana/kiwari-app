@@ -6,10 +6,14 @@ export default function EditHouseholdButton({
   action,
   name,
   phone,
+  altNames,
+  phonePasangan,
 }: {
   action: (formData: FormData) => Promise<void>;
   name: string;
   phone: string | null;
+  altNames: string | null;
+  phonePasangan: string | null;
 }) {
   const [open, setOpen] = useState(false);
   const [pending, setPending] = useState(false);
@@ -63,6 +67,28 @@ export default function EditHouseholdButton({
               <input
                 name="phone"
                 defaultValue={phone ?? ""}
+                placeholder="opsional"
+                className="w-full rounded border border-gray-300 px-3 py-2 text-sm"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-gray-700 mb-1">
+                Nama Pasangan
+              </label>
+              <input
+                name="alt_names"
+                defaultValue={altNames ?? ""}
+                placeholder="opsional"
+                className="w-full rounded border border-gray-300 px-3 py-2 text-sm"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-gray-700 mb-1">
+                No. HP Pasangan
+              </label>
+              <input
+                name="phone_pasangan"
+                defaultValue={phonePasangan ?? ""}
                 placeholder="opsional"
                 className="w-full rounded border border-gray-300 px-3 py-2 text-sm"
               />

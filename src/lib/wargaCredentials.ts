@@ -5,7 +5,7 @@ import path from "path";
 // the manual wa.me link (households/page.tsx), so both ever say the same
 // thing regardless of which one a given send used.
 export const loginInviteMessage = (email: string, password: string) =>
-  `Halo, warga Kiwari! berikut info login akun Anda untuk aplikasi Kiwari Residence (IPL):\n\nUsername: ${email}\nPassword: ${password}\n\nLogin di: https://kiwari-app.vercel.app/`;
+  `Halo, warga Kiwari! berikut info login akun Anda untuk aplikasi Kiwari Residence (IPL):\n\nUsername: ${email}\nPassword: ${password}\n\nLogin di: https://kiwari-app.vercel.app/\n\nBelum pernah bayar lewat sini? Lihat cara Bayar IPL di: https://kiwari-app.vercel.app/tutorial-bayar-ipl`;
 
 type Credential = { email: string; password: string };
 
