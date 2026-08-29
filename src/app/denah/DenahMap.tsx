@@ -117,7 +117,7 @@ const UNIT_GEOMETRY: UnitCell[] = [
 
 // The source sheet draws "8T" and "8S" sharing a single merged box.
 const DECORATIVE = [
-  { label: "8T / 8S", col: 18, row: 25, colspan: 3, rowspan: 4 },
+  { label: "8T / 8S", col: 17, row: 25, colspan: 3, rowspan: 4 },
 ];
 
 // RTH (green open space) regions — cells styled with the sheet's green
@@ -131,7 +131,11 @@ const GREEN_AREAS = [
   { col: 5, row: 10, colspan: 1, rowspan: 8 },
   { col: 5, row: 20, colspan: 1, rowspan: 8 },
   { col: 14, row: 20, colspan: 2, rowspan: 8 },
-  { col: 25, row: 36, colspan: 1, rowspan: 4 },
+  // Right of 9H, same size, with a 1-cell gap (col 13) in between.
+  { col: 14, row: 30, colspan: 2, rowspan: 4 },
+  // Above 8M-8Q (col 19-23, row 36) — stops at row 34 so row 35 stays an
+  // empty gap of boxes before the units, instead of touching them.
+  { col: 19, row: 30, colspan: 5, rowspan: 4 },
   { col: 1, row: 39, colspan: 1, rowspan: 2 },
 ];
 
@@ -148,8 +152,8 @@ type Wall = {
 };
 
 const WALLS: Wall[] = [
-  // Left side, 9X down to 9N.
-  { side: "left", col: 1, row: 12, rowspan: 22 },
+  // Left side, top edge of the plan down through 9X to 9N.
+  { side: "left", col: 1, row: 1, rowspan: 33 },
   // Bottom side, 9N across the gap through 9M, 9L, 9K, 9J, 9I. Row 33, not
   // 34: "bottom" aligns to the end of the row it's given, and 33 is the
   // last row these units actually occupy (they end at the row-34 line) —
@@ -157,32 +161,33 @@ const WALLS: Wall[] = [
   { side: "bottom", col: 1, row: 33, colspan: 10 },
   // Left side, 9G down past 9A to the bottom of the plan.
   { side: "left", col: 11, row: 34, rowspan: 20 },
-  // Top side, 19K through 19A.
-  { side: "top", col: 4, row: 1, colspan: 11 },
+  // Top side, continuing from the left wall's top-left corner (col 1)
+  // rightward across 19K through 19A and on to col 16 — the right edge of
+  // the rightmost top green area.
+  { side: "top", col: 1, row: 1, colspan: 16 },
   // Bottom side, 8A through 8E (Kiwari VII). Row 54, not 55: same
   // last-occupied-row convention as the 9N-9I wall above.
   { side: "bottom", col: 12, row: 54, colspan: 5 },
   // Bottom side, 8L through 8R.
   { side: "bottom", col: 17, row: 39, colspan: 8 },
-  // Right side of 8I (down through 8H, 8G, 8F) to the right side of 8E.
-  // col 17, not 16: 8I/8H/8G/8F each span cols 15-16 (colspan 2), so col
-  // 16 falls inside those boxes rather than at their edge.
-  { side: "left", col: 17, row: 40, rowspan: 11 },
-  // Right side of 19V down to the right side of 18A.
-  { side: "left", col: 17, row: 10, rowspan: 18 },
-];
-
-// Approximate anchors for the "Kiwari" zone captions — the source draws
-// these as separate graphic labels (not grid text), so their exact
-// coordinates aren't in the extracted cell data; placed just above/beside
-// their cluster.
-const ZONE_LABELS = [
-  { label: "Kiwari I", col: 4, row: 0 },
-  { label: "Kiwari II", col: 1, row: 9 },
-  { label: "Kiwari III", col: 6, row: 9 },
-  { label: "Kiwari IV", col: 6, row: 19 },
-  { label: "Kiwari V", col: 11, row: 33 },
-  { label: "Kiwari VII", col: 12, row: 50 },
+  // Bottom-left corner of 8T/8S, running right — same length (5 cols) as
+  // the green area below it, shifted 2 cells right.
+  { side: "bottom", col: 20, row: 28, colspan: 5 },
+  // Right side of 8T/8S.
+  { side: "left", col: 20, row: 25, rowspan: 4 },
+  // Top side of 8T/8S.
+  { side: "top", col: 17, row: 25, colspan: 3 },
+  // Right side of 8I (down through 8H, 8G, 8F), continued to the bottom
+  // edge of the plan. col 17, not 16: 8I/8H/8G/8F each span cols 15-16
+  // (colspan 2), so col 16 falls inside those boxes rather than at their
+  // edge.
+  { side: "left", col: 17, row: 40, rowspan: 15 },
+  // Right side of 19V, continued up to the top edge, down past the right
+  // side of 18A. Stops at row 24, before 8T/8S (row 25) — 8T/8S now has
+  // its own dedicated left wall instead of sharing this one.
+  { side: "left", col: 17, row: 1, rowspan: 24 },
+  // Right side of 8R itself, plus running up 7 more cells above its top edge.
+  { side: "left", col: 25, row: 29, rowspan: 11 },
 ];
 
 const MAX_COL = 25;
@@ -194,7 +199,18 @@ type Tooltip = {
   alt_names: string | null;
   left: number;
   top: number;
+  hAlign: "left" | "center" | "right";
+  vAlign: "above" | "below";
 };
+
+// Rough tooltip footprint used only to decide which side has room — the
+// actual box sizes to its content via whitespace-nowrap, but these
+// estimates are enough to stop it from clipping against the container
+// edges (e.g. 8A-8E sit on the very bottom row, 9N-9X in the leftmost
+// column).
+const TOOLTIP_HALF_WIDTH = 90;
+const TOOLTIP_HEIGHT = 70;
+const TOOLTIP_GAP = 6;
 
 export default function DenahMap({ households }: { households: DenahHousehold[] }) {
   const [tooltip, setTooltip] = useState<Tooltip | null>(null);
@@ -215,12 +231,36 @@ export default function DenahMap({ households }: { households: DenahHousehold[] 
       setTooltip(null);
       return;
     }
+
+    const el = e.currentTarget;
+    const container = el.offsetParent as HTMLElement | null;
+    const containerWidth = container?.offsetWidth ?? Infinity;
+    const containerHeight = container?.offsetHeight ?? Infinity;
+
+    const cellCenterX = el.offsetLeft + el.offsetWidth / 2;
+    const cellTop = el.offsetTop;
+    const cellBottom = el.offsetTop + el.offsetHeight;
+
+    let hAlign: Tooltip["hAlign"] = "center";
+    if (cellCenterX - TOOLTIP_HALF_WIDTH < 0) hAlign = "left";
+    else if (cellCenterX + TOOLTIP_HALF_WIDTH > containerWidth) hAlign = "right";
+
+    const vAlign: Tooltip["vAlign"] =
+      cellBottom + TOOLTIP_GAP + TOOLTIP_HEIGHT > containerHeight ? "above" : "below";
+
     setTooltip({
       unit_no: unitNo,
       name: h.name,
       alt_names: h.alt_names,
-      left: e.currentTarget.offsetLeft + e.currentTarget.offsetWidth / 2,
-      top: e.currentTarget.offsetTop + e.currentTarget.offsetHeight,
+      left:
+        hAlign === "left"
+          ? el.offsetLeft
+          : hAlign === "right"
+          ? el.offsetLeft + el.offsetWidth
+          : cellCenterX,
+      top: vAlign === "above" ? cellTop - TOOLTIP_GAP : cellBottom + TOOLTIP_GAP,
+      hAlign,
+      vAlign,
     });
   }
 
@@ -230,7 +270,7 @@ export default function DenahMap({ households }: { households: DenahHousehold[] 
         Denah Kiwari Residence
       </h1>
       <p className="text-xs text-gray-400 mb-4">
-        Klik satu unit untuk lihat nama kepala keluarga dan pasangan.
+        Klik satu unit untuk lihat nama penghuni.
       </p>
 
       <div className="overflow-x-auto -mx-4 px-4 pb-4">
@@ -295,7 +335,13 @@ export default function DenahMap({ households }: { households: DenahHousehold[] 
           {tooltip && (
             <div
               style={{ left: tooltip.left, top: tooltip.top }}
-              className="absolute z-10 -translate-x-1/2 mt-1 bg-white border border-gray-200 rounded-lg shadow-lg px-3 py-2 text-xs whitespace-nowrap"
+              className={`absolute z-10 bg-white border border-gray-200 rounded-lg shadow-lg px-3 py-2 text-xs whitespace-nowrap ${
+                tooltip.hAlign === "center"
+                  ? "-translate-x-1/2"
+                  : tooltip.hAlign === "right"
+                  ? "-translate-x-full"
+                  : ""
+              } ${tooltip.vAlign === "above" ? "-translate-y-full" : ""}`}
             >
               <p className="font-semibold text-gray-900">{tooltip.unit_no}</p>
               <p className="text-gray-600">{tooltip.name}</p>
@@ -315,19 +361,6 @@ export default function DenahMap({ households }: { households: DenahHousehold[] 
               className="border border-dashed border-gray-200 rounded text-[8px] text-gray-300 flex items-center justify-center text-center px-0.5"
             >
               {d.label}
-            </div>
-          ))}
-
-          {ZONE_LABELS.map((z) => (
-            <div
-              key={z.label}
-              style={{
-                gridColumn: z.col,
-                gridRow: z.row + ROW_OFFSET,
-              }}
-              className="text-[9px] font-semibold text-gray-400 self-end whitespace-nowrap"
-            >
-              {z.label}
             </div>
           ))}
         </div>
