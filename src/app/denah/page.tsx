@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import { getCurrentUser, DENAH_VIEWERS } from "@/lib/auth";
+import { getCurrentUser } from "@/lib/auth";
 import DenahMap from "./DenahMap";
 
 export type DenahHousehold = {
@@ -11,9 +11,9 @@ export type DenahHousehold = {
 
 export default async function DenahPage() {
   const user = await getCurrentUser();
-  // Same restriction as the nav link (see NavBar/layout.tsx) — this shows
-  // household names, so direct navigation is gated too, not just the link.
-  if (!user || !DENAH_VIEWERS.includes(user.email)) redirect("/dashboard");
+  // Open to any logged-in warga/pengurus — direct navigation is still
+  // gated to require a login, since this shows household names.
+  if (!user) redirect("/dashboard");
 
   const supabase = await createClient();
   const { data: households } = await supabase

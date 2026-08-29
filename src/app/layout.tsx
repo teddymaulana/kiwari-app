@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import "./globals.css";
-import { getCurrentUser, DENAH_VIEWERS } from "@/lib/auth";
+import { getCurrentUser } from "@/lib/auth";
 import NavBar from "@/components/NavBar";
 
 export const metadata: Metadata = {
@@ -21,7 +21,6 @@ export default async function RootLayout({
             role={user.role}
             actualRole={user.actualRole}
             unitNo={user.unitNo}
-            canViewDenah={DENAH_VIEWERS.includes(user.email)}
           />
         )}
         <main className="flex-1 bg-white">{children}</main>
