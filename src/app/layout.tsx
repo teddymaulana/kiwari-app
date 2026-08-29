@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import "./globals.css";
+import { Analytics } from "@vercel/analytics/next";
 import { getCurrentUser } from "@/lib/auth";
 import NavBar from "@/components/NavBar";
 
@@ -24,6 +25,7 @@ export default async function RootLayout({
           />
         )}
         <main className="flex-1 bg-white">{children}</main>
+        <Analytics />
       </body>
     </html>
   );
