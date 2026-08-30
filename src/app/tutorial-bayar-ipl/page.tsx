@@ -1,6 +1,8 @@
 import Image from "next/image";
 import Link from "next/link";
 import { Fredoka, Plus_Jakarta_Sans } from "next/font/google";
+import { getCurrentUser } from "@/lib/auth";
+import { logPageView } from "@/lib/pageView";
 
 // Public, unauthenticated page (see src/lib/supabase/middleware.ts's
 // isPublicPage allowlist) — a friendly visual walkthrough of the public
@@ -68,7 +70,13 @@ const steps = [
   },
 ];
 
-export default function TutorialBayarIplPage() {
+export default async function TutorialBayarIplPage() {
+  // Public/unauthenticated page — only logged-in visitors (e.g. a
+  // pengurus checking it) get attributed; anonymous residents browsing
+  // before logging in are a no-op in logPageView.
+  const user = await getCurrentUser();
+  await logPageView(user, "tutorial-bayar-ipl");
+
   return (
     <div
       className={`${fredoka.variable} ${jakarta.variable} font-[family-name:var(--font-jakarta)] bg-[#f3f6f5] text-[#12303a] min-h-screen`}

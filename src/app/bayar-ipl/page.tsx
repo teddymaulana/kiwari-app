@@ -1,5 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentUser } from "@/lib/auth";
+import { logPageView } from "@/lib/pageView";
 import BayarIplForm from "./BayarIplForm";
 import ClaimSuccessCard from "@/components/ClaimSuccessCard";
 import type { Payment, Settings } from "@/lib/types";
@@ -11,6 +12,8 @@ export default async function BayarIplPage({
 }) {
   const { claim_error, claim_success } = await searchParams;
   const user = await getCurrentUser();
+
+  await logPageView(user, "bayar-ipl");
 
   if (!user?.householdId) {
     return (

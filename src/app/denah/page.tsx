@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentUser } from "@/lib/auth";
+import { logPageView } from "@/lib/pageView";
 import DenahMap from "./DenahMap";
 
 export type DenahHousehold = {
@@ -14,6 +15,8 @@ export default async function DenahPage() {
   // Open to any logged-in warga/pengurus — direct navigation is still
   // gated to require a login, since this shows household names.
   if (!user) redirect("/dashboard");
+
+  await logPageView(user, "denah");
 
   const supabase = await createClient();
   const { data: households } = await supabase
