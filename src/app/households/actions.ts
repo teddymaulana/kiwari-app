@@ -186,16 +186,17 @@ export async function sendLoginInvite(id: string) {
   redirect("/households?wa_success=1");
 }
 
-// Manual mode (settings.whatsapp_provider === "manual"): the message
-// itself is sent by the pengurus via a wa.me link opened client-side (see
-// KirimInfoLoginManualButton in households/page.tsx) — no gateway call
-// happens here at all. This action only records that it was opened, with
-// the same permission checks as sendLoginInvite above. Called directly
-// from the client (not a <form action>), so it returns a result instead
-// of redirecting.
+// Click-to-send links opened client-side — either the "manual" WhatsApp
+// provider's wa.me link, or the SMS fallback (sms:) offered regardless of
+// provider (see OpenWaMeButton/OpenSmsButton in households/page.tsx). No
+// gateway call happens here at all; this action only records that the
+// link was opened, with the same permission checks as sendLoginInvite
+// above. Called directly from the client (not a <form action>), so it
+// returns a result instead of redirecting.
 export async function markLoginInviteSent(
   id: string,
-  target: "phone" | "phone_pasangan"
+  target: "phone" | "phone_pasangan",
+  channel: "whatsapp" | "sms" = "whatsapp"
 ): Promise<{ success: boolean }> {
   const user = await getCurrentUser();
   if (user?.role !== "pengurus") return { success: false };
@@ -223,8 +224,8 @@ export async function markLoginInviteSent(
 
   await supabase.from("activity_log").insert({
     actor_email: user.email,
-    action: "whatsapp.manual_open",
-    detail: `info login${target === "phone_pasangan" ? " (pasangan)" : ""} -> ${phone} (${household!.unit_no}) [manual/wa.me]`,
+    action: channel === "sms" ? "sms.manual_open" : "whatsapp.manual_open",
+    detail: `info login${target === "phone_pasangan" ? " (pasangan)" : ""} -> ${phone} (${household!.unit_no}) [manual/${channel === "sms" ? "sms" : "wa.me"}]`,
   });
 
   revalidatePath("/households");

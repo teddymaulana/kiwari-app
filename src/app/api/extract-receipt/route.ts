@@ -130,20 +130,28 @@ function matchHousehold(
   return null;
 }
 
-// Picks a "Rp"/"IDR"-prefixed number from the OCR text. Indonesian bank
-// apps format amounts with "." as thousands separator and "," as decimal
-// (e.g. "Rp200.000,00") — receipts often also show the fee-inclusive total
-// (e.g. "Rp502.500" = Rp500.000 transfer + Rp2.500 admin fee), so among
-// several candidates a "round" one (last 4 digits zero, e.g. 500.000) is
-// preferred over one that isn't, since IPL/kas amounts are always round
-// and a non-round total is a strong signal it includes a fee. Falls back
-// to the largest candidate if none are round.
+// Picks a "Rp"/"IDR"-prefixed number from the OCR text. Most Indonesian
+// bank apps format amounts with "." as thousands separator and "," as
+// decimal (e.g. "Rp200.000,00"), but some format the other way round —
+// Western-style "," thousands / "." decimal (e.g. "Rp200,000.00") —
+// rather than assume which character means what, whichever of "." or ","
+// appears last, if immediately followed by exactly 1-2 digits, is treated
+// as the decimal separator; every other "." or "," in the number is a
+// thousands separator regardless of which character it is. Receipts often
+// also show the fee-inclusive total (e.g. "Rp502.500" = Rp500.000
+// transfer + Rp2.500 admin fee), so among several candidates a "round" one
+// (last 4 digits zero, e.g. 500.000) is preferred over one that isn't,
+// since IPL/kas amounts are always round and a non-round total is a
+// strong signal it includes a fee. Falls back to the largest candidate if
+// none are round.
 function extractAmount(ocrText: string): number | null {
   const matches = ocrText.matchAll(/(?:rp|idr)\.?\s*([\d.,]{3,})/gi);
   const amounts: number[] = [];
 
   for (const m of matches) {
-    const normalized = m[1].replace(/\./g, "").replace(/,\d{1,2}$/, "").replace(/,/g, "");
+    const raw = m[1];
+    const decimal = raw.match(/[.,]\d{1,2}$/);
+    const normalized = (decimal ? raw.slice(0, decimal.index) : raw).replace(/[.,]/g, "");
     const value = parseInt(normalized, 10);
     if (!isNaN(value) && value >= 1000 && value <= 1_000_000_000) {
       amounts.push(value);

@@ -9,6 +9,7 @@ import {
 import { getWhatsAppProvider } from "@/lib/whatsapp";
 import { loadCredentials, loginInviteMessage } from "@/lib/wargaCredentials";
 import { buildWaMeUrl } from "@/lib/waMe";
+import { buildSmsUrl } from "@/lib/sms";
 import {
   addHousehold,
   toggleHouseholdActive,
@@ -20,6 +21,7 @@ import ToggleActiveButton from "./ToggleActiveButton";
 import EditHouseholdButton from "./EditHouseholdButton";
 import SubmitButton from "@/components/SubmitButton";
 import OpenWaMeButton from "@/components/OpenWaMeButton";
+import OpenSmsButton from "@/components/OpenSmsButton";
 import type { Household } from "@/lib/types";
 import { compareUnitNo } from "@/lib/types";
 
@@ -166,8 +168,32 @@ export default async function HouseholdsPage({
                       </span>
                     );
 
+                    const message = loginInviteMessage(credential.email, credential.password);
+
+                    // Offered regardless of provider — a manual, no-gateway
+                    // fallback for numbers that can't be reached over
+                    // WhatsApp, same click-to-send pattern as the wa.me
+                    // buttons below.
+                    const smsButtons = (
+                      <>
+                        <OpenSmsButton
+                          url={buildSmsUrl(h.phone, message)}
+                          action={markLoginInviteSent.bind(null, h.id, "phone", "sms")}
+                          label="SMS"
+                          className="text-xs text-gray-500 hover:text-gray-700 transition"
+                        />
+                        {h.phone_pasangan && (
+                          <OpenSmsButton
+                            url={buildSmsUrl(h.phone_pasangan, message)}
+                            action={markLoginInviteSent.bind(null, h.id, "phone_pasangan", "sms")}
+                            label="SMS ke Pasangan"
+                            className="text-xs text-gray-400 hover:text-gray-600 transition"
+                          />
+                        )}
+                      </>
+                    );
+
                     if (provider === "manual") {
-                      const message = loginInviteMessage(credential.email, credential.password);
                       const buttonClass = `text-xs transition ${
                         h.login_invite_sent_at
                           ? "text-gray-500 hover:text-gray-700"
@@ -190,6 +216,7 @@ export default async function HouseholdsPage({
                               className="text-xs text-gray-500 hover:text-gray-700 transition"
                             />
                           )}
+                          {smsButtons}
                         </>
                       );
                     }
@@ -209,6 +236,7 @@ export default async function HouseholdsPage({
                             {h.login_invite_sent_at ? "Kirim Ulang" : "Kirim Info Login"}
                           </SubmitButton>
                         </form>
+                        {smsButtons}
                       </>
                     );
                   })()}
