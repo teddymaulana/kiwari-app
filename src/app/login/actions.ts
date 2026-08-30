@@ -53,12 +53,20 @@ export async function submitPaymentClaim(formData: FormData) {
     );
   }
 
+  // The client-side `required` on the file input can be bypassed, so it's
+  // enforced here too.
+  if (!(receipt instanceof File) || receipt.size === 0) {
+    redirect(
+      "/login?claim_error=" + encodeURIComponent("Bukti transfer wajib diunggah")
+    );
+  }
+
   const result = await createPendingPaymentClaim({
     householdId: household_id,
     periodYear: period_year,
     periodMonths: period_months,
     note,
-    receipt: receipt instanceof File ? receipt : null,
+    receipt,
     actorEmail: null,
   });
 

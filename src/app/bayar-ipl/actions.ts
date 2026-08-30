@@ -31,12 +31,22 @@ export async function submitOwnPaymentClaim(formData: FormData) {
     );
   }
 
+  // Required for the logged-in warga flow — the client-side `required` on
+  // the file input can be bypassed, so it's enforced here too. The public
+  // /login form stays receipt-optional; this is deliberately only here.
+  if (!(receipt instanceof File) || receipt.size === 0) {
+    redirect(
+      "/bayar-ipl?claim_error=" +
+        encodeURIComponent("Bukti transfer wajib diunggah")
+    );
+  }
+
   const result = await createPendingPaymentClaim({
     householdId: user.householdId,
     periodYear: period_year,
     periodMonths: period_months,
     note,
-    receipt: receipt instanceof File ? receipt : null,
+    receipt,
     actorEmail: user.email,
   });
 

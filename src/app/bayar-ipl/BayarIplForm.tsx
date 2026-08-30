@@ -57,12 +57,13 @@ export default function BayarIplForm({
     <form action={submitOwnPaymentClaim} className="space-y-4">
       <div>
         <label className="block text-sm font-medium text-gray-700 mb-1">
-          Bukti Transfer (opsional)
+          Bukti Transfer
         </label>
         <input
           type="file"
           name="receipt"
           accept="image/*"
+          required
           className="w-full text-sm text-gray-600 file:mr-3 file:py-1.5 file:px-3 file:rounded file:border-0 file:bg-gray-100 file:text-sm file:text-gray-700"
         />
       </div>
