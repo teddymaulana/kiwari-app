@@ -60,3 +60,6 @@ warga-pasangan-nohp.csv
 
 # QA data snapshot/restore scripts — operational, not app code, kept local only
 /supabase/qa/
+
+# Personal Claude Code account isolation (see .envrc)
+.envrc
