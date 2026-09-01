@@ -9,5 +9,5 @@ export function paymentConfirmedMessage(
   periodYear: number,
   amount: number
 ): string {
-  return `Halo, pembayaran IPL ${MONTH_NAMES[periodMonth - 1]} ${periodYear} untuk ${unitNo} sebesar ${formatRupiah(amount)} telah dikonfirmasi pengurus. Terima kasih!`;
+  return `✅ Halo, pembayaran IPL ${MONTH_NAMES[periodMonth - 1]} ${periodYear} untuk *${unitNo}* sebesar *${formatRupiah(amount)}* telah dikonfirmasi. Terima kasih! 🙏`;
 }

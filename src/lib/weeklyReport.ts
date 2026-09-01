@@ -51,14 +51,21 @@ export async function sendWeeklyReport(
     getMonthlyReport(year, month),
   ]);
 
+  const paidPercent =
+    monthly.totalUnits > 0
+      ? Math.round((monthly.paidCount / monthly.totalUnits) * 100)
+      : 0;
+
   const message = [
-    "Kas Saat Ini:",
+    `💰 *Kas Saat Ini*`,
     `*${formatRupiah(kasSaatIni)}*`,
     "",
-    `Laporan Bulan Ini (${MONTH_NAMES[month - 1]} ${year})`,
-    `${monthly.paidCount}/${monthly.totalUnits} Sudah bayar IPL`,
-    `Total Terkumpul ${formatRupiah(monthly.totalTerkumpul)}`,
-    `Pengeluaran ${formatRupiah(monthly.pengeluaran)}`,
+    `📊 *Laporan Bulan Ini (${MONTH_NAMES[month - 1]} ${year})*`,
+    `✅ ${monthly.paidCount}/${monthly.totalUnits} Sudah bayar IPL (${paidPercent}%)`,
+    `💵 Total Terkumpul: ${formatRupiah(monthly.totalTerkumpul)}`,
+    `📉 Pengeluaran: ${formatRupiah(monthly.pengeluaran)}`,
+    "",
+    "_Laporan otomatis, dikirim setiap Minggu._",
   ].join("\n");
 
   const result = await sendViaWablas(household.phone, message);
