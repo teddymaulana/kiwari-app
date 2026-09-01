@@ -9,8 +9,10 @@ import {
   CASH_TRANSFER_RECORDERS,
   WHATSAPP_TEST_SENDERS,
   WHATSAPP_PROVIDER_MANAGERS,
+  WEEKLY_REPORT_SENDERS,
 } from "@/lib/auth";
 import { sendWhatsAppMessage } from "@/lib/whatsapp";
+import { sendWeeklyReport } from "@/lib/weeklyReport";
 
 // Kas balance carried over from before this app existed — not income, so
 // it's stored on settings (like monthly_amount) rather than as a
@@ -158,6 +160,23 @@ export async function sendTestWhatsApp(formData: FormData) {
       ? `${phone} - ${message} - ${result.detail}`
       : `${phone} - ${result.reason} - ${result.detail}`,
   });
+
+  if (!result.success) {
+    redirect(`/settings?wa_error=${encodeURIComponent(result.reason)}`);
+  }
+
+  redirect("/settings?wa_success=1");
+}
+
+// Manual trigger for the weekly Kas/Laporan report — same message and
+// recipient (18G, as a test) as the Sunday cron job in
+// api/cron/weekly-report/route.ts, both backed by sendWeeklyReport.
+export async function sendWeeklyReportNow() {
+  const user = await getCurrentUser();
+  if (user?.role !== "pengurus") redirect("/dashboard");
+  if (!WEEKLY_REPORT_SENDERS.includes(user.email)) redirect("/settings");
+
+  const result = await sendWeeklyReport(user.email);
 
   if (!result.success) {
     redirect(`/settings?wa_error=${encodeURIComponent(result.reason)}`);

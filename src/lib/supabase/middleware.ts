@@ -37,9 +37,14 @@ export async function updateSession(request: NextRequest) {
   // is picked. Without this allowlist, an anonymous fetch to either gets
   // redirected to /login (HTML) instead of JSON, breaking res.json() on
   // the client with "Unexpected token '<'".
+  // Vercel Cron requests carry no Supabase session cookie, only
+  // "Authorization: Bearer $CRON_SECRET" — which the route itself checks
+  // (see src/app/api/cron/weekly-report/route.ts) — so this can't gate on
+  // `user` the way session-backed routes do.
   const isPublicApi =
     request.nextUrl.pathname.startsWith("/api/extract-receipt") ||
-    request.nextUrl.pathname.startsWith("/api/unpaid-months");
+    request.nextUrl.pathname.startsWith("/api/unpaid-months") ||
+    request.nextUrl.pathname.startsWith("/api/cron/");
 
   // Shareable how-to-pay guide (real screenshots of the public Bayar IPL
   // form) — meant to be sent directly to residents, e.g. in the warga

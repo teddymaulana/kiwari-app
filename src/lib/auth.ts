@@ -83,6 +83,14 @@ export const WHATSAPP_PROVIDER_MANAGERS = ["18g@kiwari.local"];
 // actions (sendLoginInvite, markLoginInviteSent in households/actions.ts).
 export const LOGIN_INVITE_SENDERS = ["18g@kiwari.local"];
 
+// Manually triggering the weekly Kas/Laporan WhatsApp report (Kirim
+// Laporan Mingguan on /settings — the same send the Sunday cron job in
+// src/app/api/cron/weekly-report/route.ts fires automatically) is
+// restricted to this one pengurus account while the report is still only
+// going to 18G as a test, checked both in the UI (settings/page.tsx) and
+// again in the server action (settings/actions.ts).
+export const WEEKLY_REPORT_SENDERS = ["18g@kiwari.local"];
+
 export type CurrentUser = {
   id: string;
   email: string;

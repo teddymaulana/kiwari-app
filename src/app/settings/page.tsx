@@ -5,6 +5,7 @@ import {
   CASH_TRANSFER_RECORDERS,
   WHATSAPP_TEST_SENDERS,
   WHATSAPP_PROVIDER_MANAGERS,
+  WEEKLY_REPORT_SENDERS,
 } from "@/lib/auth";
 import {
   updateOpeningBalance,
@@ -12,6 +13,7 @@ import {
   sendTestWhatsApp,
   recordCashTransfer,
   setWhatsAppProvider,
+  sendWeeklyReportNow,
 } from "./actions";
 import type { Household, Settings } from "@/lib/types";
 import { formatRupiah, compareUnitNo } from "@/lib/types";
@@ -281,6 +283,43 @@ export default async function SettingsPage({
               className="bg-blue-600 text-white rounded px-4 py-2 text-sm font-medium hover:bg-blue-700 transition"
             >
               Kirim
+            </SubmitButton>
+          </form>
+        </div>
+      )}
+
+      {WEEKLY_REPORT_SENDERS.includes(user.email) && (
+        <div>
+          <h2 className="text-sm font-medium text-gray-700 mb-1">
+            Laporan Mingguan
+          </h2>
+          <p className="text-xs text-gray-400 mb-4">
+            Kirim ringkasan Kas Saat Ini + laporan bulan ini lewat WhatsApp
+            — kirim otomatis tiap Minggu pagi lewat cron job, tombol ini
+            untuk kirim manual kapan saja. Untuk sekarang hanya terkirim ke
+            18G sebagai uji coba.
+          </p>
+
+          {wa_error && (
+            <div className="mb-4 text-sm text-red-700 bg-red-50 border border-red-200 rounded px-3 py-2">
+              {wa_error}
+            </div>
+          )}
+          {wa_success && (
+            <div className="mb-4 text-sm text-green-700 bg-green-50 border border-green-200 rounded px-3 py-2">
+              Laporan berhasil dikirim.
+            </div>
+          )}
+
+          <form
+            action={sendWeeklyReportNow}
+            className="bg-white border border-gray-200 rounded-lg p-6"
+          >
+            <SubmitButton
+              pendingText="Mengirim..."
+              className="bg-blue-600 text-white rounded px-4 py-2 text-sm font-medium hover:bg-blue-700 transition"
+            >
+              Kirim Laporan Mingguan
             </SubmitButton>
           </form>
         </div>
