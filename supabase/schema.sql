@@ -31,7 +31,7 @@ alter table settings add column if not exists opening_balance_tunai numeric(12,2
 alter table settings add column if not exists whatsapp_provider text not null default 'fonnte';
 alter table settings drop constraint if exists settings_whatsapp_provider_check;
 alter table settings add constraint settings_whatsapp_provider_check
-  check (whatsapp_provider in ('fonnte', 'wablas', 'manual'));
+  check (whatsapp_provider in ('fonnte', 'wablas', 'manual', 'off'));
 
 create table if not exists households (
   id uuid primary key default gen_random_uuid(),

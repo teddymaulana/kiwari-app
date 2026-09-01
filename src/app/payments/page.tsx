@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { getCurrentUser, PAYMENT_DELETERS, CONTRIBUTION_DELETERS } from "@/lib/auth";
 import { deletePayment, excludePayment, includePayment } from "./actions";
 import {
@@ -54,6 +55,19 @@ export default async function PaymentsPage({
       : Promise.resolve({ data: null as Contribution[] | null }),
   ]);
 
+  const admin = createAdminClient();
+  const receiptUrls = new Map<string, string>();
+  await Promise.all(
+    (history ?? [])
+      .filter((p) => p.receipt_path)
+      .map(async (p) => {
+        const { data } = await admin.storage
+          .from("bukti-transfer")
+          .createSignedUrl(p.receipt_path!, 60 * 10);
+        if (data?.signedUrl) receiptUrls.set(p.id, data.signedUrl);
+      })
+  );
+
   return (
     <div className="max-w-3xl mx-auto px-4 py-8">
       <h1 className="text-lg font-semibold text-gray-900 mb-1">
@@ -95,6 +109,7 @@ export default async function PaymentsPage({
                   <th className="px-4 py-2 font-medium">Status</th>
                   <th className="px-4 py-2 font-medium">Tanggal Bayar</th>
                   <th className="px-4 py-2 font-medium">Kas</th>
+                  <th className="px-4 py-2 font-medium">Bukti Transfer</th>
                   <th className="px-4 py-2 font-medium"></th>
                 </tr>
               </thead>
@@ -129,6 +144,20 @@ export default async function PaymentsPage({
                     <td className="px-4 py-2 text-gray-500 whitespace-nowrap">
                       {KAS_LABELS[p.kas_type]}
                     </td>
+                    <td className="px-4 py-2 whitespace-nowrap">
+                      {receiptUrls.has(p.id) ? (
+                        <a
+                          href={receiptUrls.get(p.id)}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-xs text-blue-600 hover:text-blue-700 transition"
+                        >
+                          Lihat
+                        </a>
+                      ) : (
+                        <span className="text-xs text-gray-300">—</span>
+                      )}
+                    </td>
                     <td className="px-4 py-2 text-right space-x-3 whitespace-nowrap">
                       {PAYMENT_DELETERS.includes(user.email) && (
                         <>
@@ -150,7 +179,7 @@ export default async function PaymentsPage({
                 ))}
                 {(history ?? []).length === 0 && (
                   <tr>
-                    <td colSpan={6} className="px-4 py-6 text-center text-gray-400">
+                    <td colSpan={7} className="px-4 py-6 text-center text-gray-400">
                       Belum ada riwayat pembayaran untuk warga ini.
                     </td>
                   </tr>

@@ -107,7 +107,13 @@ export async function setWhatsAppProvider(formData: FormData) {
   if (!WHATSAPP_PROVIDER_MANAGERS.includes(user.email)) redirect("/settings");
 
   const provider = String(formData.get("provider") || "");
-  if (provider !== "fonnte" && provider !== "wablas" && provider !== "manual") return;
+  if (
+    provider !== "fonnte" &&
+    provider !== "wablas" &&
+    provider !== "manual" &&
+    provider !== "off"
+  )
+    return;
 
   const supabase = await createClient();
 

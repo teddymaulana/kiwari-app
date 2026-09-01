@@ -81,7 +81,7 @@ const UNIT_GEOMETRY: UnitCell[] = [
   { unit_no: "9Q", col: 1, row: 26, colspan: 2, rowspan: 2 },
   { unit_no: "9P", col: 1, row: 28, colspan: 2, rowspan: 2 },
   { unit_no: "9O", col: 1, row: 30, colspan: 2, rowspan: 2 },
-  { unit_no: "9M", col: 5, row: 30, colspan: 2, rowspan: 4 },
+  { unit_no: "9M", col: 6, row: 30, colspan: 1, rowspan: 4 },
   { unit_no: "9L", col: 7, row: 30, colspan: 1, rowspan: 4 },
   { unit_no: "9K", col: 8, row: 30, colspan: 1, rowspan: 4 },
   { unit_no: "9J", col: 9, row: 30, colspan: 1, rowspan: 4 },
@@ -130,6 +130,8 @@ const GREEN_AREAS = [
   { col: 1, row: 10, colspan: 2, rowspan: 2 },
   { col: 5, row: 10, colspan: 1, rowspan: 8 },
   { col: 5, row: 20, colspan: 1, rowspan: 8 },
+  // Left half of 9M's old box, turned into green area.
+  { col: 5, row: 30, colspan: 1, rowspan: 4 },
   { col: 14, row: 20, colspan: 2, rowspan: 8 },
   // Right of 9H, same size, with a 1-cell gap (col 13) in between.
   { col: 14, row: 30, colspan: 2, rowspan: 4 },

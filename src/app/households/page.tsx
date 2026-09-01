@@ -193,6 +193,18 @@ export default async function HouseholdsPage({
                       </>
                     );
 
+                    // Off: no WhatsApp send of any kind, gateway or
+                    // manual — just the SMS fallback above and the
+                    // "Terkirim" status, if any.
+                    if (provider === "off") {
+                      return (
+                        <>
+                          {sentLabel}
+                          {smsButtons}
+                        </>
+                      );
+                    }
+
                     if (provider === "manual") {
                       const buttonClass = `text-xs transition ${
                         h.login_invite_sent_at

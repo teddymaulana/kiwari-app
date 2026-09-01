@@ -202,9 +202,11 @@ export default async function SettingsPage({
           <p className="text-xs text-gray-400 mb-4">
             Fonnte/Wablas kirim otomatis lewat gateway. Manual membuka link
             wa.me dari WhatsApp kamu sendiri untuk Kirim Info Login dan
-            konfirmasi pembayaran (kamu yang klik Kirim) — notifikasi klaim
-            baru ke 18G selalu tetap lewat Wablas berapa pun pilihan di sini,
-            karena itu terjadi tanpa ada yang standby untuk klik.
+            konfirmasi pembayaran (kamu yang klik Kirim). Off mematikan
+            WhatsApp sama sekali di semua fungsi, termasuk notifikasi klaim
+            baru ke 18G — kalau bukan Off, notifikasi itu selalu tetap lewat
+            Wablas berapa pun pilihan lain di sini, karena itu terjadi tanpa
+            ada yang standby untuk klik.
           </p>
           <div className="flex items-center rounded-full border border-gray-300 p-0.5 text-xs w-fit">
             {(
@@ -212,6 +214,7 @@ export default async function SettingsPage({
                 ["fonnte", "Fonnte"],
                 ["wablas", "Wablas"],
                 ["manual", "Manual"],
+                ["off", "Off"],
               ] as const
             ).map(([value, label]) => (
               <form action={setWhatsAppProvider} key={value}>

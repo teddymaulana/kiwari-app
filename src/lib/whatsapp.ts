@@ -1,5 +1,5 @@
 // Reads settings.whatsapp_provider (see Pengaturan > Layanan WhatsApp) —
-// three options:
+// four options:
 //   - "fonnte" / "wablas": server-to-server gateway sends, no one needs to
 //     be present. Call sites that must fire unattended (e.g. notifying
 //     18G when a warga submits a claim) should use these directly.
@@ -9,13 +9,17 @@
 //     branch on getWhatsAppProvider() and render a different client
 //     component for that case (see households/page.tsx,
 //     payments/new/page.tsx) instead of calling sendWhatsAppMessage.
+//   - "off": WhatsApp sending is turned off entirely, everywhere —
+//     including the unattended claim-notify path in paymentClaim.ts,
+//     which otherwise bypasses this toggle. Every automatic send becomes
+//     a clean, expected failure instead of firing.
 import { createAdminClient } from "@/lib/supabase/admin";
 import { sendViaFonnte } from "./fonnte";
 import { sendViaWablas } from "./wablas";
 import type { WhatsAppResult } from "./whatsappTypes";
 
 export type { WhatsAppResult } from "./whatsappTypes";
-export type WhatsAppProvider = "fonnte" | "wablas" | "manual";
+export type WhatsAppProvider = "fonnte" | "wablas" | "manual" | "off";
 
 export async function getWhatsAppProvider(): Promise<WhatsAppProvider> {
   // Admin client, not the cookie-bound one: this also fires from the
@@ -32,13 +36,21 @@ export async function getWhatsAppProvider(): Promise<WhatsAppProvider> {
 }
 
 // For call sites that need an unattended server-to-server send. Returns a
-// clear failure if the provider is currently set to "manual", since there
-// is no gateway to send through in that mode.
+// clear failure if the provider is currently set to "manual" (no gateway
+// to send through) or "off" (WhatsApp sending is turned off entirely).
 export async function sendWhatsAppMessage(
   target: string,
   message: string
 ): Promise<WhatsAppResult> {
   const provider = await getWhatsAppProvider();
+
+  if (provider === "off") {
+    return {
+      success: false,
+      reason: "Layanan WhatsApp sedang dimatikan",
+      detail: "",
+    };
+  }
 
   if (provider === "manual") {
     return {

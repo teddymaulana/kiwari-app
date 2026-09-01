@@ -1,5 +1,6 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 import { sendViaWablas } from "@/lib/wablas";
+import { getWhatsAppProvider } from "@/lib/whatsapp";
 import { MONTH_NAMES, formatRupiah } from "@/lib/types";
 
 // Unit whose kepala keluarga gets pinged on every new claim so verification
@@ -8,12 +9,13 @@ import { MONTH_NAMES, formatRupiah } from "@/lib/types";
 // this same unit's pengurus login).
 const CLAIM_NOTIFY_UNIT = "18G";
 
-// Deliberately not the settings.whatsapp_provider toggle (src/lib/
-// whatsapp.ts) — this fires from an anonymous public form submission with
-// no pengurus present, so it can never use the "manual" (wa.me,
-// click-to-send) option. Always Wablas regardless of what the toggle is
-// set to, so this specific notification keeps working no matter how the
-// toggle is set for the admin-attended flows.
+// Deliberately not fully driven by the settings.whatsapp_provider toggle
+// (src/lib/whatsapp.ts) — this fires from an anonymous public form
+// submission with no pengurus present, so it can never use the "manual"
+// (wa.me, click-to-send) option. Always Wablas whenever the toggle isn't
+// "off", so this specific notification keeps working no matter which
+// gateway/manual choice is set for the admin-attended flows — "off" is
+// the one exception, since that means "no WhatsApp at all" everywhere.
 
 // Shared by the public "Bayar IPL" form on /login (no session) and the
 // logged-in warga's version on /dashboard (household comes from the
@@ -118,18 +120,22 @@ export async function createPendingPaymentClaim({
   // Best-effort notification to the designated unit so a new pending claim
   // gets verified promptly — must never fail the claim itself, which has
   // already succeeded above.
-  const [{ data: submitterHousehold }, { data: notifyHousehold }] = await Promise.all([
-    admin
-      .from("households")
-      .select("unit_no, name")
-      .eq("id", householdId)
-      .single<{ unit_no: string; name: string }>(),
-    admin
-      .from("households")
-      .select("phone")
-      .ilike("unit_no", CLAIM_NOTIFY_UNIT)
-      .single<{ phone: string | null }>(),
-  ]);
+  const provider = await getWhatsAppProvider();
+  const [{ data: submitterHousehold }, { data: notifyHousehold }] =
+    provider === "off"
+      ? [{ data: null }, { data: null }]
+      : await Promise.all([
+          admin
+            .from("households")
+            .select("unit_no, name")
+            .eq("id", householdId)
+            .single<{ unit_no: string; name: string }>(),
+          admin
+            .from("households")
+            .select("phone")
+            .ilike("unit_no", CLAIM_NOTIFY_UNIT)
+            .single<{ phone: string | null }>(),
+        ]);
 
   if (notifyHousehold?.phone && submitterHousehold) {
     const notifyMessage = `Halo, ada klaim pembayaran IPL baru dari ${submitterHousehold.unit_no} - ${submitterHousehold.name} untuk ${claimedLabel} ${periodYear} (${formatRupiah(amount * claimed.length)}), menunggu verifikasi.`;
