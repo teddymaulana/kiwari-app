@@ -424,6 +424,13 @@ export default async function ReportPage({
           <p className="text-2xl font-semibold text-gray-900">
             {formatRupiah(cardTotalTerkumpul)}
           </p>
+          {!isPengurus && selectedMonthStats && units.length > 0 && (
+            <p className="text-xs text-gray-500 mt-1">
+              {selectedMonthStats.paidCount}/{units.length} warga sudah bayar (
+              {Math.round((selectedMonthStats.paidCount / units.length) * 100)}
+              %)
+            </p>
+          )}
           <div className="mt-3 pt-3 border-t border-gray-100 space-y-1">
             <div className="flex items-center justify-between text-xs gap-3">
               <span className="text-gray-500">IPL {periodLabel}</span>
