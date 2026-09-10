@@ -63,6 +63,79 @@ export async function addExpense(formData: FormData) {
   revalidatePath("/report");
 }
 
+export async function updateExpense(id: string, formData: FormData) {
+  const user = await getCurrentUser();
+  if (user?.role !== "pengurus") return;
+  if (!EXPENSE_RECORDERS.includes(user.email)) return;
+
+  const description = String(formData.get("description") || "").trim();
+  const amount = Number(formData.get("amount"));
+  const expense_date = String(formData.get("expense_date") || "");
+  const kas_type = String(formData.get("kas_type") || "bri");
+  const receipt = formData.get("receipt") as File | null;
+
+  if (!description || !amount || amount <= 0) {
+    redirect("/expenses?error=" + encodeURIComponent("Keterangan dan jumlah wajib diisi"));
+  }
+  if (kas_type !== "tunai" && kas_type !== "bri") {
+    redirect("/expenses?error=" + encodeURIComponent("Sumber kas tidak valid"));
+  }
+
+  const supabase = await createClient();
+  const admin = createAdminClient();
+
+  // Only touch the receipt if a new file was actually chosen — leaving
+  // the field empty keeps whatever's already on file, same as the rest
+  // of this form (description/amount/etc. are always overwritten since
+  // they're plain inputs, always populated from the existing row).
+  let receipt_path: string | undefined;
+  if (receipt && receipt.size > 0) {
+    const { data: existing } = await supabase
+      .from("expenses")
+      .select("receipt_path")
+      .eq("id", id)
+      .single<{ receipt_path: string | null }>();
+
+    const ext = receipt.name.split(".").pop() || "jpg";
+    const path = `${Date.now()}-${crypto.randomUUID()}.${ext}`;
+    const { error: uploadError } = await admin.storage
+      .from("bukti-pengeluaran")
+      .upload(path, receipt, { contentType: receipt.type });
+    if (uploadError) {
+      redirect("/expenses?error=" + encodeURIComponent("Gagal mengunggah bukti: " + uploadError.message));
+    }
+    receipt_path = path;
+
+    if (existing?.receipt_path) {
+      await admin.storage.from("bukti-pengeluaran").remove([existing.receipt_path]);
+    }
+  }
+
+  const { error } = await supabase
+    .from("expenses")
+    .update({
+      description,
+      amount,
+      expense_date: expense_date || undefined,
+      kas_type,
+      ...(receipt_path ? { receipt_path } : {}),
+    })
+    .eq("id", id);
+
+  if (error) {
+    redirect("/expenses?error=" + encodeURIComponent(error.message));
+  }
+
+  await supabase.from("activity_log").insert({
+    actor_email: user.email,
+    action: "expense.update",
+    detail: `${id} -> ${description} - ${amount} - ${kas_type}`,
+  });
+
+  revalidatePath("/expenses");
+  revalidatePath("/report");
+}
+
 export async function releaseExpense(id: string) {
   const user = await getCurrentUser();
   if (user?.role !== "pengurus") return;

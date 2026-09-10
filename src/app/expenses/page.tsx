@@ -3,8 +3,9 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getCurrentUser, EXPENSE_RECORDERS } from "@/lib/auth";
-import { addExpense, deleteExpense, releaseExpense, releaseAllDrafts } from "./actions";
+import { addExpense, updateExpense, deleteExpense, releaseExpense, releaseAllDrafts } from "./actions";
 import DeleteExpenseButton from "./DeleteExpenseButton";
+import EditExpenseButton from "./EditExpenseButton";
 import KeteranganCell from "./KeteranganCell";
 import ReleaseAllDraftsButton from "./ReleaseAllDraftsButton";
 import SubmitButton from "@/components/SubmitButton";
@@ -190,6 +191,7 @@ export default async function ExpensesPage({
               <th className="px-4 py-2 font-medium">Status</th>
               <th className="px-4 py-2 font-medium"></th>
               <th className="px-4 py-2 font-medium"></th>
+              <th className="px-4 py-2 font-medium"></th>
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-100">
@@ -203,7 +205,7 @@ export default async function ExpensesPage({
                   {showMonthDivider && (
                     <tr>
                       <td
-                        colSpan={8}
+                        colSpan={9}
                         className="px-4 py-1.5 bg-gray-200 text-xs font-semibold text-gray-700 uppercase tracking-wide"
                       >
                         {MONTH_NAMES[monthNum - 1]} —{" "}
@@ -261,6 +263,18 @@ export default async function ExpensesPage({
                     </td>
                     <td className="px-4 py-2 text-right">
                       {EXPENSE_RECORDERS.includes(user.email) && (
+                        <EditExpenseButton
+                          action={updateExpense.bind(null, e.id)}
+                          description={e.description}
+                          amount={Number(e.amount)}
+                          expenseDate={e.expense_date}
+                          kasType={e.kas_type}
+                          hasReceipt={receiptUrls.has(e.id)}
+                        />
+                      )}
+                    </td>
+                    <td className="px-4 py-2 text-right">
+                      {EXPENSE_RECORDERS.includes(user.email) && (
                         <DeleteExpenseButton
                           action={deleteExpense.bind(null, e.id)}
                           description={e.description}
@@ -273,7 +287,7 @@ export default async function ExpensesPage({
             })}
             {(expenses ?? []).length === 0 && (
               <tr>
-                <td colSpan={8} className="px-4 py-6 text-center text-gray-400">
+                <td colSpan={9} className="px-4 py-6 text-center text-gray-400">
                   {draftOnly
                     ? `Tidak ada pengeluaran draft ${month ? "bulan ini" : "tahun ini"}.`
                     : `Belum ada pengeluaran tercatat ${month ? "bulan ini" : "tahun ini"}.`}
