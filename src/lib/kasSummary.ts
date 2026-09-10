@@ -5,9 +5,9 @@ import type { KasType } from "@/lib/types";
 // isPengurus/full-data branch, ~lines 109-209) — always reads the private
 // tables via the admin client since there's no signed-in role here. Keep
 // this in sync if that formula changes (new kas-affecting table, etc).
-// Deliberately excludes PENDING_DANA_BU_YANE / SISA_KAS_THR_HALBIL_KURBAN
-// (report/page.tsx) — those are only shown in the pengurus Cash breakdown,
-// not part of Kas Saat Ini itself.
+// Deliberately excludes PENDING_DANA_BU_YANE (report/page.tsx) — that's
+// only shown in the pengurus Cash breakdown, not part of Kas Saat Ini
+// itself.
 export async function getKasSaatIni(): Promise<number> {
   const admin = createAdminClient();
 

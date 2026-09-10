@@ -18,11 +18,6 @@ const YEAR = 2026;
 // (Petty Cash's displayed total and Kas Saat Ini are unaffected by it).
 const PENDING_DANA_BU_YANE = 1_000_000;
 
-// Leftover cash from the THR/Halal bi Halal + Kurban events — held
-// separately from day-to-day Petty Cash, same treatment as
-// PENDING_DANA_BU_YANE above.
-const SISA_KAS_THR_HALBIL_KURBAN = 458_000;
-
 export default async function ReportPage({
   searchParams,
 }: {
@@ -380,21 +375,16 @@ export default async function ReportPage({
             </div>
             {/* Decomposes Petty Cash for pengurus: Piutang Personel is
                 already folded into the Petty Cash total above, and money
-                held separately from day-to-day cash (Bu Yane, THR/Kurban
-                leftovers) is hardcoded — Cash is what's really physically
-                on hand once both are backed out. Pengurus-only since
-                warga only need the Petty Cash total, not this internal
-                reconciliation. */}
+                held separately from day-to-day cash (Bu Yane) is
+                hardcoded — Cash is what's really physically on hand once
+                both are backed out. Pengurus-only since warga only need
+                the Petty Cash total, not this internal reconciliation. */}
             {isPengurus && (
               <div className="ml-2 pl-2 border-l-2 border-gray-100 space-y-1">
                 <div className="flex items-center justify-between text-xs text-gray-400">
                   <span>Cash</span>
                   <span>
-                    {formatRupiah(
-                      kasBalance.tunai -
-                        PENDING_DANA_BU_YANE -
-                        SISA_KAS_THR_HALBIL_KURBAN
-                    )}
+                    {formatRupiah(kasBalance.tunai - PENDING_DANA_BU_YANE)}
                   </span>
                 </div>
                 <div className="flex items-center justify-between text-xs text-gray-400">
@@ -409,10 +399,6 @@ export default async function ReportPage({
                 <div className="flex items-center justify-between text-xs text-gray-400">
                   <span>Pending di Bu Yane</span>
                   <span>{formatRupiah(PENDING_DANA_BU_YANE)}</span>
-                </div>
-                <div className="flex items-center justify-between text-xs text-gray-400">
-                  <span>Sisa Kas THR Halbil + Kurban</span>
-                  <span>{formatRupiah(SISA_KAS_THR_HALBIL_KURBAN)}</span>
                 </div>
               </div>
             )}
