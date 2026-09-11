@@ -162,7 +162,7 @@ export default async function DashboardPage({
       )}
       <div className="flex flex-wrap items-center justify-between gap-4 mb-6">
         <h1 className="text-lg font-semibold text-gray-900">
-          Dashboard — {MONTH_NAMES[month - 1]} {year}
+          IPL — {MONTH_NAMES[month - 1]} {year}
         </h1>
         <form className="flex gap-2 items-center text-sm" action="/dashboard">
           <select

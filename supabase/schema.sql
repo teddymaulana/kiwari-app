@@ -469,3 +469,124 @@ drop view if exists personnel_loans_public;
 create view personnel_loans_public as
 select amount, kas_type, transaction_type, affects_kas from personnel_loans;
 grant select on personnel_loans_public to authenticated;
+
+-- Security guard roster and their shift schedule (Jadwal Security) — first
+-- piece of a larger system that will later add attendance (Absen
+-- Kehadiran, photo check-in) and daily patrol reports (Laporan Patroli),
+-- which pengurus will use together with this schedule to decide
+-- bonus/insentif per guard. Deliberately minimal for now: just who's
+-- rostered and what shift they're assigned each day.
+create table if not exists security_guards (
+  id uuid primary key default gen_random_uuid(),
+  name text not null,
+  phone text,
+  is_active boolean not null default true,
+  created_at timestamptz not null default now()
+);
+
+-- One row per guard per day — explicit rather than computed from a
+-- repeating pattern, even though the current roster does follow a fixed
+-- 5-day rotation (OFF/Pagi/OFF/Malam/Malam, staggered per guard). Shifts
+-- get manually revised in practice (the source spreadsheet this was
+-- seeded from is itself a "Revisi"), so storing each day explicitly means
+-- a one-off swap or leave doesn't require modeling pattern exceptions —
+-- same reasoning as payments/expenses being explicit rows rather than a
+-- computed recurring schedule.
+create table if not exists security_shifts (
+  id uuid primary key default gen_random_uuid(),
+  guard_id uuid not null references security_guards(id) on delete cascade,
+  shift_date date not null,
+  shift_type text not null check (shift_type in ('pagi', 'malam', 'off')),
+  note text,
+  recorded_by text,                -- email of the pengurus who entered it
+  created_at timestamptz not null default now(),
+  unique (guard_id, shift_date)
+);
+
+create index if not exists security_shifts_date_idx on security_shifts (shift_date);
+
+alter table security_guards enable row level security;
+alter table security_shifts enable row level security;
+
+-- Pengurus-only end to end, same treatment as personnel_loans — not
+-- warga-facing (yet; the attendance/patrol phases may change that).
+drop policy if exists "pengurus read write security_guards" on security_guards;
+create policy "pengurus read write security_guards" on security_guards
+  for all to authenticated using (is_pengurus()) with check (is_pengurus());
+
+drop policy if exists "pengurus read write security_shifts" on security_shifts;
+create policy "pengurus read write security_shifts" on security_shifts
+  for all to authenticated using (is_pengurus()) with check (is_pengurus());
+
+-- Short shared-secret PIN a guard enters on the public check-in/patrol
+-- pages (/security/checkin, /security/patroli) to identify themselves —
+-- no login system for guards, same tradeoff as the public "Bayar IPL"
+-- claim form (paymentClaim.ts): low-stakes identity check on an
+-- unauthenticated page, not a real auth boundary, so plaintext is fine.
+-- Pengurus sets/shares it per guard from /security.
+alter table security_guards add column if not exists pin text;
+
+-- Photo check-in (Absen Kehadiran) — a guard's proof of presence for one
+-- of their own scheduled shifts, submitted from the public
+-- /security/checkin page (no login; identified by guard + pin) via the
+-- admin client, same pattern as paymentClaim.ts. Lands as "pending" and
+-- only counts once a pengurus confirms it — same status flow as
+-- payments.status, checked from /security/kehadiran. shift_type excludes
+-- 'off' — nothing to check into on a day off.
+create table if not exists security_checkins (
+  id uuid primary key default gen_random_uuid(),
+  guard_id uuid not null references security_guards(id) on delete cascade,
+  shift_date date not null,
+  shift_type text not null check (shift_type in ('pagi', 'malam')),
+  checked_in_at timestamptz not null default now(),
+  photo_path text not null,
+  status text not null default 'pending' check (status in ('pending', 'confirmed', 'rejected')),
+  confirmed_by text,                -- email of the pengurus who confirmed/rejected
+  confirmed_at timestamptz,
+  created_at timestamptz not null default now(),
+  unique (guard_id, shift_date, shift_type)
+);
+
+create index if not exists security_checkins_date_idx on security_checkins (shift_date);
+
+-- Daily patrol report (Laporan Patroli) — one per guard per shift, same
+-- public/no-login submission path as security_checkins above (via
+-- /security/patroli). Purely informational for pengurus (no confirm/
+-- reject queue like checkins — it isn't attendance proof, just context
+-- pengurus reads alongside Kehadiran when deciding bonus/insentif).
+create table if not exists security_patrols (
+  id uuid primary key default gen_random_uuid(),
+  guard_id uuid not null references security_guards(id) on delete cascade,
+  shift_date date not null,
+  shift_type text not null check (shift_type in ('pagi', 'malam')),
+  report text not null,
+  photo_path text,
+  submitted_at timestamptz not null default now(),
+  created_at timestamptz not null default now(),
+  unique (guard_id, shift_date, shift_type)
+);
+
+create index if not exists security_patrols_date_idx on security_patrols (shift_date);
+
+alter table security_checkins enable row level security;
+alter table security_patrols enable row level security;
+
+-- Pengurus-only reads (same as security_shifts) — writes only ever happen
+-- server-side via the admin client (public submission) or pengurus
+-- confirm/reject actions, both of which bypass RLS or already check
+-- is_pengurus() in the server action itself, so there's no "with check"
+-- write policy needed here for the authenticated role.
+drop policy if exists "pengurus read security_checkins" on security_checkins;
+create policy "pengurus read security_checkins" on security_checkins
+  for select to authenticated using (is_pengurus());
+
+drop policy if exists "pengurus read security_patrols" on security_patrols;
+create policy "pengurus read security_patrols" on security_patrols
+  for select to authenticated using (is_pengurus());
+
+-- Private buckets for check-in/patrol photos — same treatment as
+-- bukti-transfer/bukti-pengeluaran: no public read policy, service-role
+-- only, pengurus views via signed URLs from /security/kehadiran.
+insert into storage.buckets (id, name, public)
+values ('bukti-kehadiran', 'bukti-kehadiran', false)
+on conflict (id) do nothing;

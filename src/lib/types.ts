@@ -105,6 +105,77 @@ export type PersonnelLoan = {
   created_at: string;
 };
 
+export type SecurityGuard = {
+  id: string;
+  name: string;
+  phone: string | null;
+  // Shared-secret PIN for the public checkin/patroli pages — see the
+  // security_guards.pin comment in schema.sql. Null until a pengurus sets
+  // one, which blocks that guard from checking in until then.
+  pin: string | null;
+  is_active: boolean;
+  created_at: string;
+};
+
+export type ShiftType = "pagi" | "malam" | "off";
+
+export const SHIFT_LABELS: Record<ShiftType, string> = {
+  pagi: "Pagi",
+  malam: "Malam",
+  off: "OFF",
+};
+
+// 07.00–19.00 / 19.00–07.00, per the source Jadwal Security spreadsheet.
+export const SHIFT_HOURS: Record<ShiftType, number> = {
+  pagi: 12,
+  malam: 12,
+  off: 0,
+};
+
+export type SecurityShift = {
+  id: string;
+  guard_id: string;
+  shift_date: string;
+  shift_type: ShiftType;
+  note: string | null;
+  recorded_by: string | null;
+  created_at: string;
+};
+
+// shift_type here is always "pagi" | "malam" — nothing to check into on
+// an OFF day.
+export type CheckinStatus = "pending" | "confirmed" | "rejected";
+
+export const CHECKIN_STATUS_LABELS: Record<CheckinStatus, string> = {
+  pending: "Menunggu",
+  confirmed: "Dikonfirmasi",
+  rejected: "Ditolak",
+};
+
+export type SecurityCheckin = {
+  id: string;
+  guard_id: string;
+  shift_date: string;
+  shift_type: "pagi" | "malam";
+  checked_in_at: string;
+  photo_path: string;
+  status: CheckinStatus;
+  confirmed_by: string | null;
+  confirmed_at: string | null;
+  created_at: string;
+};
+
+export type SecurityPatrol = {
+  id: string;
+  guard_id: string;
+  shift_date: string;
+  shift_type: "pagi" | "malam";
+  report: string;
+  photo_path: string | null;
+  submitted_at: string;
+  created_at: string;
+};
+
 export type Settings = {
   id: number;
   monthly_amount: number;

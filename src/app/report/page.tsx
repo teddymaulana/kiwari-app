@@ -3,7 +3,7 @@ import { getCurrentUser } from "@/lib/auth";
 import type { Household, KasType, Payment, Settings } from "@/lib/types";
 import { MONTH_NAMES, formatRupiah, KAS_LABELS, compareUnitNo } from "@/lib/types";
 import ReportTabs from "./ReportTabs";
-import ScrollRight from "./ScrollRight";
+import ScrollRight from "@/components/ScrollRight";
 
 type UnitRow = { id: string; unit_no: string; label: string };
 type PaidEntry = { household_id: string; period_month: number; amount: number };
@@ -349,7 +349,12 @@ export default async function ReportPage({
       >
         {isPengurus && (
         <div className="bg-white border border-gray-200 rounded-lg p-4 w-full">
-          <p className="text-xs text-gray-500 mb-1">Kas Saat Ini</p>
+          <div className="flex items-center justify-between mb-1">
+            <p className="text-xs text-gray-500">Kas Saat Ini</p>
+            <a href="/mutasi" className="text-xs text-blue-600 hover:underline">
+              Mutasi
+            </a>
+          </div>
           <p
             className={`text-2xl font-semibold ${
               kasSaatIni < 0 ? "text-red-600" : "text-emerald-600"

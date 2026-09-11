@@ -66,6 +66,21 @@ export const HOUSEHOLD_CREATORS = ["18g@kiwari.local"];
 // (settings/actions.ts).
 export const CASH_TRANSFER_RECORDERS = ["18g@kiwari.local"];
 
+// Editing Saldo Awal Kas (/settings) is restricted to this one pengurus
+// account, checked both in the UI (settings/page.tsx, which hides the
+// whole section for anyone else) and again in the server action
+// (settings/actions.ts, updateOpeningBalance).
+export const OPENING_BALANCE_EDITORS = ["18g@kiwari.local"];
+
+// Kehadiran & Patroli — both the Ringkasan summary on /security (hidden
+// for anyone else, since it's bonus/insentif-sensitive) and the whole
+// /security/kehadiran page (PIN management, confirm/reject queue,
+// history, patrol log) — are restricted to this one pengurus account for
+// now. Checked in the UI (security/page.tsx hides the section;
+// security/kehadiran/page.tsx redirects) and again in the server actions
+// (security/kehadiran/actions.ts).
+export const SECURITY_KEHADIRAN_ACCESS = ["18g@kiwari.local"];
+
 // Sending a test WhatsApp message (Kirim Pesan WhatsApp on /settings) is
 // restricted to this one pengurus account, checked both in the UI
 // (settings/page.tsx) and again in the server action (settings/actions.ts).

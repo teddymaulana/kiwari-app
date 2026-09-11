@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import {
   getCurrentUser,
   CASH_TRANSFER_RECORDERS,
+  OPENING_BALANCE_EDITORS,
   WHATSAPP_TEST_SENDERS,
   WHATSAPP_PROVIDER_MANAGERS,
   WEEKLY_REPORT_SENDERS,
@@ -30,13 +31,23 @@ export default async function SettingsPage({
     wa_success?: string;
     kas_error?: string;
     kas_success?: string;
+    balance_error?: string;
+    balance_success?: string;
   }>;
 }) {
   const user = await getCurrentUser();
   if (user?.role !== "pengurus") redirect("/dashboard");
 
-  const { error, success, wa_error, wa_success, kas_error, kas_success } =
-    await searchParams;
+  const {
+    error,
+    success,
+    wa_error,
+    wa_success,
+    kas_error,
+    kas_success,
+    balance_error,
+    balance_success,
+  } = await searchParams;
 
   const supabase = await createClient();
   const { data: settings } = await supabase
@@ -145,56 +156,69 @@ export default async function SettingsPage({
         </div>
       )}
 
-      <div>
-        <h2 className="text-sm font-medium text-gray-700 mb-1">
-          Saldo Awal Kas
-        </h2>
-        <p className="text-xs text-gray-400 mb-4">
-          Saldo kas sebelum ada pembayaran/pengeluaran yang tercatat di
-          aplikasi ini (mis. saldo dari pembukuan lama). Ikut dihitung ke
-          &quot;Kas Saat Ini&quot; di halaman Laporan. Terkunci setelah
-          diatur — ini hanya untuk saldo awal satu kali, bukan koreksi
-          rutin.
-        </p>
-        <form
-          action={updateOpeningBalance}
-          className="bg-white border border-gray-200 rounded-lg p-6 grid sm:grid-cols-2 gap-3"
-        >
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Kas BRI
-            </label>
-            <input
-              type="number"
-              name="opening_balance_bri"
-              step="1"
-              defaultValue={settings?.opening_balance_bri ?? 0}
-              disabled
-              className="w-full rounded border border-gray-300 px-3 py-2 text-sm bg-gray-100 text-gray-500"
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Petty Cash
-            </label>
-            <input
-              type="number"
-              name="opening_balance_tunai"
-              step="1"
-              defaultValue={settings?.opening_balance_tunai ?? 0}
-              disabled
-              className="w-full rounded border border-gray-300 px-3 py-2 text-sm bg-gray-100 text-gray-500"
-            />
-          </div>
-          <button
-            type="submit"
-            disabled
-            className="sm:col-span-2 bg-gray-300 text-gray-500 rounded px-4 py-2 text-sm font-medium cursor-not-allowed"
+      {OPENING_BALANCE_EDITORS.includes(user.email) && (
+        <div>
+          <h2 className="text-sm font-medium text-gray-700 mb-1">
+            Saldo Awal Kas
+          </h2>
+          <p className="text-xs text-gray-400 mb-4">
+            Saldo kas sebelum ada pembayaran/pengeluaran yang tercatat di
+            aplikasi ini (mis. saldo dari pembukuan lama). Ikut dihitung ke
+            &quot;Kas Saat Ini&quot; di halaman Laporan. Kas BRI terkunci
+            setelah diatur (saldo awal satu kali, bukan koreksi rutin) —
+            Petty Cash bisa diubah kapan saja, mis. untuk memasukkan saldo
+            yang belum tercatat sebagai transaksi (Sisa Kas THR/Kurban, dll).
+          </p>
+
+          {balance_error && (
+            <div className="mb-4 text-sm text-red-700 bg-red-50 border border-red-200 rounded px-3 py-2">
+              {balance_error}
+            </div>
+          )}
+          {balance_success && (
+            <div className="mb-4 text-sm text-green-700 bg-green-50 border border-green-200 rounded px-3 py-2">
+              Saldo awal berhasil disimpan.
+            </div>
+          )}
+
+          <form
+            action={updateOpeningBalance}
+            className="bg-white border border-gray-200 rounded-lg p-6 grid sm:grid-cols-2 gap-3"
           >
-            Simpan
-          </button>
-        </form>
-      </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Kas BRI
+              </label>
+              <input
+                type="number"
+                name="opening_balance_bri"
+                step="1"
+                defaultValue={settings?.opening_balance_bri ?? 0}
+                readOnly
+                className="w-full rounded border border-gray-300 px-3 py-2 text-sm bg-gray-100 text-gray-500 cursor-not-allowed"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Petty Cash
+              </label>
+              <input
+                type="number"
+                name="opening_balance_tunai"
+                step="1"
+                defaultValue={settings?.opening_balance_tunai ?? 0}
+                className="w-full rounded border border-gray-300 px-3 py-2 text-sm"
+              />
+            </div>
+            <SubmitButton
+              pendingText="Menyimpan..."
+              className="sm:col-span-2 bg-blue-600 text-white rounded px-4 py-2 text-sm font-medium hover:bg-blue-700 transition"
+            >
+              Simpan
+            </SubmitButton>
+          </form>
+        </div>
+      )}
 
       {WHATSAPP_PROVIDER_MANAGERS.includes(user.email) && (
         <div>

@@ -7,6 +7,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import {
   getCurrentUser,
   CASH_TRANSFER_RECORDERS,
+  OPENING_BALANCE_EDITORS,
   WHATSAPP_TEST_SENDERS,
   WHATSAPP_PROVIDER_MANAGERS,
   WEEKLY_REPORT_SENDERS,
@@ -16,10 +17,17 @@ import { sendWeeklyReport } from "@/lib/weeklyReport";
 
 // Kas balance carried over from before this app existed — not income, so
 // it's stored on settings (like monthly_amount) rather than as a
-// payment/expense row. Added into the running totals on /report.
+// payment/expense row. Added into the running totals on /report. Kas BRI
+// is locked in the UI (settings/page.tsx sends it read-only, unchanged)
+// since it's meant as a one-time initial balance; Petty Cash stays
+// editable here for ad-hoc corrections (e.g. folding in cash that was
+// never entered as a payment/expense/contribution row). The whole section
+// (and this action) is restricted to OPENING_BALANCE_EDITORS since it
+// directly moves the Kas Saat Ini figure everyone else sees.
 export async function updateOpeningBalance(formData: FormData) {
   const user = await getCurrentUser();
-  if (user?.role !== "pengurus") return;
+  if (user?.role !== "pengurus") redirect("/settings");
+  if (!OPENING_BALANCE_EDITORS.includes(user.email)) redirect("/settings");
 
   const opening_balance_bri = Number(formData.get("opening_balance_bri"));
   const opening_balance_tunai = Number(formData.get("opening_balance_tunai"));
@@ -29,12 +37,14 @@ export async function updateOpeningBalance(formData: FormData) {
     opening_balance_bri < 0 ||
     opening_balance_tunai < 0
   ) {
-    return;
+    redirect(
+      `/settings?balance_error=${encodeURIComponent("Saldo tidak valid")}`
+    );
   }
 
   const supabase = await createClient();
 
-  await supabase
+  const { error } = await supabase
     .from("settings")
     .update({
       opening_balance_bri,
@@ -42,6 +52,10 @@ export async function updateOpeningBalance(formData: FormData) {
       updated_at: new Date().toISOString(),
     })
     .eq("id", 1);
+
+  if (error) {
+    redirect(`/settings?balance_error=${encodeURIComponent(error.message)}`);
+  }
 
   await supabase.from("activity_log").insert({
     actor_email: user.email,
@@ -51,6 +65,7 @@ export async function updateOpeningBalance(formData: FormData) {
 
   revalidatePath("/settings");
   revalidatePath("/report");
+  redirect("/settings?balance_success=1");
 }
 
 // Creates a new login for a resident. Always lands as role "warga" — this

@@ -48,8 +48,14 @@ export async function updateSession(request: NextRequest) {
 
   // Shareable how-to-pay guide (real screenshots of the public Bayar IPL
   // form) — meant to be sent directly to residents, e.g. in the warga
-  // WhatsApp group, so it must be viewable without an account.
-  const isPublicPage = request.nextUrl.pathname.startsWith("/tutorial-bayar-ipl");
+  // WhatsApp group, so it must be viewable without an account. Same
+  // reasoning for the security check-in/patrol pages — a guard has no
+  // login, just a shared link + PIN (see security_guards.pin comment in
+  // schema.sql).
+  const isPublicPage =
+    request.nextUrl.pathname.startsWith("/tutorial-bayar-ipl") ||
+    request.nextUrl.pathname.startsWith("/security/checkin") ||
+    request.nextUrl.pathname.startsWith("/security/patroli");
 
   if (!user && !isLoginPage && !isPublicApi && !isPublicPage) {
     const url = request.nextUrl.clone();

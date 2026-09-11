@@ -9,6 +9,7 @@ import type { Role } from "@/lib/auth";
 
 const links = [
   { href: "/report", label: "Laporan" },
+  { href: "/mutasi", label: "Mutasi", pengurusOnly: true },
   { href: "/dashboard", label: "IPL" },
   { href: "/denah", label: "Denah" },
   { href: "/payments/new", label: "Catat Pembayaran", pengurusOnly: true },
@@ -17,6 +18,7 @@ const links = [
   { href: "/contributions", label: "Sumbangan", pengurusOnly: true },
   { href: "/expenses", label: "Pengeluaran", pengurusOnly: true },
   { href: "/piutang", label: "Piutang", pengurusOnly: true },
+  { href: "/security", label: "Keamanan", pengurusOnly: true },
   { href: "/settings", label: "Pengaturan", pengurusOnly: true },
 ];
 
