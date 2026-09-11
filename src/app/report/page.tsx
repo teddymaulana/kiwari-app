@@ -133,13 +133,15 @@ export default async function ReportPage({
           .from("contributions_public")
           .select("amount, kas_type, contribution_date, event_name, household_id")
           .order("contribution_date", { ascending: true }),
-    // Draft expenses (not yet released) shouldn't reduce Kas Saat Ini or
-    // count toward Total Pengeluaran for anyone, pengurus included — same
-    // "released" filter as warga, so this doesn't need an isPengurus split.
-    supabase
-      .from("expenses")
-      .select("amount, kas_type, expense_date")
-      .eq("status", "released"),
+    // Draft expenses count in pengurus's own Kas Saat Ini/Total Pengeluaran
+    // right away (see "New entries start as 'draft'" comment in
+    // schema.sql) but stay hidden from warga until released.
+    isPengurus
+      ? supabase.from("expenses").select("amount, kas_type, expense_date")
+      : supabase
+          .from("expenses")
+          .select("amount, kas_type, expense_date")
+          .eq("status", "released"),
     supabase.from("cash_transfers").select("amount, direction"),
     isPengurus
       ? supabase
