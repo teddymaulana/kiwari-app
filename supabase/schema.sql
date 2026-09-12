@@ -590,3 +590,41 @@ create policy "pengurus read security_patrols" on security_patrols
 insert into storage.buckets (id, name, public)
 values ('bukti-kehadiran', 'bukti-kehadiran', false)
 on conflict (id) do nothing;
+
+-- Marks one household's IPL for one month as not owed at all — e.g. a
+-- doorprize/reward month — distinct from both "Lunas" (payments row,
+-- confirmed) and "Belum Bayar" (no payments row): a household+period found
+-- here is simply not expected to pay, so it's excluded from
+-- /api/unpaid-months (Catat Pembayaran and the public "Bayar IPL" form
+-- both stop offering it) and shown as a separate gray state everywhere
+-- else Lunas/Belum Bayar is displayed. Same unique-period shape as
+-- payments, but deliberately its own table rather than a payments.status
+-- value — an exemption has no amount/kas_type/receipt, and must coexist
+-- independently of whatever a household's real payment history says.
+create table if not exists ipl_exemptions (
+  id uuid primary key default gen_random_uuid(),
+  household_id uuid not null references households(id) on delete cascade,
+  period_year int not null,
+  period_month int not null check (period_month between 1 and 12),
+  note text,
+  created_by text,                 -- email of the pengurus who set it
+  created_at timestamptz not null default now(),
+  unique (household_id, period_year, period_month)
+);
+
+create index if not exists ipl_exemptions_period_idx on ipl_exemptions (period_year, period_month);
+
+alter table ipl_exemptions enable row level security;
+
+-- Same read/write split as payments: pengurus manage it, a warga can only
+-- read their own household's exemptions (so their own dashboard/report can
+-- show the gray "free" state instead of Belum Bayar).
+drop policy if exists "authenticated read ipl_exemptions" on ipl_exemptions;
+create policy "authenticated read ipl_exemptions" on ipl_exemptions
+  for select to authenticated using (
+    is_pengurus() or household_id = my_household_id()
+  );
+
+drop policy if exists "pengurus write ipl_exemptions" on ipl_exemptions;
+create policy "pengurus write ipl_exemptions" on ipl_exemptions
+  for all to authenticated using (is_pengurus()) with check (is_pengurus());

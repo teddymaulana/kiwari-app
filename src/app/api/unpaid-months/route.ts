@@ -17,15 +17,27 @@ export async function GET(request: NextRequest) {
   }
 
   const admin = createAdminClient();
-  const { data } = await admin
-    .from("payments")
-    .select("period_month")
-    .eq("household_id", householdId)
-    .eq("period_year", year);
+  const [{ data: payments }, { data: exemptions }] = await Promise.all([
+    admin
+      .from("payments")
+      .select("period_month")
+      .eq("household_id", householdId)
+      .eq("period_year", year),
+    admin
+      .from("ipl_exemptions")
+      .select("period_month")
+      .eq("household_id", householdId)
+      .eq("period_year", year),
+  ]);
 
-  const paid = new Set((data ?? []).map((p) => p.period_month));
+  // A month with an IPL exemption (see schema.sql) isn't owed at all, so it
+  // never counts as "unpaid" — same treatment as an already-paid month.
+  const settled = new Set([
+    ...(payments ?? []).map((p) => p.period_month),
+    ...(exemptions ?? []).map((e) => e.period_month),
+  ]);
   const unpaidMonths = Array.from({ length: 12 }, (_, i) => i + 1).filter(
-    (m) => !paid.has(m)
+    (m) => !settled.has(m)
   );
 
   return NextResponse.json({ unpaidMonths });

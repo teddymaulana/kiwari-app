@@ -69,11 +69,30 @@ export async function createPendingPaymentClaim({
     if (!uploadError) receipt_path = path;
   }
 
+  // Months with an IPL exemption (schema.sql) aren't owed at all — the
+  // unpaid-months endpoint already keeps them off the checkbox list, but
+  // this is a public, unauthenticated form, so re-check server-side rather
+  // than trust the client not to submit one anyway.
+  const { data: exemptions } = await admin
+    .from("ipl_exemptions")
+    .select("period_month")
+    .eq("household_id", householdId)
+    .eq("period_year", periodYear);
+  const exemptMonths = new Set((exemptions ?? []).map((e) => e.period_month));
+
   const months = [...new Set(periodMonths)].sort((a, b) => a - b);
   const claimed: number[] = [];
   const failed: { month: number; message: string }[] = [];
 
   for (const period_month of months) {
+    if (exemptMonths.has(period_month)) {
+      failed.push({
+        month: period_month,
+        message: `${MONTH_NAMES[period_month - 1]} ${periodYear} sudah digratiskan, tidak perlu membayar`,
+      });
+      continue;
+    }
+
     const { error } = await admin.from("payments").insert({
       household_id: householdId,
       period_year: periodYear,

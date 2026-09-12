@@ -1,8 +1,19 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { getCurrentUser, PAYMENT_DELETERS, CONTRIBUTION_DELETERS } from "@/lib/auth";
-import { deletePayment, excludePayment, includePayment } from "./actions";
+import {
+  getCurrentUser,
+  PAYMENT_RECORDERS,
+  PAYMENT_DELETERS,
+  CONTRIBUTION_DELETERS,
+} from "@/lib/auth";
+import {
+  deletePayment,
+  excludePayment,
+  includePayment,
+  addIplExemption,
+  removeIplExemption,
+} from "./actions";
 import {
   deleteContribution,
   excludeContribution,
@@ -12,8 +23,13 @@ import DeletePaymentButton from "./DeletePaymentButton";
 import ExcludeToggleButton from "@/components/ExcludeToggleButton";
 import DeleteContributionButton from "@/app/contributions/DeleteContributionButton";
 import HouseholdSelect from "@/components/HouseholdSelect";
-import type { Household, Payment, Contribution } from "@/lib/types";
+import SubmitButton from "@/components/SubmitButton";
+import type { Household, Payment, Contribution, IplExemption } from "@/lib/types";
 import { MONTH_NAMES, KAS_LABELS, formatRupiah, compareUnitNo } from "@/lib/types";
+
+// Only 2026 data exists so far, so the year is locked instead of a free
+// input — same convention as report/page.tsx and RecordPaymentForm.
+const YEAR = 2026;
 
 export default async function PaymentsPage({
   searchParams,
@@ -35,25 +51,48 @@ export default async function PaymentsPage({
 
   const selected = households?.find((h) => h.id === householdId) ?? null;
 
-  const [{ data: history }, { data: sumbangan }] = await Promise.all([
-    householdId
-      ? supabase
-          .from("payments")
-          .select("*")
-          .eq("household_id", householdId)
-          .order("period_year", { ascending: false })
-          .order("period_month", { ascending: false })
-          .returns<Payment[]>()
-      : Promise.resolve({ data: null as Payment[] | null }),
-    householdId
-      ? supabase
-          .from("contributions")
-          .select("*")
-          .eq("household_id", householdId)
-          .order("contribution_date", { ascending: false })
-          .returns<Contribution[]>()
-      : Promise.resolve({ data: null as Contribution[] | null }),
+  const [{ data: history }, { data: sumbangan }, { data: exemptions }] =
+    await Promise.all([
+      householdId
+        ? supabase
+            .from("payments")
+            .select("*")
+            .eq("household_id", householdId)
+            .order("period_year", { ascending: false })
+            .order("period_month", { ascending: false })
+            .returns<Payment[]>()
+        : Promise.resolve({ data: null as Payment[] | null }),
+      householdId
+        ? supabase
+            .from("contributions")
+            .select("*")
+            .eq("household_id", householdId)
+            .order("contribution_date", { ascending: false })
+            .returns<Contribution[]>()
+        : Promise.resolve({ data: null as Contribution[] | null }),
+      householdId
+        ? supabase
+            .from("ipl_exemptions")
+            .select("*")
+            .eq("household_id", householdId)
+            .order("period_year", { ascending: false })
+            .order("period_month", { ascending: false })
+            .returns<IplExemption[]>()
+        : Promise.resolve({ data: null as IplExemption[] | null }),
+    ]);
+
+  // A month already paid or already exempted can't be exempted again — the
+  // form below only offers what's left.
+  const settledMonths = new Set([
+    ...(history ?? []).map((p) => `${p.period_year}-${p.period_month}`),
+    ...(exemptions ?? []).map((e) => `${e.period_year}-${e.period_month}`),
   ]);
+  const exemptableMonths =
+    householdId && PAYMENT_RECORDERS.includes(user.email)
+      ? Array.from({ length: 12 }, (_, i) => i + 1).filter(
+          (m) => !settledMonths.has(`${YEAR}-${m}`)
+        )
+      : [];
 
   const admin = createAdminClient();
   const receiptUrls = new Map<string, string>();
@@ -187,6 +226,103 @@ export default async function PaymentsPage({
               </tbody>
             </table>
           </div>
+
+          <h2 className="text-sm font-medium text-gray-700 mt-8 mb-2">
+            IPL Gratis
+          </h2>
+          <p className="text-xs text-gray-400 mb-4">
+            Tandai bulan yang tidak perlu dibayar warga ini (mis. hadiah
+            doorprize). Bulan ini tidak akan muncul di Catat Pembayaran atau
+            form Bayar IPL, dan tidak dihitung Lunas maupun Belum Bayar.
+          </p>
+          <div className="bg-white border border-gray-200 rounded-lg overflow-x-auto mb-4">
+            <table className="w-full text-sm">
+              <thead className="bg-gray-50 text-gray-500 text-left">
+                <tr>
+                  <th className="px-4 py-2 font-medium">Periode</th>
+                  <th className="px-4 py-2 font-medium">Catatan</th>
+                  <th className="px-4 py-2 font-medium"></th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-100">
+                {(exemptions ?? []).map((e) => (
+                  <tr key={e.id}>
+                    <td className="px-4 py-2 whitespace-nowrap">
+                      {MONTH_NAMES[e.period_month - 1]} {e.period_year}
+                    </td>
+                    <td className="px-4 py-2 text-gray-500">
+                      {e.note || "-"}
+                    </td>
+                    <td className="px-4 py-2 text-right whitespace-nowrap">
+                      {PAYMENT_RECORDERS.includes(user.email) && (
+                        <DeletePaymentButton
+                          action={removeIplExemption.bind(null, e.id)}
+                          description={`Gratis ${MONTH_NAMES[e.period_month - 1]} ${e.period_year} - ${selected.unit_no}`}
+                        />
+                      )}
+                    </td>
+                  </tr>
+                ))}
+                {(exemptions ?? []).length === 0 && (
+                  <tr>
+                    <td colSpan={3} className="px-4 py-6 text-center text-gray-400">
+                      Belum ada bulan gratis untuk warga ini.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+
+          {PAYMENT_RECORDERS.includes(user.email) && (
+            <form
+              action={addIplExemption}
+              className="bg-white border border-gray-200 rounded-lg p-4 flex flex-wrap items-end gap-3 mb-8"
+            >
+              <input type="hidden" name="household_id" value={selected.id} />
+              <input type="hidden" name="period_year" value={YEAR} />
+              <div>
+                <label className="block text-xs font-medium text-gray-700 mb-1">
+                  Bulan
+                </label>
+                {exemptableMonths.length === 0 ? (
+                  <p className="text-sm text-gray-400 py-1.5">
+                    Semua bulan {YEAR} sudah lunas/gratis.
+                  </p>
+                ) : (
+                  <select
+                    name="period_month"
+                    className="rounded border border-gray-300 px-2 py-1.5 text-sm"
+                  >
+                    {exemptableMonths.map((m) => (
+                      <option key={m} value={m}>
+                        {MONTH_NAMES[m - 1]} {YEAR}
+                      </option>
+                    ))}
+                  </select>
+                )}
+              </div>
+              <div className="flex-1 min-w-[160px]">
+                <label className="block text-xs font-medium text-gray-700 mb-1">
+                  Catatan
+                </label>
+                <input
+                  type="text"
+                  name="note"
+                  placeholder="mis. Doorprize HUT RT"
+                  className="w-full rounded border border-gray-300 px-2 py-1.5 text-sm"
+                />
+              </div>
+              {exemptableMonths.length > 0 && (
+                <SubmitButton
+                  pendingText="Menyimpan..."
+                  className="bg-blue-600 text-white rounded px-3 py-1.5 text-sm font-medium hover:bg-blue-700 transition"
+                >
+                  Tandai Gratis
+                </SubmitButton>
+              )}
+            </form>
+          )}
 
           <h2 className="text-sm font-medium text-gray-700 mt-8 mb-2">
             Sumbangan

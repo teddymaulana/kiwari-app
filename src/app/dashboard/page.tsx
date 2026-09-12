@@ -68,6 +68,7 @@ export default async function DashboardPage({
   const [
     { data: households },
     { data: payments },
+    { data: exemptions },
     { data: settings },
     { data: myHistory },
     { data: myContributions },
@@ -86,6 +87,14 @@ export default async function DashboardPage({
       .eq("status", "confirmed")
       .eq("excluded", false)
       .returns<Payment[]>(),
+    // IPL exemptions for this month (see schema.sql) — a household here
+    // isn't Lunas or Belum Bayar, it's simply not expected to pay.
+    supabase
+      .from("ipl_exemptions")
+      .select("household_id")
+      .eq("period_year", year)
+      .eq("period_month", month)
+      .returns<{ household_id: string }[]>(),
     supabase.from("settings").select("*").eq("id", 1).single<Settings>(),
     user?.householdId
       ? supabase
@@ -130,6 +139,7 @@ export default async function DashboardPage({
   ].sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0));
 
   const paidByHousehold = new Map((payments ?? []).map((p) => [p.household_id, p]));
+  const exemptHouseholds = new Set((exemptions ?? []).map((e) => e.household_id));
   const myHousehold = user?.householdId
     ? (households ?? []).find((h) => h.id === user.householdId) ?? null
     : null;
@@ -137,6 +147,8 @@ export default async function DashboardPage({
     (myHistory ?? []).find(
       (p) => p.period_year === year && p.period_month === month
     ) ?? null;
+  const isMyCurrentPeriodExempt =
+    !!myHousehold && exemptHouseholds.has(myHousehold.id);
   const realNowYear = now.getFullYear();
   const realNowMonth = now.getMonth() + 1;
   const paidThrough = myHistory
@@ -196,8 +208,13 @@ export default async function DashboardPage({
           {myHousehold ? (
             (() => {
               const status = myCurrentPeriodPayment?.status;
-              const theme =
-                status === "confirmed"
+              const theme = isMyCurrentPeriodExempt
+                ? {
+                    box: "bg-gray-50 border-gray-200",
+                    label: "text-gray-500",
+                    text: "text-gray-600",
+                  }
+                : status === "confirmed"
                   ? {
                       box: "bg-green-50 border-green-200",
                       label: "text-green-600",
@@ -214,8 +231,9 @@ export default async function DashboardPage({
                         label: "text-red-600",
                         text: "text-red-700",
                       };
-              const label =
-                status === "confirmed"
+              const label = isMyCurrentPeriodExempt
+                ? "Gratis"
+                : status === "confirmed"
                   ? "Lunas"
                   : status === "pending"
                     ? "Menunggu Verifikasi"
@@ -239,12 +257,14 @@ export default async function DashboardPage({
                       {paidThrough.year}
                     </p>
                   )}
-                  <Link
-                    href="/bayar-ipl"
-                    className="block text-center bg-blue-600 text-white rounded py-1.5 text-sm font-medium hover:bg-blue-700 transition mt-3"
-                  >
-                    Bayar IPL
-                  </Link>
+                  {!isMyCurrentPeriodExempt && (
+                    <Link
+                      href="/bayar-ipl"
+                      className="block text-center bg-blue-600 text-white rounded py-1.5 text-sm font-medium hover:bg-blue-700 transition mt-3"
+                    >
+                      Bayar IPL
+                    </Link>
+                  )}
                 </div>
               );
             })()
@@ -387,6 +407,7 @@ export default async function DashboardPage({
               <tbody className="divide-y divide-gray-100">
                 {(households ?? []).map((h) => {
                   const p = paidByHousehold.get(h.id);
+                  const exempt = exemptHouseholds.has(h.id);
                   return (
                     <tr key={h.id}>
                       <td className="px-4 py-2">
@@ -402,12 +423,14 @@ export default async function DashboardPage({
                       <td className="px-4 py-2">
                         <span
                           className={`inline-block rounded-full px-2 py-0.5 text-xs ${
-                            p
-                              ? "bg-green-100 text-green-700"
-                              : "bg-red-100 text-red-700"
+                            exempt
+                              ? "bg-gray-100 text-gray-500"
+                              : p
+                                ? "bg-green-100 text-green-700"
+                                : "bg-red-100 text-red-700"
                           }`}
                         >
-                          {p ? "Lunas" : "Belum Bayar"}
+                          {exempt ? "Gratis" : p ? "Lunas" : "Belum Bayar"}
                         </span>
                       </td>
                       <td className="px-4 py-2 text-gray-500">

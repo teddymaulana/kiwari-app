@@ -58,7 +58,9 @@ export async function sendWeeklyReport(
 
   const message = [
     `💰 *Kas Saat Ini*`,
-    `*${formatRupiah(kasSaatIni)}*`,
+    `*${formatRupiah(kasSaatIni.total)}*`,
+    `  • Kas BRI: ${formatRupiah(kasSaatIni.bri)}`,
+    `  • Petty Cash: ${formatRupiah(kasSaatIni.pettyCash)}`,
     "",
     `📊 *Laporan Bulan Ini (${MONTH_NAMES[month - 1]} ${year})*`,
     `✅ ${monthly.paidCount}/${monthly.totalUnits} Sudah bayar IPL (${paidPercent}%)`,

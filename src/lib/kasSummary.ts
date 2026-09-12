@@ -8,7 +8,13 @@ import type { KasType } from "@/lib/types";
 // Deliberately excludes PENDING_DANA_BU_YANE (report/page.tsx) — that's
 // only shown in the pengurus Cash breakdown, not part of Kas Saat Ini
 // itself.
-export async function getKasSaatIni(): Promise<number> {
+export type KasSaatIni = {
+  bri: number;
+  pettyCash: number;
+  total: number;
+};
+
+export async function getKasSaatIni(): Promise<KasSaatIni> {
   const admin = createAdminClient();
 
   const [
@@ -73,7 +79,11 @@ export async function getKasSaatIni(): Promise<number> {
     }
   });
 
-  return kasBalance.tunai + piutangPersonel + kasBalance.bri;
+  // pettyCash/total match the report/page.tsx breakdown exactly
+  // (pettyCash = kasBalance.tunai + piutangPersonel, total = pettyCash +
+  // kasBalance.bri) — keep in sync if that formula changes.
+  const pettyCash = kasBalance.tunai + piutangPersonel;
+  return { bri: kasBalance.bri, pettyCash, total: pettyCash + kasBalance.bri };
 }
 
 export type MonthlyReport = {

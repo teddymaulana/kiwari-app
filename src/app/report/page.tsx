@@ -39,24 +39,33 @@ export default async function ReportPage({
 
   let units: UnitRow[];
   let paidEntries: PaidEntry[];
+  // Populated for pengurus only — the checklist grid below is the only
+  // place this feeds into, and that grid is pengurus-only.
+  let exemptSet = new Set<string>();
 
   if (isPengurus) {
     // Pengurus sees full household detail — same as before.
-    const [{ data: households }, { data: payments }] = await Promise.all([
-      supabase
-        .from("households")
-        .select("*")
-        .eq("is_active", true)
-        .order("unit_no")
-        .returns<Household[]>(),
-      supabase
-        .from("payments")
-        .select("*")
-        .eq("period_year", year)
-        .eq("status", "confirmed")
-        .eq("excluded", false)
-        .returns<Payment[]>(),
-    ]);
+    const [{ data: households }, { data: payments }, { data: exemptions }] =
+      await Promise.all([
+        supabase
+          .from("households")
+          .select("*")
+          .eq("is_active", true)
+          .order("unit_no")
+          .returns<Household[]>(),
+        supabase
+          .from("payments")
+          .select("*")
+          .eq("period_year", year)
+          .eq("status", "confirmed")
+          .eq("excluded", false)
+          .returns<Payment[]>(),
+        supabase
+          .from("ipl_exemptions")
+          .select("household_id, period_month")
+          .eq("period_year", year)
+          .returns<{ household_id: string; period_month: number }[]>(),
+      ]);
     units = (households ?? []).map((h) => ({
       id: h.id,
       unit_no: h.unit_no,
@@ -67,6 +76,9 @@ export default async function ReportPage({
       period_month: p.period_month,
       amount: Number(p.amount),
     }));
+    exemptSet = new Set(
+      (exemptions ?? []).map((e) => `${e.household_id}-${e.period_month}`)
+    );
   } else {
     // Warga sees every unit for community-wide transparency, but only
     // through views that never expose names/phone numbers/notes — see
@@ -493,12 +505,14 @@ export default async function ReportPage({
                       </td>
                       {MONTH_NAMES.map((_, i) => {
                         const paid = paidMap.has(`${u.id}-${i + 1}`);
+                        const exempt = exemptSet.has(`${u.id}-${i + 1}`);
                         return (
                           <td key={i} className="px-2 py-2 text-center">
                             <span
                               className={paid ? "text-green-600" : "text-gray-300"}
+                              title={exempt ? "Gratis" : undefined}
                             >
-                              {paid ? "✓" : "·"}
+                              {paid ? "✓" : exempt ? "–" : "·"}
                             </span>
                           </td>
                         );

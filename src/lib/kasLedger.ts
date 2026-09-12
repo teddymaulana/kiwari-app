@@ -71,7 +71,6 @@ export function buildKasLedgerRows({
   transfers,
   loans,
   householdNameMap,
-  sortBy = "date",
 }: {
   kasType: KasType;
   payments: PaymentRow[];
@@ -80,14 +79,6 @@ export function buildKasLedgerRows({
   transfers: TransferRow[];
   loans: LoanRow[];
   householdNameMap: Map<string, string>;
-  // "date" (default) orders by the actual transaction date — the usual
-  // bank-statement order. "created_at" orders by when the row was
-  // recorded in the app instead, for a kas whose entries tend to get
-  // batch-entered out of transaction-date order (see Kas BRI on
-  // /mutasi) — running Saldo accumulates in that same order either way,
-  // so it stays internally consistent (each row's Saldo delta still
-  // matches its own Kredit/Debit).
-  sortBy?: "date" | "created_at";
 }): KasLedgerRow[] {
   const rows: KasLedgerRow[] = [];
 
@@ -200,7 +191,7 @@ export function buildKasLedgerRows({
       }
     });
 
-  rows.sort((a, b) => a[sortBy].localeCompare(b[sortBy]));
+  rows.sort((a, b) => a.date.localeCompare(b.date));
   return rows;
 }
 

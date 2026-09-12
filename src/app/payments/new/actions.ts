@@ -6,7 +6,6 @@ import { createClient } from "@/lib/supabase/server";
 import { getCurrentUser, PAYMENT_RECORDERS, PAYMENT_VERIFIERS } from "@/lib/auth";
 import { sendWhatsAppMessage } from "@/lib/whatsapp";
 import { paymentConfirmedMessage } from "@/lib/paymentMessages";
-import { MONTH_NAMES, formatRupiah } from "@/lib/types";
 
 // Records one confirmed payment row per selected month — mirrors the
 // warga-facing "Bayar IPL" claim form (paymentClaim.ts) in letting
@@ -221,19 +220,12 @@ export async function rejectPaymentClaim(id: string) {
     .delete()
     .eq("id", id)
     .eq("status", "pending")
-    .select(
-      "household_id, period_year, period_month, amount, households(unit_no, phone, phone_pasangan)"
-    )
+    .select("household_id, period_year, period_month, amount")
     .single<{
       household_id: string;
       period_year: number;
       period_month: number;
       amount: number;
-      households: {
-        unit_no: string;
-        phone: string | null;
-        phone_pasangan: string | null;
-      } | null;
     }>();
 
   if (claim) {
@@ -242,27 +234,6 @@ export async function rejectPaymentClaim(id: string) {
       action: "payment.reject_claim",
       detail: `household ${claim.household_id} - ${claim.period_month}/${claim.period_year} - ${claim.amount}`,
     });
-
-    // Best-effort notification — a WhatsApp failure must never block the
-    // rejection itself, which has already succeeded above. Sent to both
-    // numbers on file (kepala keluarga and pasangan) when both are set — a
-    // Set drops the duplicate if they happen to be the same number.
-    const phones = new Set(
-      [claim.households?.phone, claim.households?.phone_pasangan].filter(
-        (p): p is string => !!p
-      )
-    );
-    for (const phone of phones) {
-      const message = `Halo, klaim pembayaran IPL ${MONTH_NAMES[claim.period_month - 1]} ${claim.period_year} untuk ${claim.households!.unit_no} sebesar ${formatRupiah(Number(claim.amount))} ditolak pengurus. Jika ini kesalahan, silakan kirim ulang klaim dengan bukti transfer yang jelas atau hubungi pengurus. Terima kasih!`;
-      const result = await sendWhatsAppMessage(phone, message);
-      await supabase.from("activity_log").insert({
-        actor_email: user.email,
-        action: result.success ? "whatsapp.send" : "whatsapp.send_failed",
-        detail: result.success
-          ? `notif penolakan pembayaran -> ${phone} - ${result.detail}`
-          : `notif penolakan pembayaran -> ${phone} - ${result.reason} - ${result.detail}`,
-      });
-    }
   }
 
   revalidatePath("/payments/new");

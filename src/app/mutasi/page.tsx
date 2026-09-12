@@ -162,15 +162,7 @@ export default async function MutasiPage() {
   const openingBri = Number(settings?.opening_balance_bri ?? 0);
 
   const tunaiRows = buildKasLedgerRows({ kasType: "tunai", ...commonArgs });
-  // Kas BRI mutations tend to get batch-entered from the bank statement
-  // after the fact, out of transaction-date order — ordering by when the
-  // row was recorded (created_at) instead reads more like "what did I
-  // just enter" than a real bank mutasi would.
-  const briRows = buildKasLedgerRows({
-    kasType: "bri",
-    ...commonArgs,
-    sortBy: "created_at",
-  });
+  const briRows = buildKasLedgerRows({ kasType: "bri", ...commonArgs });
 
   // Petty Cash's Saldo here matches the "Petty Cash" figure on /report
   // exactly (kasBalance.tunai + piutangPersonel) — Kas BRI doesn't fold

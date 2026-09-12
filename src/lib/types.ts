@@ -35,6 +35,19 @@ export type Payment = {
   created_at: string;
 };
 
+// One household's IPL for one month marked as not owed at all (e.g. a
+// doorprize/reward month) — neither "Lunas" nor "Belum Bayar", see
+// ipl_exemptions comment in schema.sql.
+export type IplExemption = {
+  id: string;
+  household_id: string;
+  period_year: number;
+  period_month: number;
+  note: string | null;
+  created_by: string | null;
+  created_at: string;
+};
+
 // Other income from residents beyond the recurring monthly IPL — one-off
 // contributions tied to a specific event (e.g. "Sumbangan Agustus 2026").
 // Either household_id or source_name is set — household_id for a resident,
