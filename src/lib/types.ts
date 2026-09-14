@@ -213,6 +213,13 @@ export const MONTH_NAMES = [
   "Desember",
 ];
 
+// Bayar IPL only started tracking dues from Agustus 2026, so Jan–Jul 2026
+// are never offered for payment (paid or not) — collection for those
+// months predates this system. Other years use the full Jan–Dec range.
+export function iplFirstMonth(year: number): number {
+  return year === 2026 ? 8 : 1;
+}
+
 // Sorts unit_no by its numeric block first (8, 9, 18, 19, ...) then its
 // letter suffix (A, B, ...) — plain text order would put "18A" before "8A".
 function unitSortKey(unitNo: string): [number, string] {

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { iplFirstMonth } from "@/lib/types";
 
 // Public: backs the unauthenticated "Bayar IPL" form on /login, where the
 // household is only known client-side once picked (or OCR-matched). Any
@@ -36,9 +37,11 @@ export async function GET(request: NextRequest) {
     ...(payments ?? []).map((p) => p.period_month),
     ...(exemptions ?? []).map((e) => e.period_month),
   ]);
-  const unpaidMonths = Array.from({ length: 12 }, (_, i) => i + 1).filter(
-    (m) => !settled.has(m)
-  );
+  const firstMonth = iplFirstMonth(year);
+  const unpaidMonths = Array.from(
+    { length: 12 - firstMonth + 1 },
+    (_, i) => i + firstMonth
+  ).filter((m) => !settled.has(m));
 
   return NextResponse.json({ unpaidMonths });
 }

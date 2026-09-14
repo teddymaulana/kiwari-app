@@ -3,6 +3,7 @@ import { getCurrentUser } from "@/lib/auth";
 import { logPageView } from "@/lib/pageView";
 import BayarIplForm from "./BayarIplForm";
 import ClaimSuccessCard from "@/components/ClaimSuccessCard";
+import { iplFirstMonth } from "@/lib/types";
 import type { Payment, Settings } from "@/lib/types";
 
 export default async function BayarIplPage({
@@ -42,9 +43,11 @@ export default async function BayarIplPage({
   ]);
 
   const paidMonths = new Set((existing ?? []).map((p) => p.period_month));
-  const unpaidMonths = Array.from({ length: 12 }, (_, i) => i + 1).filter(
-    (m) => !paidMonths.has(m)
-  );
+  const firstMonth = iplFirstMonth(year);
+  const unpaidMonths = Array.from(
+    { length: 12 - firstMonth + 1 },
+    (_, i) => i + firstMonth
+  ).filter((m) => !paidMonths.has(m));
 
   return (
     <div className="max-w-md mx-auto px-4 py-8">
