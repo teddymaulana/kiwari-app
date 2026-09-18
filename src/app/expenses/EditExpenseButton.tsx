@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { PencilIcon } from "@/components/icons";
 import type { KasType } from "@/lib/types";
 
 export default function EditExpenseButton({
@@ -26,9 +27,11 @@ export default function EditExpenseButton({
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className="text-xs text-gray-500 hover:text-blue-600 transition"
+        title="Ubah"
+        className="inline-flex text-gray-500 hover:text-blue-600 transition"
       >
-        Ubah
+        <PencilIcon className="h-4 w-4" />
+        <span className="sr-only">Ubah</span>
       </button>
 
       {open && (

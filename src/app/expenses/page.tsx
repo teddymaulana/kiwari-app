@@ -9,6 +9,7 @@ import EditExpenseButton from "./EditExpenseButton";
 import KeteranganCell from "./KeteranganCell";
 import ReleaseAllDraftsButton from "./ReleaseAllDraftsButton";
 import SubmitButton from "@/components/SubmitButton";
+import { PaperAirplaneIcon, PrinterIcon } from "@/components/icons";
 import type { Expense } from "@/lib/types";
 import { formatRupiah, KAS_LABELS, EXPENSE_STATUS_LABELS, MONTH_NAMES } from "@/lib/types";
 
@@ -192,6 +193,7 @@ export default async function ExpensesPage({
               <th className="px-4 py-2 font-medium"></th>
               <th className="px-4 py-2 font-medium"></th>
               <th className="px-4 py-2 font-medium"></th>
+              <th className="px-4 py-2 font-medium"></th>
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-100">
@@ -205,7 +207,7 @@ export default async function ExpensesPage({
                   {showMonthDivider && (
                     <tr>
                       <td
-                        colSpan={9}
+                        colSpan={10}
                         className="px-4 py-1.5 bg-gray-200 text-xs font-semibold text-gray-700 uppercase tracking-wide"
                       >
                         {MONTH_NAMES[monthNum - 1]} —{" "}
@@ -254,9 +256,12 @@ export default async function ExpensesPage({
                         <form action={releaseExpense.bind(null, e.id)}>
                           <SubmitButton
                             pendingText="Merilis..."
-                            className="text-xs text-blue-600 hover:text-blue-700 transition"
+                            className="inline-flex text-blue-600 hover:text-blue-700 transition"
                           >
-                            Rilis ke Warga
+                            <span title="Rilis ke Warga">
+                              <PaperAirplaneIcon className="h-4 w-4" />
+                              <span className="sr-only">Rilis ke Warga</span>
+                            </span>
                           </SubmitButton>
                         </form>
                       )}
@@ -281,13 +286,25 @@ export default async function ExpensesPage({
                         />
                       )}
                     </td>
+                    <td className="px-4 py-2 text-right whitespace-nowrap">
+                      <a
+                        href={`/expenses/${e.id}/kwitansi`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        title="Cetak Kwitansi"
+                        className="inline-flex text-gray-500 hover:text-blue-600 transition"
+                      >
+                        <PrinterIcon className="h-4 w-4" />
+                        <span className="sr-only">Cetak Kwitansi</span>
+                      </a>
+                    </td>
                   </tr>
                 </Fragment>
               );
             })}
             {(expenses ?? []).length === 0 && (
               <tr>
-                <td colSpan={9} className="px-4 py-6 text-center text-gray-400">
+                <td colSpan={10} className="px-4 py-6 text-center text-gray-400">
                   {draftOnly
                     ? `Tidak ada pengeluaran draft ${month ? "bulan ini" : "tahun ini"}.`
                     : `Belum ada pengeluaran tercatat ${month ? "bulan ini" : "tahun ini"}.`}

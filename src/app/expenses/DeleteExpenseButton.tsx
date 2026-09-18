@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { TrashIcon } from "@/components/icons";
 
 export default function DeleteExpenseButton({
   action,
@@ -17,9 +18,11 @@ export default function DeleteExpenseButton({
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className="text-xs text-red-600 hover:text-red-700 transition"
+        title="Hapus"
+        className="inline-flex text-red-600 hover:text-red-700 transition"
       >
-        Hapus
+        <TrashIcon className="h-4 w-4" />
+        <span className="sr-only">Hapus</span>
       </button>
 
       {open && (
