@@ -1,5 +1,6 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 import type { KasType } from "@/lib/types";
+import { compareUnitNo } from "@/lib/types";
 
 // Backend-job version of the ledger math in src/app/report/page.tsx (the
 // isPengurus/full-data branch, ~lines 109-209) — always reads the private
@@ -134,4 +135,46 @@ export async function getMonthlyReport(
     totalTerkumpul: iplTotal + contributionTotal,
     pengeluaran,
   };
+}
+
+// Same "Belum Bayar" logic as the dashboard status badge
+// (src/app/dashboard/page.tsx, ~line 433): an active household is unpaid
+// for the month unless it has a confirmed payment or an IPL exemption.
+// Returns unit_no values only, sorted with compareUnitNo.
+export async function getUnpaidUnits(
+  year: number,
+  month: number
+): Promise<string[]> {
+  const admin = createAdminClient();
+
+  const [{ data: households }, { data: payments }, { data: exemptions }] =
+    await Promise.all([
+      admin
+        .from("households")
+        .select("id, unit_no")
+        .eq("is_active", true)
+        .returns<{ id: string; unit_no: string }[]>(),
+      admin
+        .from("payments")
+        .select("household_id")
+        .eq("period_year", year)
+        .eq("period_month", month)
+        .eq("status", "confirmed")
+        .eq("excluded", false)
+        .returns<{ household_id: string }[]>(),
+      admin
+        .from("ipl_exemptions")
+        .select("household_id")
+        .eq("period_year", year)
+        .eq("period_month", month)
+        .returns<{ household_id: string }[]>(),
+    ]);
+
+  const paidHouseholds = new Set((payments ?? []).map((p) => p.household_id));
+  const exemptHouseholds = new Set((exemptions ?? []).map((e) => e.household_id));
+
+  return (households ?? [])
+    .filter((h) => !paidHouseholds.has(h.id) && !exemptHouseholds.has(h.id))
+    .map((h) => h.unit_no)
+    .sort(compareUnitNo);
 }

@@ -1,13 +1,14 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getWhatsAppProvider } from "@/lib/whatsapp";
 import { sendViaWablas } from "@/lib/wablas";
-import { getKasSaatIni, getMonthlyReport } from "@/lib/kasSummary";
+import { getKasSaatIni, getMonthlyReport, getUnpaidUnits } from "@/lib/kasSummary";
 import { formatRupiah, MONTH_NAMES } from "@/lib/types";
 
-// Test recipient only, same convention as CLAIM_NOTIFY_UNIT in
-// paymentClaim.ts — swap for a real distribution list (all households, or
-// a pengurus group) once the report format is confirmed with 18G.
-const REPORT_TEST_UNIT = "18G";
+// The WA group this report goes to. Wablas sends to a group the same way
+// it sends to a person — the "phone" field just takes the group's JID
+// instead of a phone number — so this is the group's JID (confirmed from
+// the Wablas dashboard), not a phone number.
+const REPORT_GROUP_ID = "120363428671682296@g.us";
 
 export type WeeklyReportResult =
   | { success: true; detail: string }
@@ -29,26 +30,15 @@ export async function sendWeeklyReport(
   }
 
   const admin = createAdminClient();
-  const { data: household } = await admin
-    .from("households")
-    .select("phone")
-    .ilike("unit_no", REPORT_TEST_UNIT)
-    .single<{ phone: string | null }>();
-
-  if (!household?.phone) {
-    return {
-      success: false,
-      reason: `Tidak ada nomor HP untuk unit ${REPORT_TEST_UNIT}`,
-    };
-  }
 
   const now = new Date();
   const year = now.getFullYear();
   const month = now.getMonth() + 1;
 
-  const [kasSaatIni, monthly] = await Promise.all([
+  const [kasSaatIni, monthly, unpaidUnits] = await Promise.all([
     getKasSaatIni(),
     getMonthlyReport(year, month),
+    getUnpaidUnits(year, month),
   ]);
 
   const paidPercent =
@@ -63,21 +53,25 @@ export async function sendWeeklyReport(
     `  • Petty Cash: ${formatRupiah(kasSaatIni.pettyCash)}`,
     "",
     `📊 *Laporan Bulan Ini (${MONTH_NAMES[month - 1]} ${year})*`,
+    `Sampai tanggal ${now.getDate()} ${MONTH_NAMES[now.getMonth()]} ${now.getFullYear()}`,
     `✅ ${monthly.paidCount}/${monthly.totalUnits} Sudah bayar IPL (${paidPercent}%)`,
     `💵 Total Terkumpul: ${formatRupiah(monthly.totalTerkumpul)}`,
     `📉 Pengeluaran: ${formatRupiah(monthly.pengeluaran)}`,
+    ...(unpaidUnits.length > 0
+      ? ["", `❌ *Belum Bayar (${unpaidUnits.length}):*`, unpaidUnits.join(", ")]
+      : []),
     "",
     "_Laporan otomatis, dikirim setiap Minggu._",
   ].join("\n");
 
-  const result = await sendViaWablas(household.phone, message);
+  const result = await sendViaWablas(REPORT_GROUP_ID, message);
 
   await admin.from("activity_log").insert({
     actor_email: actorEmail,
     action: result.success ? "whatsapp.weekly_report" : "whatsapp.weekly_report_failed",
     detail: result.success
-      ? `laporan mingguan -> ${household.phone} - ${result.detail}`
-      : `laporan mingguan -> ${household.phone} - ${result.reason} - ${result.detail}`,
+      ? `laporan mingguan -> ${REPORT_GROUP_ID} - ${result.detail}`
+      : `laporan mingguan -> ${REPORT_GROUP_ID} - ${result.reason} - ${result.detail}`,
   });
 
   return result.success

@@ -319,9 +319,8 @@ export default async function SettingsPage({
           </h2>
           <p className="text-xs text-gray-400 mb-4">
             Kirim ringkasan Kas Saat Ini + laporan bulan ini lewat WhatsApp
-            — kirim otomatis tiap Minggu pagi lewat cron job, tombol ini
-            untuk kirim manual kapan saja. Untuk sekarang hanya terkirim ke
-            18G sebagai uji coba.
+            ke grup — kirim otomatis tiap Minggu pagi lewat cron job, tombol
+            ini untuk kirim manual kapan saja.
           </p>
 
           {wa_error && (
