@@ -1,221 +1,207 @@
 "use client";
 
-import { useMemo, useState } from "react";
-import type { DenahHousehold } from "./page";
+import { useEffect, useMemo, useRef, useState } from "react";
+import type { DenahHousehold, DenahSecurityGuard } from "./page";
 
-// Exact grid geometry (col, row, colspan, rowspan) extracted from the
-// original "Denah Kiwari Residence" spreadsheet — every unit box below is
-// the real merged-cell region from that sheet, not an eyeballed guess, so
-// this reproduces the source layout faithfully. Row 1 is reserved for zone
-// labels; unit geometry below is shifted down by ROW_OFFSET to make room.
-//
-// Deliberately not connected to any household/IPL data — this is a plain
-// reference map, not a status dashboard.
-const ROW_OFFSET = 1;
-
-type UnitCell = {
-  unit_no: string;
-  col: number;
-  row: number;
-  colspan: number;
-  rowspan: number;
-};
-
-const UNIT_GEOMETRY: UnitCell[] = [
-  { unit_no: "19K", col: 4, row: 1, colspan: 1, rowspan: 4 },
-  { unit_no: "19J", col: 5, row: 1, colspan: 1, rowspan: 4 },
-  { unit_no: "19I", col: 6, row: 1, colspan: 1, rowspan: 4 },
-  { unit_no: "19H", col: 7, row: 1, colspan: 1, rowspan: 4 },
-  { unit_no: "19G", col: 8, row: 1, colspan: 1, rowspan: 4 },
-  { unit_no: "19F", col: 9, row: 1, colspan: 1, rowspan: 4 },
-  { unit_no: "19E", col: 10, row: 1, colspan: 1, rowspan: 4 },
-  { unit_no: "19D", col: 11, row: 1, colspan: 1, rowspan: 4 },
-  { unit_no: "19C", col: 12, row: 1, colspan: 1, rowspan: 4 },
-  { unit_no: "19B", col: 13, row: 1, colspan: 1, rowspan: 4 },
-  { unit_no: "19A", col: 14, row: 1, colspan: 1, rowspan: 4 },
-  { unit_no: "19L", col: 6, row: 10, colspan: 1, rowspan: 4 },
-  { unit_no: "19M", col: 7, row: 10, colspan: 1, rowspan: 4 },
-  { unit_no: "19N", col: 8, row: 10, colspan: 1, rowspan: 4 },
-  { unit_no: "19O", col: 9, row: 10, colspan: 1, rowspan: 4 },
-  { unit_no: "19P", col: 10, row: 10, colspan: 1, rowspan: 4 },
-  { unit_no: "19Q", col: 11, row: 10, colspan: 1, rowspan: 4 },
-  { unit_no: "19R", col: 12, row: 10, colspan: 1, rowspan: 4 },
-  { unit_no: "19S", col: 13, row: 10, colspan: 1, rowspan: 4 },
-  { unit_no: "19T", col: 14, row: 10, colspan: 1, rowspan: 4 },
-  { unit_no: "19U", col: 15, row: 10, colspan: 1, rowspan: 4 },
-  { unit_no: "19V", col: 16, row: 10, colspan: 1, rowspan: 4 },
-  { unit_no: "9X", col: 1, row: 12, colspan: 2, rowspan: 2 },
-  { unit_no: "9W", col: 1, row: 14, colspan: 2, rowspan: 2 },
-  { unit_no: "18Q", col: 6, row: 14, colspan: 1, rowspan: 4 },
-  { unit_no: "18R", col: 7, row: 14, colspan: 1, rowspan: 4 },
-  { unit_no: "18S", col: 8, row: 14, colspan: 1, rowspan: 4 },
-  { unit_no: "18T", col: 9, row: 14, colspan: 1, rowspan: 4 },
-  { unit_no: "18U", col: 10, row: 14, colspan: 1, rowspan: 4 },
-  { unit_no: "18V", col: 11, row: 14, colspan: 1, rowspan: 4 },
-  { unit_no: "18W", col: 12, row: 14, colspan: 1, rowspan: 4 },
-  { unit_no: "18X", col: 13, row: 14, colspan: 1, rowspan: 4 },
-  { unit_no: "18Y", col: 14, row: 14, colspan: 1, rowspan: 4 },
-  { unit_no: "18Z", col: 15, row: 14, colspan: 1, rowspan: 4 },
-  { unit_no: "18AA", col: 16, row: 14, colspan: 1, rowspan: 4 },
-  { unit_no: "9V", col: 1, row: 16, colspan: 2, rowspan: 2 },
-  { unit_no: "9U", col: 1, row: 18, colspan: 2, rowspan: 2 },
-  { unit_no: "9T", col: 1, row: 20, colspan: 2, rowspan: 2 },
-  { unit_no: "18I", col: 6, row: 20, colspan: 1, rowspan: 4 },
-  { unit_no: "18J", col: 7, row: 20, colspan: 1, rowspan: 4 },
-  { unit_no: "18K", col: 8, row: 20, colspan: 1, rowspan: 4 },
-  { unit_no: "18L", col: 9, row: 20, colspan: 1, rowspan: 4 },
-  { unit_no: "18M", col: 10, row: 20, colspan: 1, rowspan: 4 },
-  { unit_no: "18N", col: 11, row: 20, colspan: 1, rowspan: 4 },
-  { unit_no: "18O", col: 12, row: 20, colspan: 1, rowspan: 4 },
-  { unit_no: "18P", col: 13, row: 20, colspan: 1, rowspan: 4 },
-  { unit_no: "9S", col: 1, row: 22, colspan: 2, rowspan: 2 },
-  { unit_no: "9R", col: 1, row: 24, colspan: 2, rowspan: 2 },
-  { unit_no: "18H", col: 6, row: 24, colspan: 1, rowspan: 4 },
-  { unit_no: "18G", col: 7, row: 24, colspan: 1, rowspan: 4 },
-  { unit_no: "18F", col: 8, row: 24, colspan: 1, rowspan: 4 },
-  { unit_no: "18E", col: 9, row: 24, colspan: 1, rowspan: 4 },
-  { unit_no: "18D", col: 10, row: 24, colspan: 1, rowspan: 4 },
-  { unit_no: "18C", col: 11, row: 24, colspan: 1, rowspan: 4 },
-  { unit_no: "18B", col: 12, row: 24, colspan: 1, rowspan: 4 },
-  { unit_no: "18A", col: 13, row: 24, colspan: 1, rowspan: 4 },
-  { unit_no: "9Q", col: 1, row: 26, colspan: 2, rowspan: 2 },
-  { unit_no: "9P", col: 1, row: 28, colspan: 2, rowspan: 2 },
-  { unit_no: "9O", col: 1, row: 30, colspan: 2, rowspan: 2 },
-  { unit_no: "9M", col: 6, row: 30, colspan: 1, rowspan: 4 },
-  { unit_no: "9L", col: 7, row: 30, colspan: 1, rowspan: 4 },
-  { unit_no: "9K", col: 8, row: 30, colspan: 1, rowspan: 4 },
-  { unit_no: "9J", col: 9, row: 30, colspan: 1, rowspan: 4 },
-  { unit_no: "9I", col: 10, row: 30, colspan: 1, rowspan: 4 },
-  { unit_no: "9H", col: 11, row: 30, colspan: 2, rowspan: 4 },
-  { unit_no: "9N", col: 1, row: 32, colspan: 2, rowspan: 2 },
-  { unit_no: "9G", col: 11, row: 34, colspan: 2, rowspan: 2 },
-  { unit_no: "9F", col: 11, row: 36, colspan: 2, rowspan: 2 },
-  { unit_no: "8K", col: 15, row: 36, colspan: 2, rowspan: 2 },
-  { unit_no: "8L", col: 17, row: 36, colspan: 2, rowspan: 4 },
-  { unit_no: "8M", col: 19, row: 36, colspan: 1, rowspan: 4 },
-  { unit_no: "8N", col: 20, row: 36, colspan: 1, rowspan: 4 },
-  { unit_no: "8O", col: 21, row: 36, colspan: 1, rowspan: 4 },
-  { unit_no: "8P", col: 22, row: 36, colspan: 1, rowspan: 4 },
-  { unit_no: "8Q", col: 23, row: 36, colspan: 1, rowspan: 4 },
-  { unit_no: "8R", col: 24, row: 36, colspan: 1, rowspan: 4 },
-  { unit_no: "9E", col: 11, row: 38, colspan: 2, rowspan: 2 },
-  { unit_no: "8J", col: 15, row: 38, colspan: 2, rowspan: 2 },
-  { unit_no: "9D", col: 11, row: 40, colspan: 2, rowspan: 2 },
-  { unit_no: "8I", col: 15, row: 40, colspan: 2, rowspan: 2 },
-  { unit_no: "9C", col: 11, row: 42, colspan: 2, rowspan: 2 },
-  { unit_no: "8H", col: 15, row: 42, colspan: 2, rowspan: 2 },
-  { unit_no: "9B", col: 11, row: 44, colspan: 2, rowspan: 2 },
-  { unit_no: "8G", col: 15, row: 44, colspan: 2, rowspan: 2 },
-  { unit_no: "9A", col: 11, row: 46, colspan: 2, rowspan: 2 },
-  { unit_no: "8F", col: 15, row: 46, colspan: 2, rowspan: 2 },
-  { unit_no: "8A", col: 12, row: 51, colspan: 1, rowspan: 4 },
-  { unit_no: "8B", col: 13, row: 51, colspan: 1, rowspan: 4 },
-  { unit_no: "8C", col: 14, row: 51, colspan: 1, rowspan: 4 },
-  { unit_no: "8D", col: 15, row: 51, colspan: 1, rowspan: 4 },
-  { unit_no: "8E", col: 16, row: 51, colspan: 1, rowspan: 4 },
+// Exact site-plan geometry (unit id, x, y — box is always 16 x 9.8) ported
+// from the "Denah Kiwari Residence" site plan artifact. Coordinates sit in
+// the plan's own SVG user-space (viewBox origin 208,78 / size 396x292),
+// not screen pixels.
+const RAW: [string, number, number][] = [
+  ["19K", 271.5, 93.5], ["19J", 289.4, 93.5], ["19I", 306.9, 93.5], ["19H", 321.7, 93.5], ["19G", 337.4, 93.5], ["19F", 353.7, 93.5], ["19E", 369.5, 93.5], ["19D", 385, 93.5], ["19C", 400.7, 93.5], ["19B", 416.5, 93.5], ["19A", 432.2, 93.5],
+  ["19L", 290.9, 137.6], ["19M", 305.4, 137.6], ["19N", 321.7, 137.6], ["19O", 337.4, 137.6], ["19P", 353.7, 137.6], ["19Q", 368.9, 137.6], ["19R", 385, 137.6], ["19S", 401, 137.6], ["19T", 416.7, 137.6], ["19U", 432, 137.6], ["19V", 451.1, 137.6],
+  ["9X", 233.3, 142.6], ["9W", 232.3, 152.4],
+  ["18Q", 290.1, 157.3], ["18R", 306.2, 157.3], ["18S", 322.2, 157.3], ["18T", 337.9, 157.3], ["18U", 353.2, 157.3], ["18V", 369.2, 157.3], ["18W", 384.2, 157.3], ["18X", 401, 157.3], ["18Y", 416.7, 157.3], ["18Z", 432.5, 157.3], ["18AA", 449.3, 157.3],
+  ["9V", 233.3, 162.2], ["9U", 233.1, 172], ["9T", 233.6, 181.8],
+  ["18I", 291.2, 186.7], ["18J", 306.9, 186.7], ["18K", 322.2, 186.7], ["18L", 338.2, 186.7], ["18M", 352.7, 186.7], ["18N", 368.9, 186.7], ["18O", 384.7, 186.7], ["18P", 401, 186.7],
+  ["9S", 233.6, 191.6], ["9R", 233.3, 201.5],
+  ["18H", 290.1, 206.4], ["18G", 305.9, 206.4], ["18F", 322.2, 206.4], ["18E", 337.9, 206.4], ["18D", 353.4, 206.4], ["18C", 369.2, 206.4], ["18B", 385, 206.4], ["18A", 400.7, 206.4],
+  ["8T", 475.3, 211.3], ["8S", 500.1, 211.3],
+  ["9Q", 233.1, 211.3], ["9P", 233.3, 221.1], ["9O", 233.1, 230.9],
+  ["9M", 289.4, 235.8], ["9L", 308, 235.8], ["9K", 323.5, 235.8], ["9J", 339.8, 235.8], ["9I", 355.8, 235.8], ["9H", 378.2, 235.8],
+  ["9N", 233.1, 240.7],
+  ["9G", 378.2, 250.5], ["9F", 378.8, 260.4],
+  ["8K", 441.5, 260.4],
+  ["8L", 468.4, 265.3], ["8M", 486, 265.3], ["8N", 502.5, 265.3], ["8O", 518, 265.3], ["8P", 534.3, 265.3], ["8Q", 549.5, 265.3], ["8R", 565.8, 265.3],
+  ["9E", 378.8, 270.2], ["8J", 442.1, 270.2],
+  ["9D", 378.2, 280], ["8I", 442.3, 280],
+  ["9C", 378.5, 289.8], ["8H", 441.3, 289.8],
+  ["9B", 378.5, 299.6], ["8G", 441.3, 299.6],
+  ["9A", 378.5, 309.5], ["8F", 441.8, 309.5],
+  ["8A", 386.3, 338.9], ["8B", 402.3, 338.9], ["8C", 418, 338.9], ["8D", 433.5, 338.9], ["8E", 449.6, 338.9],
 ];
 
-// The source sheet draws "8T" and "8S" sharing a single merged box.
-const DECORATIVE = [
-  { label: "8T / 8S", col: 17, row: 25, colspan: 3, rowspan: 4 },
+type PoiKind = "cctv" | "play" | "pos" | "gardu" | "air" | "stop" | "arah";
+
+const POI: [PoiKind, string, number, number][] = [
+  ["cctv", "CCTV lingkungan", 253.7, 229.2],
+  ["cctv", "CCTV lingkungan", 399.6, 218.9],
+  ["cctv", "CCTV lingkungan", 371.9, 328.7],
+  ["play", "Playground", 458.3, 244.2],
+  ["pos", "Pos security", 381.1, 353.5],
+  ["gardu", "Gardu listrik", 230.6, 104.3],
+  ["air", "Saluran air / selokan besar", 475.2, 118.6],
+  ["stop", "Dilarang melintas", 281.4, 192],
+  ["stop", "Dilarang melintas", 449.5, 219.1],
+  ["stop", "Dilarang melintas", 466.9, 105.8],
+  ["arah", "Arah lalu lintas", 282.2, 176.9],
+  ["arah", "Arah lalu lintas", 407.6, 231.2],
+  ["arah", "Arah lalu lintas", 464.8, 223.7],
 ];
 
-// RTH (green open space) regions — cells styled with the sheet's green
-// fill (#92d050), extracted and merged the same way as UNIT_GEOMETRY.
-const GREEN_AREAS = [
-  { col: 1, row: 1, colspan: 3, rowspan: 4 },
-  { col: 15, row: 1, colspan: 1, rowspan: 4 },
-  { col: 16, row: 1, colspan: 1, rowspan: 3 },
-  { col: 6, row: 7, colspan: 9, rowspan: 1 },
-  { col: 1, row: 10, colspan: 2, rowspan: 2 },
-  { col: 5, row: 10, colspan: 1, rowspan: 8 },
-  { col: 5, row: 20, colspan: 1, rowspan: 8 },
-  // Left half of 9M's old box, turned into green area.
-  { col: 5, row: 30, colspan: 1, rowspan: 4 },
-  { col: 14, row: 20, colspan: 2, rowspan: 8 },
-  // Right of 9H, same size, with a 1-cell gap (col 13) in between.
-  { col: 14, row: 30, colspan: 2, rowspan: 4 },
-  // Above 8M-8Q (col 19-23, row 36) — stops at row 34 so row 35 stays an
-  // empty gap of boxes before the units, instead of touching them.
-  { col: 19, row: 30, colspan: 5, rowspan: 4 },
-  { col: 1, row: 39, colspan: 1, rowspan: 2 },
+// Asphalt-textured road surfaces.
+const ROAD_RECTS: [number, number, number, number][] = [
+  [214.6, 84.5, 271.5, 5.2], [214.6, 89.4, 10, 167.2],
+  [470.1, 89.4, 16, 15], [470.1, 104.1, 16, 5.2],
+  [470.1, 123.8, 16, 10], [470.1, 133.6, 16, 10],
+  [470.1, 143.4, 16, 29.7], [470.1, 172.8, 16, 10.1],
+  [470.1, 182.7, 16, 24.8], [485.8, 202.3, 47.6, 5.2],
+  [517.4, 207.2, 16, 15], [517.4, 221.9, 16, 5.2],
+  [517.4, 226.8, 16, 19.9], [533.1, 241.6, 63.6, 5.1],
+  [585.3, 246.5, 11.4, 5.1], [224.4, 251.4, 145.4, 5.2],
+  [585.3, 251.4, 11.4, 5.2], [353.8, 256.3, 16, 19.9],
+  [585.3, 256.3, 11.4, 5.2], [585.3, 261.2, 11.4, 15],
+  [353.8, 275.9, 16, 10.1], [585.3, 275.9, 11.4, 5.2],
+  [464.1, 280.8, 132.6, 5.2], [353.8, 285.7, 16, 19.9],
+  [464.1, 285.7, 6.2, 19.9], [224.4, 305.4, 16, 10.1],
+  [353.8, 305.4, 16, 10.1], [464.1, 305.4, 6.2, 10.1],
+  [353.8, 315.2, 16, 44.4], [464.1, 315.2, 6.2, 39.5],
+  [385.3, 354.5, 85, 5.1],
 ];
 
-// Outer perimeter wall — thick continuous bars along the outside edge of
-// the built area, drawn as their own grid-line-anchored segments (not
-// per-unit borders) so they read as one unbroken wall and can bridge the
-// empty gap between 9N and 9M (nothing occupies col3-4 there).
-type Wall = {
-  side: "left" | "top" | "bottom";
-  col: number;
-  row: number;
-  colspan?: number;
-  rowspan?: number;
-};
-
-const WALLS: Wall[] = [
-  // Left side, top edge of the plan down through 9X to 9N.
-  { side: "left", col: 1, row: 1, rowspan: 33 },
-  // Bottom side, 9N across the gap through 9M, 9L, 9K, 9J, 9I. Row 33, not
-  // 34: "bottom" aligns to the end of the row it's given, and 33 is the
-  // last row these units actually occupy (they end at the row-34 line) —
-  // using 34 here left a full row-height gap before the left wall above.
-  { side: "bottom", col: 1, row: 33, colspan: 10 },
-  // Left side, 9G down past 9A to the bottom of the plan.
-  { side: "left", col: 11, row: 34, rowspan: 20 },
-  // Top side, continuing from the left wall's top-left corner (col 1)
-  // rightward across 19K through 19A and on to col 16 — the right edge of
-  // the rightmost top green area.
-  { side: "top", col: 1, row: 1, colspan: 16 },
-  // Bottom side, 8A through 8E (Kiwari VII). Row 54, not 55: same
-  // last-occupied-row convention as the 9N-9I wall above.
-  { side: "bottom", col: 12, row: 54, colspan: 5 },
-  // Bottom side, 8L through 8R.
-  { side: "bottom", col: 17, row: 39, colspan: 8 },
-  // Bottom-left corner of 8T/8S, running right — same length (5 cols) as
-  // the green area below it, shifted 2 cells right.
-  { side: "bottom", col: 20, row: 28, colspan: 5 },
-  // Right side of 8T/8S.
-  { side: "left", col: 20, row: 25, rowspan: 4 },
-  // Top side of 8T/8S.
-  { side: "top", col: 17, row: 25, colspan: 3 },
-  // Right side of 8I (down through 8H, 8G, 8F), continued to the bottom
-  // edge of the plan. col 17, not 16: 8I/8H/8G/8F each span cols 15-16
-  // (colspan 2), so col 16 falls inside those boxes rather than at their
-  // edge.
-  { side: "left", col: 17, row: 40, rowspan: 15 },
-  // Right side of 19V, continued up to the top edge, down past the right
-  // side of 18A. Stops at row 24, before 8T/8S (row 25) — 8T/8S now has
-  // its own dedicated left wall instead of sharing this one.
-  { side: "left", col: 17, row: 1, rowspan: 24 },
-  // Right side of 8R itself, plus running up 7 more cells above its top edge.
-  { side: "left", col: 25, row: 29, rowspan: 11 },
+// RTH (green open space) regions, some with rounded corners (rx).
+const RTH_RECTS: [number, number, number, number, number?][] = [
+  [224.4, 89.4, 47.5, 19.9], [448.4, 89.4, 21.9, 15],
+  [448.4, 104.1, 16, 5.2], [290.8, 118.8, 142.1, 5.2],
+  [224.4, 133.6, 31.8, 10], [287.4, 133.6, 3.6, 10],
+  [287.4, 143.4, 3.6, 29.7], [464.1, 172.8, 6.2, 10.1],
+  [287.4, 182.7, 3.6, 39.5], [416.9, 182.7, 31.7, 39.5],
+  [464.1, 182.7, 6.2, 39.5], [464.1, 221.9, 6.2, 5.2],
+  [580.4, 261.2, 5.2, 15], [224.4, 275.9, 16, 10.1],
+  [580.4, 275.9, 5.2, 5.2], [415.8, 262.5, 4.4, 55.5],
+  [417, 230.6, 23.5, 23.7, 1.6], [448.8, 237.6, 55.2, 13.9, 1.6],
 ];
 
-const MAX_COL = 25;
-const MAX_ROW = 54 + ROW_OFFSET;
+const ROAD_NAMES: { x: number; y: number; label: string; rotate?: [number, number, number] }[] = [
+  { x: 360, y: 123.2, label: "KIWARI I" },
+  { x: 272.5, y: 176, label: "KIWARI II", rotate: [-90, 272.5, 176] },
+  { x: 374.4, y: 179.8, label: "KIWARI III" },
+  { x: 350.4, y: 228.3, label: "KIWARI IV" },
+  { x: 535.5, y: 256.7, label: "KIWARI V" },
+  { x: 418.6, y: 291.4, label: "KIWARI VI", rotate: [-90, 418.6, 291.4] },
+  { x: 426.8, y: 330.5, label: "KIWARI VII" },
+];
 
-type Tooltip = {
-  unit_no: string;
-  name: string;
-  alt_names: string | null;
-  left: number;
-  top: number;
-  hAlign: "left" | "center" | "right";
-  vAlign: "above" | "below";
-};
+const BLOKS = ["Semua", "8", "9", "18", "19"] as const;
+type Blok = (typeof BLOKS)[number];
 
-// Rough tooltip footprint used only to decide which side has room — the
-// actual box sizes to its content via whitespace-nowrap, but these
-// estimates are enough to stop it from clipping against the container
-// edges (e.g. 8A-8E sit on the very bottom row, 9N-9X in the leftmost
-// column).
-const TOOLTIP_HALF_WIDTH = 90;
-const TOOLTIP_HEIGHT = 70;
-const TOOLTIP_GAP = 6;
+type Sel =
+  | { kind: "plot"; id: string; blok: string }
+  | { kind: "poi"; name: string; poiKind: PoiKind }
+  | null;
 
-export default function DenahMap({ households }: { households: DenahHousehold[] }) {
-  const [tooltip, setTooltip] = useState<Tooltip | null>(null);
+const INITIAL_VB: [number, number, number, number] = [208, 78, 396, 292];
+
+function blokOf(id: string) {
+  return id.match(/^\d+/)![0];
+}
+
+function clampVb(v: [number, number, number, number]): [number, number, number, number] {
+  const w = Math.max(70, Math.min(396, v[2]));
+  const h = (w * 292) / 396;
+  return [
+    Math.max(208 - 40, Math.min(604 + 40 - w, v[0])),
+    Math.max(78 - 40, Math.min(370 + 40 - h, v[1])),
+    w,
+    h,
+  ];
+}
+
+// Small facility glyphs, each drawn in an 8x8 box.
+function PoiGlyph({ kind }: { kind: PoiKind }) {
+  switch (kind) {
+    case "cctv":
+      return (
+        <>
+          <path d="M1.1 2.6 L5.6 1.5 L6 2.9 L1.5 4 Z" fill="#006786" />
+          <path d="M3 4 L3.4 5.2 M2.2 5.2 h2.2" stroke="#006786" strokeWidth={0.6} fill="none" strokeLinecap="round" />
+          <circle cx={6.4} cy={2.2} r={0.6} fill="#d6006c" />
+        </>
+      );
+    case "play":
+      return (
+        <>
+          <path d="M2 6.3 V2.2 h1.3 V6.3" stroke="#006786" strokeWidth={0.6} fill="none" />
+          <path d="M3.3 2.4 C5.2 2.6 5.4 4.6 6.4 6.3" stroke="#006786" strokeWidth={0.6} fill="none" strokeLinecap="round" />
+          <path d="M2 4.2 h1.3" stroke="#006786" strokeWidth={0.5} />
+        </>
+      );
+    case "pos":
+      return (
+        <>
+          <path d="M1.4 3.4 L4 1.6 L6.6 3.4 Z" fill="#006786" />
+          <rect x={2.2} y={3.6} width={3.6} height={2.9} fill="none" stroke="#006786" strokeWidth={0.6} />
+          <rect x={3.2} y={4.4} width={1.6} height={1.2} fill="#006786" />
+        </>
+      );
+    case "gardu":
+      return <path d="M4.6 1.2 L2.2 4.5 h1.5 L3.2 6.9 L5.8 3.4 H4.2 Z" fill="#006786" />;
+    case "air":
+      return (
+        <>
+          <path d="M1 3 C2 2.2 3 3.8 4 3 C5 2.2 6 3.8 7 3" stroke="#006786" strokeWidth={0.6} fill="none" strokeLinecap="round" />
+          <path d="M1 5 C2 4.2 3 5.8 4 5 C5 4.2 6 5.8 7 5" stroke="#006786" strokeWidth={0.6} fill="none" strokeLinecap="round" />
+        </>
+      );
+    case "stop":
+      return (
+        <>
+          <circle cx={4} cy={4} r={2.8} fill="none" stroke="#d6006c" strokeWidth={0.7} />
+          <rect x={2} y={3.5} width={4} height={1} fill="#d6006c" />
+        </>
+      );
+    case "arah":
+      return (
+        <path
+          d="M1.4 4 h4.2 M4.2 2.4 L5.9 4 L4.2 5.6"
+          stroke="#006786"
+          strokeWidth={0.7}
+          fill="none"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+      );
+  }
+}
+
+const LEGEND: { kind: PoiKind; label: string }[] = [
+  { kind: "cctv", label: "CCTV lingkungan" },
+  { kind: "play", label: "Playground" },
+  { kind: "pos", label: "Pos security" },
+  { kind: "gardu", label: "Gardu listrik" },
+  { kind: "air", label: "Saluran air / selokan besar" },
+  { kind: "stop", label: "Dilarang melintas" },
+  { kind: "arah", label: "Arah lalu lintas" },
+];
+
+export default function DenahMap({
+  households,
+  securityGuards,
+}: {
+  households: DenahHousehold[];
+  securityGuards: DenahSecurityGuard[];
+}) {
+  const [sel, setSel] = useState<Sel>(null);
+  const [blok, setBlok] = useState<Blok>("Semua");
+  const [q, setQ] = useState("");
+  const [vb, setVb] = useState(INITIAL_VB);
+
+  const svgRef = useRef<SVGSVGElement | null>(null);
+  const dragRef = useRef<{ mx: number; my: number; vb: [number, number, number, number] } | null>(null);
+  const vbRef = useRef(vb);
+  useEffect(() => {
+    vbRef.current = vb;
+  }, [vb]);
 
   const byUnit = useMemo(() => {
     const m = new Map<string, DenahHousehold>();
@@ -223,149 +209,382 @@ export default function DenahMap({ households }: { households: DenahHousehold[] 
     return m;
   }, [households]);
 
-  function handleClick(unitNo: string, e: React.MouseEvent<HTMLButtonElement>) {
-    const h = byUnit.get(unitNo);
-    if (!h) {
-      setTooltip(null);
-      return;
-    }
-    if (tooltip?.unit_no === unitNo) {
-      setTooltip(null);
-      return;
-    }
-
-    const el = e.currentTarget;
-    const container = el.offsetParent as HTMLElement | null;
-    const containerWidth = container?.offsetWidth ?? Infinity;
-    const containerHeight = container?.offsetHeight ?? Infinity;
-
-    const cellCenterX = el.offsetLeft + el.offsetWidth / 2;
-    const cellTop = el.offsetTop;
-    const cellBottom = el.offsetTop + el.offsetHeight;
-
-    let hAlign: Tooltip["hAlign"] = "center";
-    if (cellCenterX - TOOLTIP_HALF_WIDTH < 0) hAlign = "left";
-    else if (cellCenterX + TOOLTIP_HALF_WIDTH > containerWidth) hAlign = "right";
-
-    const vAlign: Tooltip["vAlign"] =
-      cellBottom + TOOLTIP_GAP + TOOLTIP_HEIGHT > containerHeight ? "above" : "below";
-
-    setTooltip({
-      unit_no: unitNo,
-      name: h.name,
-      alt_names: h.alt_names,
-      left:
-        hAlign === "left"
-          ? el.offsetLeft
-          : hAlign === "right"
-          ? el.offsetLeft + el.offsetWidth
-          : cellCenterX,
-      top: vAlign === "above" ? cellTop - TOOLTIP_GAP : cellBottom + TOOLTIP_GAP,
-      hAlign,
-      vAlign,
+  function zoom(f: number, cx?: number, cy?: number) {
+    setVb(([x, y, w, h]) => {
+      const px = cx ?? x + w / 2;
+      const py = cy ?? y + h / 2;
+      const nw = w * f;
+      const nh = h * f;
+      return clampVb([px - (px - x) * f, py - (py - y) * f, nw, nh]);
     });
   }
 
+  // React marks onWheel as a passive listener, so preventDefault() there is
+  // silently ignored (and warns) — attach natively to actually stop page
+  // scroll while zooming the map.
+  useEffect(() => {
+    const el = svgRef.current;
+    if (!el) return;
+    function onWheel(e: WheelEvent) {
+      e.preventDefault();
+      const r = el!.getBoundingClientRect();
+      const [x, y, w, h] = vbRef.current;
+      zoom(
+        e.deltaY > 0 ? 1.12 : 0.89,
+        x + ((e.clientX - r.left) / r.width) * w,
+        y + ((e.clientY - r.top) / r.height) * h
+      );
+    }
+    el.addEventListener("wheel", onWheel, { passive: false });
+    return () => el.removeEventListener("wheel", onWheel);
+  }, []);
+
+  function handleMouseDown(e: React.MouseEvent<SVGSVGElement>) {
+    dragRef.current = { mx: e.clientX, my: e.clientY, vb };
+  }
+  function handleMouseMove(e: React.MouseEvent<SVGSVGElement>) {
+    const d = dragRef.current;
+    if (!d) return;
+    const r = e.currentTarget.getBoundingClientRect();
+    const k = d.vb[2] / r.width;
+    setVb(clampVb([d.vb[0] - (e.clientX - d.mx) * k, d.vb[1] - (e.clientY - d.my) * k, d.vb[2], d.vb[3]]));
+  }
+  function handleMouseUp() {
+    dragRef.current = null;
+  }
+
+  function handlePick(e: React.MouseEvent<SVGGElement>) {
+    const target = (e.target as SVGElement).closest("[data-id]");
+    if (!target) return;
+    const id = target.getAttribute("data-id")!;
+    setSel({ kind: "plot", id, blok: blokOf(id) });
+  }
+
+  const qUpper = q.trim().toUpperCase();
+  const filtering = blok !== "Semua" || !!qUpper;
+
+  const { marks, matches } = useMemo(() => {
+    const marks: { x: number; y: number; fill: string; stroke: string; sw: number }[] = [];
+    let matches = 0;
+    RAW.forEach(([id, x, y]) => {
+      const on = (blok === "Semua" || blokOf(id) === blok) && (!qUpper || id.startsWith(qUpper));
+      if (on) matches++;
+      if (filtering && on) marks.push({ x, y, fill: "none", stroke: "#d6006c", sw: 0.8 });
+    });
+    if (sel?.kind === "plot") {
+      const selPlot = RAW.find((r) => r[0] === sel.id);
+      if (selPlot) marks.push({ x: selPlot[1], y: selPlot[2], fill: "#cbeeff", stroke: "#0088b0", sw: 1 });
+    }
+    return { marks, matches };
+  }, [blok, qUpper, filtering, sel]);
+
+  const counts = useMemo(
+    () => (["8", "9", "18", "19"] as const).map((b) => ({ label: "Blok " + b, n: RAW.filter((r) => blokOf(r[0]) === b).length })),
+    []
+  );
+
+  const selHousehold = sel?.kind === "plot" ? byUnit.get(sel.id) : undefined;
+
   return (
-    <div className="max-w-5xl mx-auto px-4 py-8">
-      <h1 className="text-lg font-semibold text-gray-900 mb-1">
-        Denah Kiwari Residence
-      </h1>
-      <p className="text-xs text-gray-400 mb-4">
-        Klik satu unit untuk lihat nama penghuni.
-      </p>
+    <div className="max-w-6xl mx-auto px-4 py-8">
+      <div className="flex flex-wrap items-end gap-4 mb-6">
+        <div className="flex-1 min-w-[280px]">
+          <h1 className="text-3xl sm:text-4xl font-semibold text-gray-900 leading-tight">
+            Denah Kiwari Residence
+          </h1>
+        </div>
+        <div className="text-sm text-gray-500">
+          93 rumah · Blok 8, 9, 18, 19 · Jalan Kiwari I–VII
+        </div>
+      </div>
 
-      <div className="overflow-x-auto -mx-4 px-4 pb-4">
-        <div
-          className="grid gap-0.5 relative"
-          style={{
-            gridTemplateColumns: `repeat(${MAX_COL}, minmax(1.9rem, 1fr))`,
-            gridTemplateRows: `repeat(${MAX_ROW}, minmax(1.1rem, auto))`,
-            minWidth: `${MAX_COL * 2.1}rem`,
-          }}
-        >
-          {GREEN_AREAS.map((g, i) => (
-            <div
-              key={`green-${i}`}
-              style={{
-                gridColumn: `${g.col} / span ${g.colspan}`,
-                gridRow: `${g.row + ROW_OFFSET} / span ${g.rowspan}`,
-                backgroundColor: "#92d050",
-              }}
-              className="rounded-sm"
+      <div className="flex flex-wrap gap-6">
+        <div className="flex-1 min-w-[320px]" style={{ flexBasis: 560 }}>
+          <div className="flex flex-wrap items-center gap-2 mb-4">
+            <input
+              type="search"
+              placeholder="Cari nomor rumah, mis. 19K"
+              value={q}
+              onChange={(e) => setQ(e.target.value)}
+              className="border border-gray-300 rounded-md px-3 py-1.5 text-sm w-44 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
             />
-          ))}
-
-          {UNIT_GEOMETRY.map((cell) => {
-            const h = byUnit.get(cell.unit_no);
-            return (
+            <div className="flex gap-1.5 flex-wrap">
+              {BLOKS.map((b) => (
+                <button
+                  key={b}
+                  type="button"
+                  onClick={() => setBlok(b)}
+                  className={`px-2.5 py-1 rounded-full text-xs font-medium ${
+                    blok === b
+                      ? "bg-blue-600 text-white"
+                      : "border border-blue-200 text-blue-700 hover:bg-blue-50"
+                  }`}
+                >
+                  {b === "Semua" ? "Semua" : "Blok " + b}
+                </button>
+              ))}
+            </div>
+            <div className="flex gap-1.5 ml-auto">
               <button
-                key={cell.unit_no}
                 type="button"
-                onClick={(e) => handleClick(cell.unit_no, e)}
-                style={{
-                  gridColumn: `${cell.col} / span ${cell.colspan}`,
-                  gridRow: `${cell.row + ROW_OFFSET} / span ${cell.rowspan}`,
-                }}
-                className={`border rounded text-[9px] sm:text-[10px] font-medium flex items-center justify-center px-0.5 transition cursor-pointer hover:brightness-95 ${
-                  tooltip?.unit_no === cell.unit_no
-                    ? "bg-blue-100 border-blue-400 text-blue-800 ring-2 ring-blue-500"
-                    : "bg-white border-gray-300 text-gray-700"
-                }`}
-                title={h ? `${cell.unit_no} — ${h.name}` : cell.unit_no}
+                onClick={() => zoom(1 / 0.7)}
+                className="w-8 h-8 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50"
               >
-                {cell.unit_no}
+                −
               </button>
-            );
-          })}
+              <button
+                type="button"
+                onClick={() => zoom(0.7)}
+                className="w-8 h-8 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50"
+              >
+                +
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setVb(INITIAL_VB);
+                  setSel(null);
+                  setQ("");
+                  setBlok("Semua");
+                }}
+                className="px-3 h-8 text-sm text-blue-600 hover:bg-blue-50 rounded-md"
+              >
+                Reset
+              </button>
+            </div>
+          </div>
 
-          {WALLS.map((w, i) => (
-            <div
-              key={`wall-${i}`}
-              style={{
-                gridColumn: `${w.col} / span ${w.colspan ?? 1}`,
-                gridRow: `${w.row + ROW_OFFSET} / span ${w.rowspan ?? 1}`,
-                backgroundColor: "#374151",
-                pointerEvents: "none",
-                ...(w.side === "left" && { justifySelf: "start", width: 5, height: "100%" }),
-                ...(w.side === "top" && { alignSelf: "start", height: 5, width: "100%" }),
-                ...(w.side === "bottom" && { alignSelf: "end", height: 5, width: "100%" }),
-              }}
-            />
-          ))}
+          <svg
+            ref={svgRef}
+            viewBox={vb.map((n) => Math.round(n * 10) / 10).join(" ")}
+            onMouseDown={handleMouseDown}
+            onMouseMove={handleMouseMove}
+            onMouseUp={handleMouseUp}
+            onMouseLeave={handleMouseUp}
+            className="w-full h-auto bg-white shadow-sm cursor-grab active:cursor-grabbing select-none rounded-sm"
+            style={{ aspectRatio: "396/292", touchAction: "none", display: "block" }}
+          >
+            <defs>
+              <pattern id="rth" width={4} height={4} patternUnits="userSpaceOnUse">
+                <rect width={4} height={4} fill="#e8f4e0" />
+                <circle cx={1} cy={1} r={0.55} fill="#8cc06a" />
+                <circle cx={3} cy={3} r={0.55} fill="#8cc06a" />
+              </pattern>
+              <pattern id="asphalt" width={3} height={3} patternUnits="userSpaceOnUse">
+                <rect width={3} height={3} fill="#eae7e7" />
+                <circle cx={1.5} cy={1.5} r={0.3} fill="#d7d3d3" />
+              </pattern>
+            </defs>
 
-          {tooltip && (
-            <div
-              style={{ left: tooltip.left, top: tooltip.top }}
-              className={`absolute z-10 bg-white border border-gray-200 rounded-lg shadow-lg px-3 py-2 text-xs whitespace-nowrap ${
-                tooltip.hAlign === "center"
-                  ? "-translate-x-1/2"
-                  : tooltip.hAlign === "right"
-                  ? "-translate-x-full"
-                  : ""
-              } ${tooltip.vAlign === "above" ? "-translate-y-full" : ""}`}
-            >
-              <p className="font-semibold text-gray-900">{tooltip.unit_no}</p>
-              <p className="text-gray-600">{tooltip.name}</p>
-              {tooltip.alt_names && (
-                <p className="text-gray-600">{tooltip.alt_names}</p>
+            <g>
+              <rect x={208} y={78} width={396} height={292} fill="#ffffff" />
+              <g fill="url(#asphalt)">
+                {ROAD_RECTS.map(([x, y, w, h], i) => (
+                  <rect key={i} x={x} y={y} width={w} height={h} />
+                ))}
+              </g>
+              <g fill="url(#rth)" stroke="#8cc06a" strokeWidth={0.3}>
+                {RTH_RECTS.map(([x, y, w, h, rx], i) => (
+                  <rect key={i} x={x} y={y} width={w} height={h} rx={rx} />
+                ))}
+              </g>
+            </g>
+
+            <g onClick={handlePick} style={{ cursor: "pointer" }}>
+              <g fill="#ffffff" stroke="#bab6b6" strokeWidth={0.25}>
+                {RAW.map(([id, x, y]) => {
+                  const h = byUnit.get(id);
+                  return (
+                    <rect
+                      key={id}
+                      data-id={id}
+                      x={x}
+                      y={y}
+                      width={16}
+                      height={9.8}
+                      className="transition-colors hover:fill-gray-50"
+                    >
+                      <title>{h ? `${id} — ${h.name}` : id}</title>
+                    </rect>
+                  );
+                })}
+              </g>
+              <g style={{ pointerEvents: "none" }}>
+                {marks.map((m, i) => (
+                  <rect key={i} x={m.x} y={m.y} width={16} height={9.8} fill={m.fill} stroke={m.stroke} strokeWidth={m.sw} />
+                ))}
+              </g>
+              <g textAnchor="middle" fontSize={5.2} fill="#201e1d" style={{ pointerEvents: "none", userSelect: "none" }}>
+                {RAW.map(([id, x, y]) => (
+                  <text key={id} x={x + 8} y={y + 7.1} fontSize={id.length >= 4 ? 4.4 : undefined}>
+                    {id}
+                  </text>
+                ))}
+              </g>
+            </g>
+
+            <g fontSize={4.4} fill="#201e1d" letterSpacing={0.6} textAnchor="middle" style={{ pointerEvents: "none" }}>
+              {ROAD_NAMES.map((r, i) => (
+                <text key={i} x={r.x} y={r.y} transform={r.rotate ? `rotate(${r.rotate.join(" ")})` : undefined}>
+                  {r.label}
+                </text>
+              ))}
+            </g>
+
+            <g>
+              {POI.map(([kind, name, cx, cy], i) => (
+                <g
+                  key={i}
+                  style={{ cursor: "pointer" }}
+                  onClick={() => setSel({ kind: "poi", name, poiKind: kind })}
+                >
+                  <circle cx={cx} cy={cy} r={4.6} fill="#ffffff" stroke="#201e1d" strokeWidth={0.35} />
+                  <g transform={`translate(${cx - 3.2}, ${cy - 3.2})`}>
+                    <PoiGlyph kind={kind} />
+                  </g>
+                </g>
+              ))}
+            </g>
+
+            <g stroke="#201e1d" strokeWidth={0.4} fill="none">
+              <path d="M570 92 V70 M566.4 74.2 L570 69.4 L573.6 74.2" />
+            </g>
+            <text x={570} y={99} textAnchor="middle" fontSize={5} fill="#201e1d">
+              U
+            </text>
+
+            <g stroke="#bab6b6" strokeWidth={0.3} fill="none">
+              <path d="M212 82 h6 M215 79 v6" />
+              <path d="M594 82 h6 M597 79 v6" />
+              <path d="M212 364 h6 M215 361 v6" />
+              <path d="M594 364 h6 M597 361 v6" />
+            </g>
+          </svg>
+
+          <p className="text-sm text-gray-500 mt-3">
+            Klik rumah atau ikon fasilitas · scroll untuk zoom · geser untuk menggeser peta
+          </p>
+        </div>
+
+        <aside className="flex-1 min-w-[260px] max-w-[340px]">
+          <div className="min-h-[150px] mb-8">
+            <div className="text-xs tracking-widest uppercase text-gray-500 mb-1">
+              {sel?.kind === "plot" ? "Blok " + sel.blok : sel?.kind === "poi" ? "Fasilitas" : "Rumah"}
+            </div>
+            <div className="font-semibold text-3xl text-gray-900 mb-2">
+              {sel?.kind === "plot" ? sel.id : sel?.kind === "poi" ? sel.name : "Pilih rumah"}
+            </div>
+            <div className="mb-3">
+              {sel?.kind === "plot" ? (
+                <span
+                  className={`inline-flex items-center text-xs font-medium px-2.5 py-1 rounded-full ${
+                    selHousehold ? "bg-blue-50 text-blue-700" : "bg-gray-100 text-gray-500"
+                  }`}
+                >
+                  {selHousehold ? selHousehold.name : "Belum ada data"}
+                </span>
+              ) : sel?.kind === "poi" ? (
+                <span className="inline-flex items-center text-xs font-medium px-2.5 py-1 rounded-full border border-blue-200 text-blue-700">
+                  Fasilitas lingkungan
+                </span>
+              ) : (
+                <span className="inline-flex items-center text-xs font-medium px-2.5 py-1 rounded-full bg-gray-100 text-gray-500">
+                  {matches} rumah tampil
+                </span>
               )}
             </div>
-          )}
-
-          {DECORATIVE.map((d) => (
-            <div
-              key={d.label}
-              style={{
-                gridColumn: `${d.col} / span ${d.colspan}`,
-                gridRow: `${d.row + ROW_OFFSET} / span ${d.rowspan}`,
-              }}
-              className="border border-dashed border-gray-200 rounded text-[8px] text-gray-300 flex items-center justify-center text-center px-0.5"
-            >
-              {d.label}
+            <div className="text-sm leading-relaxed text-gray-700">
+              {sel?.kind === "plot" ? (
+                selHousehold ? (
+                  <div>
+                    <p className="text-gray-500">Penghuni:</p>
+                    <ul>
+                      {[
+                        selHousehold.name,
+                        ...(selHousehold.alt_names
+                          ? selHousehold.alt_names.split(",").map((n) => n.trim()).filter(Boolean)
+                          : []),
+                      ].map((name, i) => (
+                        <li key={i} className="font-medium text-gray-900">
+                          {name}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                ) : (
+                  <p>Data penghuni untuk rumah {sel.id} belum tercatat di sistem.</p>
+                )
+              ) : sel?.kind === "poi" ? (
+                sel.poiKind === "pos" ? (
+                  securityGuards.length > 0 ? (
+                    <div>
+                      <p className="text-gray-500">Anggota security:</p>
+                      <ul>
+                        {securityGuards.map((g) => (
+                          <li key={g.name} className="font-medium text-gray-900">
+                            {g.name}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  ) : (
+                    <p>Data anggota security belum tercatat di sistem.</p>
+                  )
+                ) : (
+                  <p>{sel.name} berada pada titik yang ditandai di denah.</p>
+                )
+              ) : (
+                <p>
+                  Klik salah satu rumah pada denah untuk melihat nomor, blok, dan penghuninya. Gunakan
+                  pencarian atau filter blok untuk menemukan alamat tertentu.
+                </p>
+              )}
             </div>
-          ))}
-        </div>
+            {sel && (
+              <div className="mt-4">
+                <button
+                  type="button"
+                  onClick={() => setSel(null)}
+                  className="text-sm text-blue-600 hover:underline"
+                >
+                  Tutup
+                </button>
+              </div>
+            )}
+          </div>
+
+          <div className="mb-8">
+            <div className="text-xs tracking-widest uppercase text-gray-500 mb-3">Legenda</div>
+            <div className="flex flex-col gap-2 text-sm">
+              {LEGEND.map((l) => (
+                <div key={l.kind} className="flex items-center gap-3">
+                  <svg viewBox="0 0 8 8" width={18} height={18}>
+                    <PoiGlyph kind={l.kind} />
+                  </svg>
+                  {l.label}
+                </div>
+              ))}
+              <div className="flex items-center gap-3">
+                <span className="w-5 h-3.5 inline-block" style={{ background: "#e8f4e0", border: "1px solid #8cc06a" }} />
+                RTH / taman
+              </div>
+            </div>
+          </div>
+
+          <div>
+            <div className="text-xs tracking-widest uppercase text-gray-500 mb-3">Jumlah rumah</div>
+            <table className="w-full text-sm">
+              <tbody>
+                {counts.map((r) => (
+                  <tr key={r.label} className="border-b border-gray-100">
+                    <td className="py-1.5 text-gray-700">{r.label}</td>
+                    <td className="py-1.5 text-right text-gray-900">{r.n}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </aside>
       </div>
     </div>
   );
