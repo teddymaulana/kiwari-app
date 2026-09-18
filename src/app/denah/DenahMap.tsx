@@ -31,21 +31,23 @@ const RAW: [string, number, number][] = [
   ["8A", 386.3, 338.9], ["8B", 402.3, 338.9], ["8C", 418, 338.9], ["8D", 433.5, 338.9], ["8E", 449.6, 338.9],
 ];
 
-type PoiKind = "cctv" | "play" | "pos" | "gardu" | "air" | "stop" | "arah";
+type PoiKind = "cctv" | "play" | "pos" | "gardu" | "gate" | "stop" | "arah";
 
-const POI: [PoiKind, string, number, number][] = [
+// Optional 5th element is a glyph variant — only "arah" reads it, to tell a
+// single-direction arrow apart from a left/right T-junction sign.
+const POI: [PoiKind, string, number, number, string?][] = [
   ["cctv", "CCTV lingkungan", 253.7, 229.2],
   ["cctv", "CCTV lingkungan", 399.6, 218.9],
   ["cctv", "CCTV lingkungan", 371.9, 328.7],
   ["play", "Playground", 458.3, 244.2],
   ["pos", "Pos security", 381.1, 353.5],
   ["gardu", "Gardu listrik", 230.6, 104.3],
-  ["air", "Saluran air / selokan besar", 475.2, 118.6],
+  ["gate", "Gerbang tertutup", 475.2, 118.6],
   ["stop", "Dilarang melintas", 281.4, 192],
   ["stop", "Dilarang melintas", 449.5, 219.1],
   ["stop", "Dilarang melintas", 466.9, 105.8],
   ["arah", "Arah lalu lintas", 282.2, 176.9],
-  ["arah", "Arah lalu lintas", 407.6, 231.2],
+  ["arah", "Arah kiri / kanan", 407.6, 231.2, "tjunction"],
   ["arah", "Arah lalu lintas", 464.8, 223.7],
 ];
 
@@ -118,7 +120,7 @@ function clampVb(v: [number, number, number, number]): [number, number, number, 
 }
 
 // Small facility glyphs, each drawn in an 8x8 box.
-function PoiGlyph({ kind }: { kind: PoiKind }) {
+function PoiGlyph({ kind, variant }: { kind: PoiKind; variant?: string }) {
   switch (kind) {
     case "cctv":
       return (
@@ -146,11 +148,18 @@ function PoiGlyph({ kind }: { kind: PoiKind }) {
       );
     case "gardu":
       return <path d="M4.6 1.2 L2.2 4.5 h1.5 L3.2 6.9 L5.8 3.4 H4.2 Z" fill="#006786" />;
-    case "air":
+    case "gate":
+      // Closed gate: two posts with an X-braced panel between them.
       return (
         <>
-          <path d="M1 3 C2 2.2 3 3.8 4 3 C5 2.2 6 3.8 7 3" stroke="#006786" strokeWidth={0.6} fill="none" strokeLinecap="round" />
-          <path d="M1 5 C2 4.2 3 5.8 4 5 C5 4.2 6 5.8 7 5" stroke="#006786" strokeWidth={0.6} fill="none" strokeLinecap="round" />
+          <path d="M1.5 1.4 V6.6 M6.5 1.4 V6.6" stroke="#006786" strokeWidth={0.6} strokeLinecap="round" />
+          <path
+            d="M1.5 2.1 H6.5 M1.5 2.1 L6.5 6.1 M6.5 2.1 L1.5 6.1"
+            stroke="#006786"
+            strokeWidth={0.5}
+            fill="none"
+            strokeLinecap="round"
+          />
         </>
       );
     case "stop":
@@ -161,15 +170,35 @@ function PoiGlyph({ kind }: { kind: PoiKind }) {
         </>
       );
     case "arah":
-      return (
-        <path
-          d="M1.4 4 h4.2 M4.2 2.4 L5.9 4 L4.2 5.6"
-          stroke="#006786"
-          strokeWidth={0.7}
-          fill="none"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        />
+      // Indonesian mandatory-direction road sign (rambu perintah): a blue
+      // disc with a white rim, rather than a bare arrow — reads as an
+      // actual traffic sign at marker scale. The "tjunction" variant is a
+      // T-shape (stem + crossbar with arrowheads both ends) for a spot
+      // where traffic can only turn left or right, not go straight.
+      return variant === "tjunction" ? (
+        <>
+          <circle cx={4} cy={4} r={3.3} fill="#1d4ed8" stroke="#ffffff" strokeWidth={0.5} />
+          <path
+            d="M4 3.3 V6.2 M1.7 3.3 H6.3 M2.7 2.2 L1.7 3.3 L2.7 4.4 M5.3 2.2 L6.3 3.3 L5.3 4.4"
+            stroke="#ffffff"
+            strokeWidth={0.7}
+            fill="none"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
+        </>
+      ) : (
+        <>
+          <circle cx={4} cy={4} r={3.3} fill="#1d4ed8" stroke="#ffffff" strokeWidth={0.5} />
+          <path
+            d="M1.9 4 H5.6 M4 2.3 L5.7 4 L4 5.7"
+            stroke="#ffffff"
+            strokeWidth={0.8}
+            fill="none"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
+        </>
       );
   }
 }
@@ -179,7 +208,7 @@ const LEGEND: { kind: PoiKind; label: string }[] = [
   { kind: "play", label: "Playground" },
   { kind: "pos", label: "Pos security" },
   { kind: "gardu", label: "Gardu listrik" },
-  { kind: "air", label: "Saluran air / selokan besar" },
+  { kind: "gate", label: "Gerbang tertutup" },
   { kind: "stop", label: "Dilarang melintas" },
   { kind: "arah", label: "Arah lalu lintas" },
 ];
@@ -267,7 +296,14 @@ export default function DenahMap({
     const marks: { x: number; y: number; fill: string; stroke: string; sw: number }[] = [];
     let matches = 0;
     RAW.forEach(([id, x, y]) => {
-      const on = (blok === "Semua" || blokOf(id) === blok) && (!qUpper || id.startsWith(qUpper));
+      const h = byUnit.get(id);
+      const nameMatch =
+        !!h &&
+        (h.name.toUpperCase().includes(qUpper) ||
+          (h.alt_names?.toUpperCase().includes(qUpper) ?? false));
+      const on =
+        (blok === "Semua" || blokOf(id) === blok) &&
+        (!qUpper || id.startsWith(qUpper) || nameMatch);
       if (on) matches++;
       if (filtering && on) marks.push({ x, y, fill: "none", stroke: "#d6006c", sw: 0.8 });
     });
@@ -276,7 +312,7 @@ export default function DenahMap({
       if (selPlot) marks.push({ x: selPlot[1], y: selPlot[2], fill: "#cbeeff", stroke: "#0088b0", sw: 1 });
     }
     return { marks, matches };
-  }, [blok, qUpper, filtering, sel]);
+  }, [blok, qUpper, filtering, sel, byUnit]);
 
   const counts = useMemo(
     () => (["8", "9", "18", "19"] as const).map((b) => ({ label: "Blok " + b, n: RAW.filter((r) => blokOf(r[0]) === b).length })),
@@ -303,7 +339,7 @@ export default function DenahMap({
           <div className="flex flex-wrap items-center gap-2 mb-4">
             <input
               type="search"
-              placeholder="Cari nomor rumah, mis. 19K"
+              placeholder="Cari nomor rumah atau nama, mis. 19K / Budi"
               value={q}
               onChange={(e) => setQ(e.target.value)}
               className="border border-gray-300 rounded-md px-3 py-1.5 text-sm w-44 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
@@ -313,7 +349,10 @@ export default function DenahMap({
                 <button
                   key={b}
                   type="button"
-                  onClick={() => setBlok(b)}
+                  onClick={() => {
+                    setBlok(b);
+                    setQ("");
+                  }}
                   className={`px-2.5 py-1 rounded-full text-xs font-medium ${
                     blok === b
                       ? "bg-blue-600 text-white"
@@ -432,15 +471,15 @@ export default function DenahMap({
             </g>
 
             <g>
-              {POI.map(([kind, name, cx, cy], i) => (
+              {POI.map(([kind, name, cx, cy, variant], i) => (
                 <g
                   key={i}
                   style={{ cursor: "pointer" }}
                   onClick={() => setSel({ kind: "poi", name, poiKind: kind })}
                 >
-                  <circle cx={cx} cy={cy} r={4.6} fill="#ffffff" stroke="#201e1d" strokeWidth={0.35} />
+                  <circle cx={cx} cy={cy} r={4.6} fill="#ffffff" />
                   <g transform={`translate(${cx - 3.2}, ${cy - 3.2})`}>
-                    <PoiGlyph kind={kind} />
+                    <PoiGlyph kind={kind} variant={variant} />
                   </g>
                 </g>
               ))}
