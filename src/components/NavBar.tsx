@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useLinkStatus } from "next/link";
 import { usePathname } from "next/navigation";
+import { useEffect, useRef, useState } from "react";
 import { signOut } from "@/app/login/actions";
 import { setViewAsWarga, setViewAsPengurus } from "@/lib/viewAs";
 import type { Role } from "@/lib/auth";
@@ -22,6 +23,23 @@ const links = [
   { href: "/humas", label: "Humas", pengurusOnly: true },
   { href: "/settings", label: "Pengaturan", pengurusOnly: true },
 ];
+
+function ChevronIcon({ direction }: { direction: "left" | "right" }) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={2.5}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className="h-3.5 w-3.5"
+      aria-hidden="true"
+    >
+      <path d={direction === "left" ? "M15 18l-6-6 6-6" : "M9 18l6-6-6-6"} />
+    </svg>
+  );
+}
 
 function NavLinkPendingHint() {
   const { pending } = useLinkStatus();
@@ -46,6 +64,33 @@ export default function NavBar({
 }) {
   const pathname = usePathname();
   const visibleLinks = links.filter((l) => !l.pengurusOnly || role === "pengurus");
+
+  // Hiding the scrollbar on the tab row (below) removes the only native
+  // hint that it scrolls — these edge fades replace it, only showing on
+  // whichever side still has more tabs off-screen (so they disappear once
+  // you've scrolled all the way, like Gmail/Slack's tab bars).
+  const tabsRef = useRef<HTMLElement>(null);
+  const [canScrollLeft, setCanScrollLeft] = useState(false);
+  const [canScrollRight, setCanScrollRight] = useState(false);
+
+  useEffect(() => {
+    const el = tabsRef.current;
+    if (!el) return;
+    function update() {
+      if (!el) return;
+      setCanScrollLeft(el.scrollLeft > 4);
+      setCanScrollRight(el.scrollLeft + el.clientWidth < el.scrollWidth - 4);
+    }
+    update();
+    el.addEventListener("scroll", update, { passive: true });
+    window.addEventListener("resize", update);
+    return () => {
+      el.removeEventListener("scroll", update);
+      window.removeEventListener("resize", update);
+    };
+    // Re-measure when the tab list itself changes (view-as toggle swaps
+    // how many links are visible, which changes whether it overflows).
+  }, [role, visibleLinks.length]);
 
   return (
     <header className="border-b border-gray-200 bg-white">
@@ -122,24 +167,58 @@ export default function NavBar({
           </form>
         </div>
       </div>
-      <div className="max-w-5xl mx-auto px-4">
+      <div className="max-w-5xl mx-auto px-4 border-t border-gray-100 relative">
         <nav
-          className={`flex gap-4 text-sm text-gray-600 pb-3 overflow-x-auto ${
+          ref={tabsRef}
+          className={`flex gap-1 text-sm overflow-x-auto [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden ${
             role === "pengurus" ? "" : "sm:hidden"
           }`}
         >
-          {visibleLinks.map((l) => (
-            <Link
-              key={l.href}
-              href={l.href}
-              className={`hover:text-blue-600 transition shrink-0 whitespace-nowrap ${
-                pathname === l.href ? "font-semibold text-gray-900" : ""
-              }`}
-            >
-              {l.label} <NavLinkPendingHint />
-            </Link>
-          ))}
+          {visibleLinks.map((l) => {
+            const active = pathname === l.href;
+            return (
+              <Link
+                key={l.href}
+                href={l.href}
+                className={`shrink-0 whitespace-nowrap border-b-2 px-3 py-2.5 transition ${
+                  active
+                    ? "border-blue-600 font-medium text-blue-700"
+                    : "border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-800"
+                }`}
+              >
+                {l.label} <NavLinkPendingHint />
+              </Link>
+            );
+          })}
         </nav>
+        {canScrollLeft && (
+          <button
+            type="button"
+            aria-label="Scroll menu ke kiri"
+            onClick={() =>
+              tabsRef.current?.scrollBy({ left: -160, behavior: "smooth" })
+            }
+            className="absolute inset-y-0 left-4 flex w-10 items-center justify-start bg-gradient-to-r from-white via-white to-transparent"
+          >
+            <span className="flex h-6 w-6 items-center justify-center rounded-full border border-gray-300 bg-white text-gray-600 shadow-sm transition hover:border-gray-400 hover:text-gray-900">
+              <ChevronIcon direction="left" />
+            </span>
+          </button>
+        )}
+        {canScrollRight && (
+          <button
+            type="button"
+            aria-label="Scroll menu ke kanan"
+            onClick={() =>
+              tabsRef.current?.scrollBy({ left: 160, behavior: "smooth" })
+            }
+            className="absolute inset-y-0 right-4 flex w-10 items-center justify-end bg-gradient-to-l from-white via-white to-transparent"
+          >
+            <span className="flex h-6 w-6 items-center justify-center rounded-full border border-gray-300 bg-white text-gray-600 shadow-sm transition hover:border-gray-400 hover:text-gray-900">
+              <ChevronIcon direction="right" />
+            </span>
+          </button>
+        )}
       </div>
     </header>
   );
