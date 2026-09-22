@@ -20,6 +20,11 @@ import HouseholdSelect from "@/components/HouseholdSelect";
 import SubmitButton from "@/components/SubmitButton";
 import ResultPopup from "@/components/ResultPopup";
 
+// sendWeeklyReportNow (./actions.ts) can wait up to TIMEOUT_MS (wablas.ts,
+// currently 45s) for a slow Wablas reply — see the same comment on
+// humas/page.tsx for why this is needed alongside that timeout.
+export const maxDuration = 60;
+
 export default async function SettingsPage({
   searchParams,
 }: {

@@ -9,6 +9,12 @@ import { sendWeeklyReport } from "@/lib/weeklyReport";
 // The actual message/recipient/send logic lives in src/lib/weeklyReport.ts
 // so it's identical to the manual "Kirim Laporan Mingguan" button on
 // /settings (restricted to WEEKLY_REPORT_SENDERS).
+//
+// Can wait up to TIMEOUT_MS (wablas.ts, currently 45s) for a slow Wablas
+// reply — this is a route handler, not a Server Action, so maxDuration is
+// set directly here rather than on a page (contrast settings/page.tsx).
+export const maxDuration = 60;
+
 export async function GET(request: NextRequest) {
   const cronSecret = process.env.CRON_SECRET;
   const authHeader = request.headers.get("authorization");

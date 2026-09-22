@@ -22,7 +22,16 @@ import type { WhatsAppResult } from "./whatsappTypes";
 // reply) leaves the request pending forever — fetch has no default
 // timeout — which is exactly what makes "Kirim Info Login" look stuck on
 // "Mengirim..." indefinitely instead of eventually failing with a reason.
-const TIMEOUT_MS = 20_000;
+//
+// Wablas has been observed replying well past 20s while still actually
+// sending the message — the old 20s cutoff was declaring "failed" for
+// sends that went through fine a few seconds later. Any call site that
+// awaits this (a Server Action) needs `export const maxDuration` set on
+// its page to at least a few seconds above this, or Vercel kills the
+// function first with a generic error instead of this one — see
+// humas/page.tsx for the pattern (already proven at 60s for a slow
+// operation by api/extract-receipt/route.ts).
+const TIMEOUT_MS = 45_000;
 
 // The resident WhatsApp group's JID (from the Wablas dashboard). Sent via
 // sendViaWablas(..., true) — used by the weekly report and the manual
@@ -70,8 +79,13 @@ export async function sendViaWablas(
     const timedOut = err instanceof Error && err.name === "TimeoutError";
     return {
       success: false,
+      // Worded as "might have still gone through" rather than a flat
+      // failure — Wablas is known to sometimes reply this slowly while
+      // having already sent the message (see the TIMEOUT_MS comment
+      // above). Genuinely wrong credentials/target fail fast with a
+      // real HTTP response instead of hitting this branch at all.
       reason: timedOut
-        ? `Wablas tidak merespons dalam ${TIMEOUT_MS / 1000} detik`
+        ? `Wablas belum merespons dalam ${TIMEOUT_MS / 1000} detik — pesan mungkin tetap terkirim walau muncul gagal di sini, cek Percakapan WhatsApp atau dashboard Wablas untuk pastikan`
         : `Gagal terhubung ke Wablas: ${err instanceof Error ? err.message : String(err)}`,
       detail: "",
     };

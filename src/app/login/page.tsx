@@ -7,6 +7,13 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import type { Household, Settings } from "@/lib/types";
 import { compareUnitNo } from "@/lib/types";
 
+// The public Bayar IPL claim (./actions.ts, via createPendingPaymentClaim
+// -> sendViaWablas) can wait up to TIMEOUT_MS (wablas.ts, currently 45s)
+// for a slow Wablas reply while notifying 18G of the new claim — see the
+// same comment on humas/page.tsx for why this is needed alongside that
+// timeout.
+export const maxDuration = 60;
+
 export default async function LoginPage({
   searchParams,
 }: {

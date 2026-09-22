@@ -8,6 +8,12 @@ import { WARGA_GROUP_ID } from "@/lib/wablas";
 import WhatsAppSendForm from "@/components/WhatsAppSendForm";
 import ResultPopup from "@/components/ResultPopup";
 
+// sendTestWhatsApp (./actions.ts) can wait up to TIMEOUT_MS (wablas.ts,
+// currently 45s) for a slow Wablas reply — without this, Vercel's default
+// function limit can kill the Server Action first with a generic error
+// instead of that timeout's own graceful message.
+export const maxDuration = 60;
+
 // Best-effort "who is this" label for a wa_messages.phone value — matches
 // it against every household's phone/phone_pasangan (same numbers
 // WargaPhoneSelect offers), falling back to the raw number when it's
