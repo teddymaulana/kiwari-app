@@ -4,14 +4,12 @@ import {
   getCurrentUser,
   CASH_TRANSFER_RECORDERS,
   OPENING_BALANCE_EDITORS,
-  WHATSAPP_TEST_SENDERS,
   WHATSAPP_PROVIDER_MANAGERS,
   WEEKLY_REPORT_SENDERS,
 } from "@/lib/auth";
 import {
   updateOpeningBalance,
   createWargaUser,
-  sendTestWhatsApp,
   recordCashTransfer,
   setWhatsAppProvider,
   sendWeeklyReportNow,
@@ -20,6 +18,7 @@ import type { Household, Settings } from "@/lib/types";
 import { formatRupiah, compareUnitNo } from "@/lib/types";
 import HouseholdSelect from "@/components/HouseholdSelect";
 import SubmitButton from "@/components/SubmitButton";
+import ResultPopup from "@/components/ResultPopup";
 
 export default async function SettingsPage({
   searchParams,
@@ -29,6 +28,7 @@ export default async function SettingsPage({
     success?: string;
     wa_error?: string;
     wa_success?: string;
+    wa_form?: string;
     kas_error?: string;
     kas_success?: string;
     balance_error?: string;
@@ -43,6 +43,7 @@ export default async function SettingsPage({
     success,
     wa_error,
     wa_success,
+    wa_form,
     kas_error,
     kas_success,
     balance_error,
@@ -261,57 +262,6 @@ export default async function SettingsPage({
         </div>
       )}
 
-      {WHATSAPP_TEST_SENDERS.includes(user.email) && (
-        <div>
-          <h2 className="text-sm font-medium text-gray-700 mb-1">
-            Kirim Pesan WhatsApp
-          </h2>
-          <p className="text-xs text-gray-400 mb-4">
-            Uji coba integrasi WhatsApp — kirim pesan manual ke satu nomor,
-            lewat gateway yang sedang aktif di atas. Butuh{" "}
-            <code>FONNTE_TOKEN</code> atau <code>WABLAS_TOKEN</code> +{" "}
-            <code>WABLAS_BASE_URL</code> di environment variables (lihat
-            README).
-          </p>
-
-          {wa_error && (
-            <div className="mb-4 text-sm text-red-700 bg-red-50 border border-red-200 rounded px-3 py-2">
-              {wa_error}
-            </div>
-          )}
-          {wa_success && (
-            <div className="mb-4 text-sm text-green-700 bg-green-50 border border-green-200 rounded px-3 py-2">
-              Pesan berhasil dikirim.
-            </div>
-          )}
-
-          <form
-            action={sendTestWhatsApp}
-            className="bg-white border border-gray-200 rounded-lg p-6 space-y-3"
-          >
-            <input
-              name="phone"
-              placeholder="No. HP (mis. 08123456789)"
-              required
-              className="w-full rounded border border-gray-300 px-3 py-2 text-sm"
-            />
-            <textarea
-              name="message"
-              placeholder="Pesan"
-              required
-              rows={3}
-              className="w-full rounded border border-gray-300 px-3 py-2 text-sm"
-            />
-            <SubmitButton
-              pendingText="Mengirim..."
-              className="bg-blue-600 text-white rounded px-4 py-2 text-sm font-medium hover:bg-blue-700 transition"
-            >
-              Kirim
-            </SubmitButton>
-          </form>
-        </div>
-      )}
-
       {WEEKLY_REPORT_SENDERS.includes(user.email) && (
         <div>
           <h2 className="text-sm font-medium text-gray-700 mb-1">
@@ -323,15 +273,11 @@ export default async function SettingsPage({
             ini untuk kirim manual kapan saja.
           </p>
 
-          {wa_error && (
-            <div className="mb-4 text-sm text-red-700 bg-red-50 border border-red-200 rounded px-3 py-2">
-              {wa_error}
-            </div>
+          {wa_form === "weekly" && wa_error && (
+            <ResultPopup kind="error" message={wa_error} />
           )}
-          {wa_success && (
-            <div className="mb-4 text-sm text-green-700 bg-green-50 border border-green-200 rounded px-3 py-2">
-              Laporan berhasil dikirim.
-            </div>
+          {wa_form === "weekly" && wa_success && (
+            <ResultPopup kind="success" message="Laporan berhasil dikirim." />
           )}
 
           <form

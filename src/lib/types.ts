@@ -99,6 +99,40 @@ export type CashTransfer = {
   created_at: string;
 };
 
+// Two-way WhatsApp conversation log for the Percakapan panel on /humas —
+// "out" rows come from Kirim Pesan WhatsApp (humas/actions.ts), "in" rows
+// from Wablas's incoming-message webhook (api/webhooks/wablas/route.ts).
+// See the wa_messages comment in supabase/schema.sql for the full story.
+export type WaMessage = {
+  id: string;
+  direction: "in" | "out";
+  phone: string;
+  is_group: boolean;
+  message: string | null;
+  message_type: string | null;
+  wablas_message_id: string | null;
+  sent_by: string | null;
+  // Real delivery status from Wablas's tracking webhook (pending/sent/
+  // delivered/read/...) — null until that webhook matches this row, or
+  // for "in" rows where it doesn't apply. See WA_STATUS_LABELS.
+  status: string | null;
+  created_at: string;
+};
+
+// Wablas's tracking webhook uses its own status vocabulary — mapped to
+// Indonesian for the Percakapan panel. An unrecognized value (a status
+// Wablas added since this was written) falls back to showing it as-is
+// rather than hiding it.
+export const WA_STATUS_LABELS: Record<string, string> = {
+  pending: "Menunggu",
+  sent: "Terkirim",
+  delivered: "Diterima",
+  read: "Dibaca",
+  cancel: "Dibatalkan",
+  reject: "Ditolak",
+  failed: "Gagal",
+};
+
 // Loans (hutang) the kas has extended to personnel, and their
 // repayments — 'pinjam' increases what they owe, 'bayar' reduces it.
 export type PersonnelLoan = {

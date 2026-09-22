@@ -623,8 +623,53 @@ drop policy if exists "authenticated read ipl_exemptions" on ipl_exemptions;
 create policy "authenticated read ipl_exemptions" on ipl_exemptions
   for select to authenticated using (
     is_pengurus() or household_id = my_household_id()
-  );
-
 drop policy if exists "pengurus write ipl_exemptions" on ipl_exemptions;
 create policy "pengurus write ipl_exemptions" on ipl_exemptions
+  for all to authenticated using (is_pengurus()) with check (is_pengurus());
+
+-- Full two-way WhatsApp conversation log for the Percakapan panel on
+-- /humas. "out" rows are written when Kirim Pesan WhatsApp actually sends
+-- (see humas/actions.ts); "in" rows arrive via Wablas's own incoming-
+-- message webhook (api/webhooks/wablas/route.ts), which you configure on
+-- the Wablas dashboard under Device > Setting > Webhook Receive, pointed
+-- at that route's URL with ?token=<WABLAS_WEBHOOK_SECRET>. Only covers
+-- messages that actually go through Wablas specifically — a send routed
+-- through Fonnte (see Layanan WhatsApp) never reaches this table on the
+-- "out" side, and can never get an "in" reply captured either, since
+-- that's a different WhatsApp number/account entirely. Wablas's docs
+-- don't spell out this webhook's exact field names, so `raw` always keeps
+-- the full payload — a wrong guess in the parsed columns is fixable later
+-- by reparsing `raw` instead of having silently lost the data.
+create table if not exists wa_messages (
+  id uuid primary key default gen_random_uuid(),
+  direction text not null check (direction in ('in', 'out')),
+  phone text not null,             -- sender (in) / recipient (out); group JID for group messages
+  is_group boolean not null default false,
+  message text,
+  message_type text,               -- text/image/document/... — best-effort from the payload
+  wablas_message_id text,
+  sent_by text,                    -- actor_email, "out" rows only
+  raw jsonb,
+  created_at timestamptz not null default now()
+);
+
+-- Delivery status for "out" rows (pending/sent/delivered/read/failed, per
+-- Wablas's tracking webhook — api/webhooks/wablas-tracking/route.ts,
+-- configured separately from the incoming-message webhook above, via
+-- "Change Device Tracking URL" on the Wablas dashboard/API). Null means
+-- either an "in" row (status doesn't apply) or an "out" row sent before
+-- this column existed / whose id the tracking webhook hasn't matched yet
+-- — the UI falls back to a generic "Terkirim" in that case.
+alter table wa_messages add column if not exists status text;
+
+create index if not exists wa_messages_phone_idx on wa_messages (phone);
+create index if not exists wa_messages_created_idx on wa_messages (created_at);
+create index if not exists wa_messages_wablas_message_id_idx
+  on wa_messages (wablas_message_id) where wablas_message_id is not null;
+
+alter table wa_messages enable row level security;
+
+-- Internal, pengurus-only — same treatment as activity_log.
+drop policy if exists "pengurus all wa_messages" on wa_messages;
+create policy "pengurus all wa_messages" on wa_messages
   for all to authenticated using (is_pengurus()) with check (is_pengurus());

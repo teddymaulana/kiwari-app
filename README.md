@@ -108,6 +108,21 @@ cp .env.local.example .env.local
 # tetap), isi juga WABLAS_SECRET_KEY (nilai terpisah di halaman yang sama
 # dengan token) — Wablas menerima permintaan dari IP manapun kalau secret
 # key ini disertakan.
+#
+# opsional: isi WABLAS_WEBHOOK_SECRET (string acak bebas) untuk fitur
+# "Percakapan WhatsApp" di halaman Humas. Dipakai oleh dua webhook Wablas
+# yang beda, tiap satu diisi terpisah di dashboard Wablas:
+#   1. Pesan masuk (balasan warga) — Device > Setting > Webhook Receive,
+#      isi https://<domain-kamu>/api/webhooks/wablas?token=<isi
+#      WABLAS_WEBHOOK_SECRET di sini>
+#   2. Status kirim (terkirim/diterima/dibaca) — field "Tracking URL" di
+#      Device Setting (atau lewat API POST /api/device/change-tracking-url
+#      kalau tidak ada di dashboard), isi
+#      https://<domain-kamu>/api/webhooks/wablas-tracking?token=<token yang
+#      sama>
+# Tanpa ini, pesan yang dikirim dari Kiwari tetap tercatat sebagai
+# "Terkirim" generik — hanya status real-time dan balasan masuk yang
+# kosong.
 npm run dev
 ```
 

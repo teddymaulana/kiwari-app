@@ -19,6 +19,7 @@ const links = [
   { href: "/expenses", label: "Pengeluaran", pengurusOnly: true },
   { href: "/piutang", label: "Piutang", pengurusOnly: true },
   { href: "/security", label: "Keamanan", pengurusOnly: true },
+  { href: "/humas", label: "Humas", pengurusOnly: true },
   { href: "/settings", label: "Pengaturan", pengurusOnly: true },
 ];
 

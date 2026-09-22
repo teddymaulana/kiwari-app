@@ -8,11 +8,9 @@ import {
   getCurrentUser,
   CASH_TRANSFER_RECORDERS,
   OPENING_BALANCE_EDITORS,
-  WHATSAPP_TEST_SENDERS,
   WHATSAPP_PROVIDER_MANAGERS,
   WEEKLY_REPORT_SENDERS,
 } from "@/lib/auth";
-import { sendWhatsAppMessage } from "@/lib/whatsapp";
 import { sendWeeklyReport } from "@/lib/weeklyReport";
 
 // Kas balance carried over from before this app existed — not income, so
@@ -148,41 +146,6 @@ export async function setWhatsAppProvider(formData: FormData) {
   revalidatePath("/settings");
 }
 
-// Manual WhatsApp send, for testing the Fonnte integration before it's
-// wired into automatic events (e.g. payment confirmed).
-export async function sendTestWhatsApp(formData: FormData) {
-  const user = await getCurrentUser();
-  if (user?.role !== "pengurus") redirect("/dashboard");
-  if (!WHATSAPP_TEST_SENDERS.includes(user.email)) redirect("/settings");
-
-  const phone = String(formData.get("phone") || "").trim();
-  const message = String(formData.get("message") || "").trim();
-
-  if (!phone || !message) {
-    redirect(
-      "/settings?wa_error=" +
-        encodeURIComponent("No. HP dan pesan wajib diisi")
-    );
-  }
-
-  const result = await sendWhatsAppMessage(phone, message);
-
-  const supabase = await createClient();
-  await supabase.from("activity_log").insert({
-    actor_email: user.email,
-    action: result.success ? "whatsapp.send" : "whatsapp.send_failed",
-    detail: result.success
-      ? `${phone} - ${message} - ${result.detail}`
-      : `${phone} - ${result.reason} - ${result.detail}`,
-  });
-
-  if (!result.success) {
-    redirect(`/settings?wa_error=${encodeURIComponent(result.reason)}`);
-  }
-
-  redirect("/settings?wa_success=1");
-}
-
 // Manual trigger for the weekly Kas/Laporan report — same message and
 // recipient (18G, as a test) as the Sunday cron job in
 // api/cron/weekly-report/route.ts, both backed by sendWeeklyReport.
@@ -194,10 +157,10 @@ export async function sendWeeklyReportNow() {
   const result = await sendWeeklyReport(user.email);
 
   if (!result.success) {
-    redirect(`/settings?wa_error=${encodeURIComponent(result.reason)}`);
+    redirect(`/settings?wa_form=weekly&wa_error=${encodeURIComponent(result.reason)}`);
   }
 
-  redirect("/settings?wa_success=1");
+  redirect("/settings?wa_form=weekly&wa_success=1");
 }
 
 // Moves money between the two kas — e.g. the treasurer withdraws cash from

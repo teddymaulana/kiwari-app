@@ -24,9 +24,15 @@ import type { WhatsAppResult } from "./whatsappTypes";
 // "Mengirim..." indefinitely instead of eventually failing with a reason.
 const TIMEOUT_MS = 20_000;
 
+// The resident WhatsApp group's JID (from the Wablas dashboard). Sent via
+// sendViaWablas(..., true) — used by the weekly report and the manual
+// "Kirim Pesan WhatsApp" form on /settings.
+export const WARGA_GROUP_ID = "120363428671682296";
+
 export async function sendViaWablas(
   target: string,
-  message: string
+  message: string,
+  isGroup = false
 ): Promise<WhatsAppResult> {
   const token = process.env.WABLAS_TOKEN;
   const secretKey = process.env.WABLAS_SECRET_KEY;
@@ -50,7 +56,14 @@ export async function sendViaWablas(
         Authorization: authorization,
         "Content-Type": "application/json",
       },
-      body: JSON.stringify({ phone: target, message }),
+      // Wablas only treats "phone" as a group ID when isGroup is set;
+      // without it the JID is handled as a phone number and the message
+      // never reaches the group (nor shows up in the Wablas message log).
+      body: JSON.stringify({
+        phone: target,
+        message,
+        ...(isGroup ? { isGroup: true } : {}),
+      }),
       signal: AbortSignal.timeout(TIMEOUT_MS),
     });
   } catch (err) {
@@ -82,5 +95,17 @@ export async function sendViaWablas(
     };
   }
 
-  return { success: true, detail: rawBody };
+  return { success: true, detail: rawBody, messageId: extractMessageId(data) };
+}
+
+// Best-effort — Wablas's send-message response shape for the message id
+// isn't precisely documented, so this tries a few plausible spots rather
+// than committing to one. Returns undefined (never throws) on a miss;
+// `detail` above always keeps the full raw response as a fallback.
+function extractMessageId(data: Record<string, unknown>): string | undefined {
+  const dataField = data.data;
+  const first = Array.isArray(dataField) ? dataField[0] : dataField;
+  const id =
+    (first as Record<string, unknown> | undefined)?.id ?? data.id ?? undefined;
+  return typeof id === "string" ? id : undefined;
 }

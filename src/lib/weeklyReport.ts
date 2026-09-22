@@ -1,14 +1,11 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getWhatsAppProvider } from "@/lib/whatsapp";
-import { sendViaWablas } from "@/lib/wablas";
+import { sendViaWablas, WARGA_GROUP_ID } from "@/lib/wablas";
 import { getKasSaatIni, getMonthlyReport, getUnpaidUnits } from "@/lib/kasSummary";
 import { formatRupiah, MONTH_NAMES } from "@/lib/types";
 
-// The WA group this report goes to. Wablas sends to a group the same way
-// it sends to a person — the "phone" field just takes the group's JID
-// instead of a phone number — so this is the group's JID (confirmed from
-// the Wablas dashboard), not a phone number.
-const REPORT_GROUP_ID = "120363428671682296@g.us";
+// The WA group this report goes to (see WARGA_GROUP_ID in wablas.ts).
+const REPORT_GROUP_ID = WARGA_GROUP_ID;
 
 export type WeeklyReportResult =
   | { success: true; detail: string }
@@ -64,7 +61,7 @@ export async function sendWeeklyReport(
     "_Laporan otomatis, dikirim setiap Minggu._",
   ].join("\n");
 
-  const result = await sendViaWablas(REPORT_GROUP_ID, message);
+  const result = await sendViaWablas(REPORT_GROUP_ID, message, true);
 
   await admin.from("activity_log").insert({
     actor_email: actorEmail,
