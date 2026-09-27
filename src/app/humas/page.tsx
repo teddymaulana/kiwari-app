@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import { getCurrentUser, WHATSAPP_TEST_SENDERS } from "@/lib/auth";
+import { getCurrentUser } from "@/lib/auth";
 import { sendTestWhatsApp } from "./actions";
 import type { Household, WaMessage } from "@/lib/types";
 import { compareUnitNo, WA_STATUS_LABELS } from "@/lib/types";
@@ -87,27 +87,23 @@ export default async function HumasPage({
       <div>
         <h1 className="text-lg font-semibold text-gray-900 mb-6">Humas</h1>
 
-        {WHATSAPP_TEST_SENDERS.includes(user.email) && (
-          <div>
-            <h2 className="text-sm font-medium text-gray-700 mb-1">
-              Kirim Pesan WhatsApp
-            </h2>
-            <p className="text-xs text-gray-400 mb-4">
-              Uji coba integrasi WhatsApp — kirim pesan manual ke satu nomor,
-              lewat gateway yang sedang aktif di Pengaturan.
-            </p>
+        <h2 className="text-sm font-medium text-gray-700 mb-1">
+          Kirim Pesan WhatsApp
+        </h2>
+        <p className="text-xs text-gray-400 mb-4">
+          Uji coba integrasi WhatsApp — kirim pesan manual ke satu nomor,
+          lewat gateway yang sedang aktif di Pengaturan.
+        </p>
 
-            {wa_error && <ResultPopup kind="error" message={wa_error} />}
-            {wa_success && (
-              <ResultPopup kind="success" message="Pesan berhasil dikirim." />
-            )}
-
-            <WhatsAppSendForm
-              action={sendTestWhatsApp}
-              households={households ?? []}
-            />
-          </div>
+        {wa_error && <ResultPopup kind="error" message={wa_error} />}
+        {wa_success && (
+          <ResultPopup kind="success" message="Pesan berhasil dikirim." />
         )}
+
+        <WhatsAppSendForm
+          action={sendTestWhatsApp}
+          households={households ?? []}
+        />
       </div>
 
       <div>

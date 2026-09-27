@@ -2,7 +2,7 @@
 
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import { getCurrentUser, WHATSAPP_TEST_SENDERS } from "@/lib/auth";
+import { getCurrentUser } from "@/lib/auth";
 import { getWhatsAppProvider, sendWhatsAppMessage } from "@/lib/whatsapp";
 import { sendViaWablas, WARGA_GROUP_ID } from "@/lib/wablas";
 
@@ -12,7 +12,6 @@ import { sendViaWablas, WARGA_GROUP_ID } from "@/lib/wablas";
 export async function sendTestWhatsApp(formData: FormData) {
   const user = await getCurrentUser();
   if (user?.role !== "pengurus") redirect("/dashboard");
-  if (!WHATSAPP_TEST_SENDERS.includes(user.email)) redirect("/humas");
 
   const toGroup = formData.get("target") === "group";
   const phone = toGroup

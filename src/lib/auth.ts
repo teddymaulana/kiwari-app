@@ -81,11 +81,6 @@ export const OPENING_BALANCE_EDITORS = ["18g@kiwari.local"];
 // (security/kehadiran/actions.ts).
 export const SECURITY_KEHADIRAN_ACCESS = ["18g@kiwari.local"];
 
-// Sending a test WhatsApp message (Kirim Pesan WhatsApp on /humas) is
-// restricted to this one pengurus account, checked both in the UI
-// (humas/page.tsx) and again in the server action (humas/actions.ts).
-export const WHATSAPP_TEST_SENDERS = ["18g@kiwari.local"];
-
 // Switching the WhatsApp gateway (Layanan WhatsApp on /settings, backing
 // src/lib/whatsapp.ts's provider toggle) is restricted to this one
 // pengurus account, checked both in the UI (settings/page.tsx) and again
