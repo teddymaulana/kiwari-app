@@ -176,6 +176,7 @@ export async function recordCashTransfer(formData: FormData) {
   const direction = String(formData.get("direction") || "");
   const transfer_date = String(formData.get("transfer_date") || "");
   const note = String(formData.get("note") || "").trim();
+  const receipt = formData.get("receipt") as File | null;
 
   if (!amount || amount <= 0) {
     redirect(
@@ -186,6 +187,25 @@ export async function recordCashTransfer(formData: FormData) {
     redirect(`/settings?kas_error=${encodeURIComponent("Arah transfer tidak valid")}`);
   }
 
+  // Storage has no policy on this private bucket (see schema.sql), so
+  // uploading needs the service role — same as bukti-pengeluaran in
+  // expenses/actions.ts.
+  let receipt_path: string | null = null;
+  if (receipt && receipt.size > 0) {
+    const admin = createAdminClient();
+    const ext = receipt.name.split(".").pop() || "jpg";
+    const path = `${Date.now()}-${crypto.randomUUID()}.${ext}`;
+    const { error: uploadError } = await admin.storage
+      .from("bukti-transfer-kas")
+      .upload(path, receipt, { contentType: receipt.type });
+    if (uploadError) {
+      redirect(
+        `/settings?kas_error=${encodeURIComponent("Gagal mengunggah bukti: " + uploadError.message)}`
+      );
+    }
+    receipt_path = path;
+  }
+
   const supabase = await createClient();
 
   const { error } = await supabase.from("cash_transfers").insert({
@@ -193,6 +213,7 @@ export async function recordCashTransfer(formData: FormData) {
     direction,
     transfer_date: transfer_date || undefined,
     note: note || null,
+    receipt_path,
     recorded_by: user.email,
   });
 

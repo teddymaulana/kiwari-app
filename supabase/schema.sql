@@ -393,6 +393,16 @@ create table if not exists cash_transfers (
 
 create index if not exists cash_transfers_date_idx on cash_transfers (transfer_date);
 
+-- Storage object path for an uploaded bukti transfer kas (e.g. the ATM
+-- slip for a Tarik Tunai), if any — same treatment as expenses.receipt_path.
+alter table cash_transfers add column if not exists receipt_path text;
+
+-- Same treatment as bukti-pengeluaran, but for Transfer Kas receipts —
+-- private, service_role-only, viewed via signed URLs on /mutasi.
+insert into storage.buckets (id, name, public)
+values ('bukti-transfer-kas', 'bukti-transfer-kas', false)
+on conflict (id) do nothing;
+
 alter table cash_transfers enable row level security;
 
 drop policy if exists "authenticated read cash_transfers" on cash_transfers;

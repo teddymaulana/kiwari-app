@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { getCurrentUser } from "@/lib/auth";
 import type { Settings } from "@/lib/types";
 import { formatRupiah } from "@/lib/types";
@@ -38,7 +39,22 @@ function LedgerTable({
                 <td className="px-3 py-2 whitespace-nowrap text-gray-500">
                   {new Date(row.date).toLocaleDateString("id-ID")}
                 </td>
-                <td className="px-3 py-2">{row.description}</td>
+                <td className="px-3 py-2">
+                  {row.description}
+                  {row.receiptUrl && (
+                    <>
+                      {" "}
+                      <a
+                        href={row.receiptUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-xs text-blue-600 hover:underline"
+                      >
+                        Bukti
+                      </a>
+                    </>
+                  )}
+                </td>
                 <td className="px-3 py-2 text-right text-emerald-600 whitespace-nowrap">
                   {row.kredit > 0 ? (
                     formatRupiah(row.kredit)
@@ -120,7 +136,7 @@ export default async function MutasiPage() {
       .select("amount, kas_type, expense_date, created_at, description"),
     supabase
       .from("cash_transfers")
-      .select("amount, direction, transfer_date, created_at, note"),
+      .select("id, amount, direction, transfer_date, created_at, note, receipt_path"),
     supabase
       .from("personnel_loans")
       .select(
@@ -149,6 +165,22 @@ export default async function MutasiPage() {
     else piutangPersonel -= amount;
   });
 
+  // Private bucket, service_role-only (see schema.sql) — same signed-URL
+  // pattern as bukti-pengeluaran on expenses/page.tsx.
+  const transferReceiptUrls = new Map<string, string>();
+  const withReceipt = (transfers ?? []).filter((t) => t.receipt_path);
+  if (withReceipt.length > 0) {
+    const admin = createAdminClient();
+    await Promise.all(
+      withReceipt.map(async (t) => {
+        const { data } = await admin.storage
+          .from("bukti-transfer-kas")
+          .createSignedUrl(t.receipt_path!, 60 * 10);
+        if (data?.signedUrl) transferReceiptUrls.set(t.id, data.signedUrl);
+      })
+    );
+  }
+
   const commonArgs = {
     payments: payments ?? [],
     contributions: contributions ?? [],
@@ -156,6 +188,7 @@ export default async function MutasiPage() {
     transfers: transfers ?? [],
     loans: loans ?? [],
     householdNameMap,
+    transferReceiptUrls,
   };
 
   const openingTunai = Number(settings?.opening_balance_tunai ?? 0);

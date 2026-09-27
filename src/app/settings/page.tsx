@@ -150,11 +150,22 @@ export default async function SettingsPage({
             <input
               name="note"
               placeholder="Catatan (opsional)"
-              className="rounded border border-gray-300 px-3 py-2 text-sm sm:col-span-3"
+              className="rounded border border-gray-300 px-3 py-2 text-sm sm:col-span-4"
             />
+            <div className="sm:col-span-3">
+              <label className="block text-xs text-gray-500 mb-1">
+                Bukti Transfer (opsional)
+              </label>
+              <input
+                type="file"
+                name="receipt"
+                accept="image/*"
+                className="w-full text-sm text-gray-600 file:mr-3 file:py-1.5 file:px-3 file:rounded file:border-0 file:bg-gray-100 file:text-sm file:text-gray-700"
+              />
+            </div>
             <SubmitButton
               pendingText="Menyimpan..."
-              className="bg-blue-600 text-white rounded px-4 py-2 text-sm font-medium hover:bg-blue-700 transition"
+              className="self-end bg-blue-600 text-white rounded px-4 py-2 text-sm font-medium hover:bg-blue-700 transition"
             >
               Simpan
             </SubmitButton>

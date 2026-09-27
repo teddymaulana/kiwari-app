@@ -14,6 +14,9 @@ export type KasLedgerRow = {
   description: string;
   kredit: number;
   debit: number;
+  // Signed URL to an uploaded bukti, when the source row has one — only
+  // cash_transfers carries this into the ledger for now.
+  receiptUrl?: string;
 };
 
 type PaymentRow = {
@@ -45,6 +48,7 @@ type ExpenseRow = {
 };
 
 type TransferRow = {
+  id: string;
   direction: string;
   transfer_date: string;
   created_at: string;
@@ -71,6 +75,7 @@ export function buildKasLedgerRows({
   transfers,
   loans,
   householdNameMap,
+  transferReceiptUrls,
 }: {
   kasType: KasType;
   payments: PaymentRow[];
@@ -79,6 +84,7 @@ export function buildKasLedgerRows({
   transfers: TransferRow[];
   loans: LoanRow[];
   householdNameMap: Map<string, string>;
+  transferReceiptUrls?: Map<string, string>;
 }): KasLedgerRow[] {
   const rows: KasLedgerRow[] = [];
 
@@ -128,11 +134,13 @@ export function buildKasLedgerRows({
   transfers.forEach((t) => {
     const amount = Number(t.amount);
     const suffix = t.note ? ` — ${t.note}` : "";
+    const receiptUrl = transferReceiptUrls?.get(t.id);
     if (kasType === "tunai") {
       if (t.direction === "bri_to_tunai") {
         rows.push({
           date: t.transfer_date,
           created_at: t.created_at,
+          receiptUrl,
           description: `Tarik Tunai dari Kas BRI${suffix}`,
           kredit: amount,
           debit: 0,
@@ -141,6 +149,7 @@ export function buildKasLedgerRows({
         rows.push({
           date: t.transfer_date,
           created_at: t.created_at,
+          receiptUrl,
           description: `Setor Tunai ke Kas BRI${suffix}`,
           kredit: 0,
           debit: amount,
@@ -151,6 +160,7 @@ export function buildKasLedgerRows({
         rows.push({
           date: t.transfer_date,
           created_at: t.created_at,
+          receiptUrl,
           description: `Tarik Tunai ke Petty Cash${suffix}`,
           kredit: 0,
           debit: amount,
@@ -159,6 +169,7 @@ export function buildKasLedgerRows({
         rows.push({
           date: t.transfer_date,
           created_at: t.created_at,
+          receiptUrl,
           description: `Setor Tunai dari Petty Cash${suffix}`,
           kredit: amount,
           debit: 0,
