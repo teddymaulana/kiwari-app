@@ -46,6 +46,9 @@ export default function WhatsAppSendForm({
         rows={6}
         className="w-full rounded border border-gray-300 px-3 py-2 text-sm"
       />
+      <p className="-mt-2 text-xs text-gray-400">
+        Otomatis ditambahkan di akhir pesan: <em>Pesan otomatis dari Kiwari App</em>
+      </p>
       <SubmitButton
         pendingText="Mengirim..."
         className="bg-blue-600 text-white rounded px-4 py-2 text-sm font-medium hover:bg-blue-700 transition"

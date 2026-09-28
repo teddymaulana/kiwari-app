@@ -6,6 +6,10 @@ import { getCurrentUser } from "@/lib/auth";
 import { getWhatsAppProvider, sendWhatsAppMessage } from "@/lib/whatsapp";
 import { sendViaWablas, WARGA_GROUP_ID } from "@/lib/wablas";
 
+// Appended to every Kirim Pesan WhatsApp send so recipients know the
+// message came through Kiwari. Underscores render as italics in WhatsApp.
+const MESSAGE_FOOTER = "──────────\n_Pesan otomatis dari Kiwari App_";
+
 // Manual WhatsApp send, for testing the Fonnte integration before it's
 // wired into automatic events (e.g. payment confirmed). Moved here from
 // settings/actions.ts when Kirim Pesan WhatsApp got its own Humas menu.
@@ -27,6 +31,7 @@ export async function sendTestWhatsApp(formData: FormData) {
   }
 
   const provider = await getWhatsAppProvider();
+  const fullMessage = `${message}\n\n${MESSAGE_FOOTER}`;
 
   // Group sends go straight to Wablas (the only gateway wired for group
   // JIDs), still honoring the "off" toggle like sendWeeklyReport does.
@@ -39,9 +44,9 @@ export async function sendTestWhatsApp(formData: FormData) {
             reason: "Layanan WhatsApp sedang dimatikan",
             detail: "",
           }
-        : await sendViaWablas(phone, message, true);
+        : await sendViaWablas(phone, fullMessage, true);
   } else {
-    result = await sendWhatsAppMessage(phone, message);
+    result = await sendWhatsAppMessage(phone, fullMessage);
   }
 
   const supabase = await createClient();
@@ -62,7 +67,7 @@ export async function sendTestWhatsApp(formData: FormData) {
       direction: "out",
       phone,
       is_group: toGroup,
-      message,
+      message: fullMessage,
       sent_by: user.email,
       // Lets the Wablas tracking webhook (api/webhooks/wablas-tracking)
       // find this row later and fill in real delivery status — null when
