@@ -29,7 +29,7 @@ export default function RecordPaymentForm({
     if (!householdId) return;
 
     let cancelled = false;
-    fetch(`/api/unpaid-months?household_id=${householdId}&year=${YEAR}`)
+    fetch(`/api/unpaid-months?household_id=${householdId}&year=${YEAR}&all_months=1`)
       .then((res) => res.json())
       .then((data) => {
         if (cancelled) return;
@@ -178,6 +178,18 @@ export default function RecordPaymentForm({
           name="note"
           placeholder="mis. transfer BCA"
           className="w-full rounded border border-gray-300 px-3 py-2 text-sm"
+        />
+      </div>
+
+      <div>
+        <label className="block text-sm font-medium text-gray-700 mb-1">
+          Bukti Transfer (opsional)
+        </label>
+        <input
+          type="file"
+          name="receipt"
+          accept="image/*"
+          className="w-full text-sm text-gray-600 file:mr-3 file:py-1.5 file:px-3 file:rounded file:border-0 file:bg-gray-100 file:text-sm file:text-gray-700"
         />
       </div>
 

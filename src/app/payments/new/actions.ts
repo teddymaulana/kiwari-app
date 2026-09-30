@@ -3,6 +3,7 @@
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { getCurrentUser, PAYMENT_RECORDERS, PAYMENT_VERIFIERS } from "@/lib/auth";
 import { sendWhatsAppMessage } from "@/lib/whatsapp";
 import { paymentConfirmedMessage } from "@/lib/paymentMessages";
@@ -27,12 +28,32 @@ export async function recordPayments(formData: FormData) {
   const paid_date = String(formData.get("paid_date") || "");
   const note = String(formData.get("note") || "").trim();
   const kas_type = String(formData.get("kas_type") || "bri");
+  const receipt = formData.get("receipt") as File | null;
 
   if (!household_id || !period_year || period_months.length === 0 || !amount) {
     redirect("/payments/new?error=Lengkapi semua data wajib");
   }
   if (kas_type !== "tunai" && kas_type !== "bri") {
     redirect("/payments/new?error=Sumber kas tidak valid");
+  }
+
+  // Uploaded once and shared by every selected month, same as a Bayar IPL
+  // claim (paymentClaim.ts) — and into the same private bukti-transfer
+  // bucket, so /payments shows it via its existing signed-URL links.
+  let receipt_path: string | null = null;
+  if (receipt && receipt.size > 0) {
+    const admin = createAdminClient();
+    const ext = receipt.name.split(".").pop() || "jpg";
+    const path = `${household_id}/${Date.now()}-${crypto.randomUUID()}.${ext}`;
+    const { error: uploadError } = await admin.storage
+      .from("bukti-transfer")
+      .upload(path, receipt, { contentType: receipt.type });
+    if (uploadError) {
+      redirect(
+        `/payments/new?error=${encodeURIComponent("Gagal mengunggah bukti: " + uploadError.message)}`
+      );
+    }
+    receipt_path = path;
   }
 
   const supabase = await createClient();
@@ -49,6 +70,7 @@ export async function recordPayments(formData: FormData) {
           paid_date: paid_date || undefined,
           note: note || null,
           kas_type,
+          receipt_path,
           recorded_by: user.email,
         })
         .select("period_month")

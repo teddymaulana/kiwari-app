@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { iplFirstMonth } from "@/lib/types";
+import { getCurrentUser } from "@/lib/auth";
 
 // Public: backs the unauthenticated "Bayar IPL" form on /login, where the
 // household is only known client-side once picked (or OCR-matched). Any
@@ -9,6 +10,7 @@ import { iplFirstMonth } from "@/lib/types";
 export async function GET(request: NextRequest) {
   const householdId = request.nextUrl.searchParams.get("household_id");
   const year = Number(request.nextUrl.searchParams.get("year"));
+  const allMonths = request.nextUrl.searchParams.get("all_months") === "1";
 
   if (!householdId || !year) {
     return NextResponse.json(
@@ -37,7 +39,14 @@ export async function GET(request: NextRequest) {
     ...(payments ?? []).map((p) => p.period_month),
     ...(exemptions ?? []).map((e) => e.period_month),
   ]);
-  const firstMonth = iplFirstMonth(year);
+  // Catat Pembayaran (pengurus) passes all_months=1 to also get the months
+  // before iplFirstMonth — e.g. Jan–Jul 2026 dues collected outside the
+  // app that still need recording. Honored only for a pengurus, so the
+  // public Bayar IPL form keeps its Agustus 2026 start.
+  const firstMonth =
+    allMonths && (await getCurrentUser())?.role === "pengurus"
+      ? 1
+      : iplFirstMonth(year);
   const unpaidMonths = Array.from(
     { length: 12 - firstMonth + 1 },
     (_, i) => i + firstMonth
