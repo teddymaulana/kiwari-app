@@ -1,13 +1,15 @@
 import type { ShiftType } from "@/lib/types";
 
-// The fixed 5-day rotation every guard follows, per the source Jadwal
-// Security spreadsheet ("pola 5 hari diteruskan terus-menerus sejak 1
-// September 2026") — each guard just runs this same cycle starting from a
-// different offset, which is what keeps daily coverage at exactly 1 Pagi
-// + 2 Malam + 2 OFF. No two rotations of this sequence are identical, so
-// matching a guard's last few days against it uniquely pins down where
-// they are in the cycle (see findOffsetAfter below).
-export const ROTATION_CYCLE: ShiftType[] = ["off", "pagi", "off", "malam", "malam"];
+// The fixed 5-day rotation every guard follows, per Jadwal Security
+// Oktober 2026 (Jadwal_Security_Oktober2026.pdf) — each guard runs this
+// same cycle starting from a different offset, which keeps daily coverage
+// at exactly 2 Pagi + 2 Malam + 1 OFF. (September used an older
+// OFF/Pagi/OFF/Malam/Malam cycle with 1 Pagi + 2 Malam + 2 OFF; those rows
+// stay as recorded, this only drives generating new months.) No two
+// rotations of this sequence are identical, so matching a guard's last
+// few days against it uniquely pins down where they are in the cycle (see
+// findOffsetAfter below).
+export const ROTATION_CYCLE: ShiftType[] = ["pagi", "pagi", "malam", "malam", "off"];
 
 function isNextCalendarDay(dateStr: string, nextDateStr: string): boolean {
   const d = new Date(dateStr + "T00:00:00");
