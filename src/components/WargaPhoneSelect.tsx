@@ -11,7 +11,10 @@ export type WargaPhoneHousehold = {
   alt_names: string | null;
 };
 
-type PhoneOption = { key: string; label: string; phone: string };
+// key is "<household id>:kk" (households.phone) or "<household id>:pasangan"
+// (households.phone_pasangan) — also what the blast form submits per
+// recipient, so the server can look the number up itself.
+export type PhoneOption = { key: string; label: string; phone: string };
 
 // Searchable phone-number field for "Kirim Pesan WhatsApp" — lets pengurus
 // find a warga's number by unit/name instead of hunting it down manually.
@@ -21,25 +24,34 @@ type PhoneOption = { key: string; label: string; phone: string };
 // except here the visible text can also just be typed in directly as a raw
 // number when the target isn't a warga in the list, since there's no id to
 // fall back on.
+//
+// With onPick it's a picker instead of a form field (used to add extra
+// recipients to a kepala keluarga blast): no hidden input, typed text is
+// only a search, and picking hands the option over then clears the input.
+// hiddenKeys drops options that are already chosen.
 export default function WargaPhoneSelect({
   households,
   name,
   placeholder = "No. HP, atau cari nama/no. rumah warga...",
   className = "w-full rounded border border-gray-300 px-3 py-2 text-sm",
   disabled,
+  onPick,
+  hiddenKeys,
 }: {
   households: WargaPhoneHousehold[];
-  name: string;
+  name?: string;
   placeholder?: string;
   className?: string;
   disabled?: boolean;
+  onPick?: (option: PhoneOption) => void;
+  hiddenKeys?: Set<string>;
 }) {
   const options = useMemo<PhoneOption[]>(() => {
     const list: PhoneOption[] = [];
     for (const h of households) {
       if (h.phone) {
         list.push({
-          key: `${h.id}-1`,
+          key: `${h.id}:kk`,
           label: `${h.unit_no} - ${h.name}`,
           phone: h.phone,
         });
@@ -50,7 +62,7 @@ export default function WargaPhoneSelect({
         // name, falling back to the generic "(pasangan)" tag when empty.
         const pasanganName = h.alt_names?.split(",")[0]?.trim();
         list.push({
-          key: `${h.id}-2`,
+          key: `${h.id}:pasangan`,
           label: pasanganName
             ? `${h.unit_no} - ${pasanganName}`
             : `${h.unit_no} - ${h.name} (pasangan)`,
@@ -81,13 +93,22 @@ export default function WargaPhoneSelect({
   }, []);
 
   const q = query.trim().toLowerCase();
+  const available = hiddenKeys
+    ? options.filter((o) => !hiddenKeys.has(o.key))
+    : options;
   const filtered = q
-    ? options.filter(
+    ? available.filter(
         (o) => o.label.toLowerCase().includes(q) || o.phone.includes(q)
       )
-    : options;
+    : available;
 
   function pick(o: PhoneOption) {
+    if (onPick) {
+      onPick(o);
+      setQuery("");
+      setHighlight(0);
+      return;
+    }
     setValue(o.phone);
     setQuery(`${o.label} - ${o.phone}`);
     setOpen(false);
@@ -95,7 +116,9 @@ export default function WargaPhoneSelect({
 
   return (
     <div ref={containerRef} className="relative">
-      <input type="hidden" name={name} value={value} disabled={disabled} />
+      {!onPick && (
+        <input type="hidden" name={name} value={value} disabled={disabled} />
+      )}
       <input
         type="text"
         value={query}
@@ -114,11 +137,14 @@ export default function WargaPhoneSelect({
           // directly, same as before this component split display from
           // submitted value.
           setQuery(e.target.value);
-          setValue(e.target.value);
+          if (!onPick) setValue(e.target.value);
           setOpen(true);
           setHighlight(0);
         }}
         onKeyDown={(e) => {
+          // In picker mode Enter only ever picks — never submits the form
+          // the picker happens to sit in.
+          if (onPick && e.key === "Enter") e.preventDefault();
           if (!open || filtered.length === 0) return;
           if (e.key === "ArrowDown") {
             e.preventDefault();

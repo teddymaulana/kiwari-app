@@ -17,7 +17,12 @@ const TIMEOUT_MS = 20_000;
 
 export async function sendViaFonnte(
   target: string,
-  message: string
+  message: string,
+  // Seconds between messages when `target` is a comma-separated list
+  // (Fonnte's own multi-target support, used by the kepala keluarga blast
+  // on /humas) — e.g. "2" or a random range "2-5", so a burst of
+  // identical messages looks less like spam to WhatsApp. Unused otherwise.
+  delay?: string
 ): Promise<WhatsAppResult> {
   const token = process.env.FONNTE_TOKEN;
   if (!token) {
@@ -36,7 +41,7 @@ export async function sendViaFonnte(
         Authorization: token,
         "Content-Type": "application/x-www-form-urlencoded",
       },
-      body: new URLSearchParams({ target, message }),
+      body: new URLSearchParams({ target, message, ...(delay ? { delay } : {}) }),
       signal: AbortSignal.timeout(TIMEOUT_MS),
     });
   } catch (err) {

@@ -123,3 +123,85 @@ function extractMessageId(data: Record<string, unknown>): string | undefined {
     (first as Record<string, unknown> | undefined)?.id ?? data.id ?? undefined;
   return typeof id === "string" ? id : undefined;
 }
+
+// Bulk send for the "Semua kepala keluarga" blast on /humas — one request
+// to Wablas's v2 multi-message endpoint instead of one sendViaWablas call
+// per household, which at TIMEOUT_MS each could never finish inside the
+// page's maxDuration. Wablas queues the batch and sends it out on its own
+// pace, so this only confirms the batch was accepted, not delivered.
+//
+// Returns per-item message ids in the same order as `items` (best-effort,
+// like extractMessageId above — undefined where the response didn't
+// carry one), for wa_messages.wablas_message_id / the tracking webhook.
+export async function sendBulkViaWablas(
+  items: { phone: string; message: string }[]
+): Promise<
+  | { success: true; detail: string; messageIds: (string | undefined)[] }
+  | { success: false; reason: string; detail: string }
+> {
+  const token = process.env.WABLAS_TOKEN;
+  const secretKey = process.env.WABLAS_SECRET_KEY;
+  const baseUrl = process.env.WABLAS_BASE_URL;
+
+  if (!token || !baseUrl) {
+    return {
+      success: false,
+      reason: "WABLAS_TOKEN atau WABLAS_BASE_URL belum diatur",
+      detail: "",
+    };
+  }
+
+  const authorization = secretKey ? `${token}.${secretKey}` : token;
+
+  let response: Response;
+  try {
+    response = await fetch(
+      `${baseUrl.replace(/\/$/, "")}/api/v2/send-message`,
+      {
+        method: "POST",
+        headers: {
+          Authorization: authorization,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ data: items }),
+        signal: AbortSignal.timeout(TIMEOUT_MS),
+      }
+    );
+  } catch (err) {
+    const timedOut = err instanceof Error && err.name === "TimeoutError";
+    return {
+      success: false,
+      reason: timedOut
+        ? `Wablas belum merespons dalam ${TIMEOUT_MS / 1000} detik — pesan mungkin tetap terkirim walau muncul gagal di sini, cek dashboard Wablas sebelum kirim ulang`
+        : `Gagal terhubung ke Wablas: ${err instanceof Error ? err.message : String(err)}`,
+      detail: "",
+    };
+  }
+
+  const rawBody = await response.text();
+  let data: Record<string, unknown> = {};
+  try {
+    data = JSON.parse(rawBody);
+  } catch {
+    // Non-JSON body — rawBody still gets logged by the caller.
+  }
+
+  if (!response.ok || data.status === false) {
+    return {
+      success: false,
+      reason:
+        (data.message as string) || (data.reason as string) || `HTTP ${response.status}`,
+      detail: rawBody,
+    };
+  }
+
+  const messages = (data.data as Record<string, unknown> | undefined)?.messages;
+  const messageIds = items.map((_, i) => {
+    const id = Array.isArray(messages)
+      ? (messages[i] as Record<string, unknown> | undefined)?.id
+      : undefined;
+    return typeof id === "string" ? id : undefined;
+  });
+
+  return { success: true, detail: rawBody, messageIds };
+}

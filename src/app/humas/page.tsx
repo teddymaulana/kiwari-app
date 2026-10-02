@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { getCurrentUser } from "@/lib/auth";
 import { sendTestWhatsApp } from "./actions";
 import type { Household, WaMessage } from "@/lib/types";
@@ -56,15 +57,48 @@ function outStatusBadge(status: string | null): {
   };
 }
 
+// Households whose kepala keluarga is a pengurus, for the "Pengurus" blast
+// group. Pengurus logins are `<unit>@kiwari.local` (see
+// scripts/migrate-account-emails.mjs) with profiles.role = 'pengurus', so
+// the unit comes from the email — reading auth emails needs the admin
+// client. Kept live rather than hardcoded so promoting/demoting a pengurus
+// in profiles updates this group automatically.
+async function getPengurusHouseholdIds(
+  households: Household[]
+): Promise<string[]> {
+  const admin = createAdminClient();
+  const { data: profiles } = await admin
+    .from("profiles")
+    .select("id")
+    .eq("role", "pengurus")
+    .returns<{ id: string }[]>();
+  const pengurusIds = new Set((profiles ?? []).map((p) => p.id));
+
+  const { data } = await admin.auth.admin.listUsers({ perPage: 1000 });
+  const units = new Set(
+    (data?.users ?? [])
+      .filter((u) => pengurusIds.has(u.id) && u.email?.endsWith("@kiwari.local"))
+      .map((u) => u.email!.split("@")[0].toUpperCase())
+  );
+
+  return households
+    .filter((h) => units.has(h.unit_no.toUpperCase()))
+    .map((h) => h.id);
+}
+
 export default async function HumasPage({
   searchParams,
 }: {
-  searchParams: Promise<{ wa_error?: string; wa_success?: string }>;
+  searchParams: Promise<{
+    wa_error?: string;
+    wa_success?: string;
+    wa_blast?: string;
+  }>;
 }) {
   const user = await getCurrentUser();
   if (user?.role !== "pengurus") redirect("/dashboard");
 
-  const { wa_error, wa_success } = await searchParams;
+  const { wa_error, wa_success, wa_blast } = await searchParams;
 
   const supabase = await createClient();
   const { data: households } = await supabase
@@ -74,6 +108,8 @@ export default async function HumasPage({
     .returns<Household[]>();
 
   households?.sort((a, b) => compareUnitNo(a.unit_no, b.unit_no));
+
+  const pengurusHouseholdIds = await getPengurusHouseholdIds(households ?? []);
 
   const { data: messages } = await supabase
     .from("wa_messages")
@@ -91,18 +127,26 @@ export default async function HumasPage({
           Kirim Pesan WhatsApp
         </h2>
         <p className="text-xs text-gray-400 mb-4">
-          Uji coba integrasi WhatsApp — kirim pesan manual ke satu nomor,
-          lewat gateway yang sedang aktif di Pengaturan.
+          Kirim pesan manual ke satu nomor, atau banyak kepala keluarga
+          sekaligus (semua, pengurus, atau per blok) — lewat gateway yang
+          sedang aktif di Pengaturan.
         </p>
 
         {wa_error && <ResultPopup kind="error" message={wa_error} />}
         {wa_success && (
           <ResultPopup kind="success" message="Pesan berhasil dikirim." />
         )}
+        {wa_blast && (
+          <ResultPopup
+            kind="success"
+            message={`Pesan diterima gateway untuk ${wa_blast} nomor dan sedang dikirim bertahap.`}
+          />
+        )}
 
         <WhatsAppSendForm
           action={sendTestWhatsApp}
           households={households ?? []}
+          pengurusHouseholdIds={pengurusHouseholdIds}
         />
       </div>
 
