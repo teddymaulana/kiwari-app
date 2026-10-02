@@ -6,6 +6,7 @@ import ClaimSuccessCard from "@/components/ClaimSuccessCard";
 import { createAdminClient } from "@/lib/supabase/admin";
 import type { Household, Settings } from "@/lib/types";
 import { compareUnitNo } from "@/lib/types";
+import { safeNextPath } from "@/lib/safeNext";
 
 // The public Bayar IPL claim (./actions.ts, via createPendingPaymentClaim
 // -> sendViaWablas) can wait up to TIMEOUT_MS (wablas.ts, currently 45s)
@@ -21,9 +22,14 @@ export default async function LoginPage({
     error?: string;
     claim_error?: string;
     claim_success?: string;
+    next?: string;
   }>;
 }) {
-  const { error, claim_error, claim_success } = await searchParams;
+  const { error, claim_error, claim_success, next: rawNext } =
+    await searchParams;
+  // Set when the auth proxy bounced an anonymous visitor here from a
+  // specific page — signIn sends them back to it (see safeNext.ts).
+  const next = safeNextPath(rawNext);
 
   // Public page — no session here, so this can't go through the regular
   // RLS-scoped client. Read-only, non-sensitive fields only.
@@ -69,7 +75,9 @@ export default async function LoginPage({
   const loginBody = (
     <>
       <p className="text-sm text-gray-500 mb-6">
-        Login untuk warga.
+        {next
+          ? "Login dulu untuk membuka halaman yang dituju."
+          : "Login untuk warga."}
       </p>
 
       {error && (
@@ -79,6 +87,7 @@ export default async function LoginPage({
       )}
 
       <form action={signIn} className="space-y-4">
+        {next && <input type="hidden" name="next" value={next} />}
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">
             Email
@@ -149,7 +158,12 @@ export default async function LoginPage({
             </summary>
             <div className="px-6 pb-6">{bayarIplBody}</div>
           </details>
-          <details className="bg-white rounded-lg shadow-sm border border-gray-200">
+          {/* Opened up front when they came here to reach a specific page
+              (or just failed a login attempt), instead of collapsed. */}
+          <details
+            open={!!(next || error)}
+            className="bg-white rounded-lg shadow-sm border border-gray-200"
+          >
             <summary className="cursor-pointer select-none px-6 py-4 text-lg font-semibold text-gray-900">
               Login Warga
             </summary>

@@ -3,10 +3,14 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { createPendingPaymentClaim } from "@/lib/paymentClaim";
+import { safeNextPath } from "@/lib/safeNext";
 
 export async function signIn(formData: FormData) {
   const email = String(formData.get("email") || "");
   const password = String(formData.get("password") || "");
+  // Page the visitor was bounced from (see safeNext.ts) — kept on a
+  // failed attempt too, so a typo'd password doesn't lose it.
+  const next = safeNextPath(formData.get("next"));
 
   const supabase = await createClient();
   const { data, error } = await supabase.auth.signInWithPassword({
@@ -15,8 +19,17 @@ export async function signIn(formData: FormData) {
   });
 
   if (error) {
-    redirect(`/login?error=${encodeURIComponent(error.message)}`);
+    redirect(
+      `/login?error=${encodeURIComponent(error.message)}${
+        next ? `&next=${encodeURIComponent(next)}` : ""
+      }`
+    );
   }
+
+  // Straight back to the page they originally asked for. If it's a
+  // pengurus-only page and this is a warga login, that page's own role
+  // check sends them on to their usual landing page.
+  if (next) redirect(next);
 
   const { data: profile } = await supabase
     .from("profiles")

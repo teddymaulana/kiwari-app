@@ -1,8 +1,10 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
+import { safeNextPath } from "@/lib/safeNext";
 
 // Refreshes the Supabase auth session on every request and redirects
-// anonymous visitors to /login (except the login page itself).
+// anonymous visitors to /login (except the login page itself), carrying
+// the page they asked for as ?next= so login can send them back there.
 export async function updateSession(request: NextRequest) {
   let supabaseResponse = NextResponse.next({ request });
 
@@ -60,13 +62,24 @@ export async function updateSession(request: NextRequest) {
   if (!user && !isLoginPage && !isPublicApi && !isPublicPage) {
     const url = request.nextUrl.clone();
     url.pathname = "/login";
+    url.search = "";
+    // Pages only — an API call bounced here has no page to come back to.
+    // "/" isn't worth remembering either, it just redirects onward.
+    const { pathname, search } = request.nextUrl;
+    if (!pathname.startsWith("/api/") && pathname !== "/") {
+      url.searchParams.set("next", pathname + search);
+    }
     return NextResponse.redirect(url);
   }
 
   if (user && isLoginPage) {
+    // e.g. an old /login?next=... link opened in a tab that's since
+    // logged in — go straight to where it was headed.
+    const next = safeNextPath(request.nextUrl.searchParams.get("next"));
     const url = request.nextUrl.clone();
+    url.search = "";
     url.pathname = "/report";
-    return NextResponse.redirect(url);
+    return NextResponse.redirect(next ? new URL(next, request.url) : url);
   }
 
   return supabaseResponse;
