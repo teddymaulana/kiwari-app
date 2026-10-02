@@ -16,6 +16,34 @@ export type WargaPhoneHousehold = {
 // recipient, so the server can look the number up itself.
 export type PhoneOption = { key: string; label: string; phone: string };
 
+// A household's messageable numbers as options — kepala keluarga first,
+// then pasangan — skipping whichever isn't on file. Shared with the blast
+// groups in WhatsAppSendForm so labels match the search results here.
+export function householdPhoneOptions(h: WargaPhoneHousehold): PhoneOption[] {
+  const list: PhoneOption[] = [];
+  if (h.phone?.trim()) {
+    list.push({
+      key: `${h.id}:kk`,
+      label: `${h.unit_no} - ${h.name}`,
+      phone: h.phone,
+    });
+  }
+  if (h.phone_pasangan?.trim()) {
+    // alt_names is freeform (comma-separated, meant for OCR receipt
+    // matching) — best-effort read its first entry as the spouse's
+    // name, falling back to the generic "(pasangan)" tag when empty.
+    const pasanganName = h.alt_names?.split(",")[0]?.trim();
+    list.push({
+      key: `${h.id}:pasangan`,
+      label: pasanganName
+        ? `${h.unit_no} - ${pasanganName}`
+        : `${h.unit_no} - ${h.name} (pasangan)`,
+      phone: h.phone_pasangan,
+    });
+  }
+  return list;
+}
+
 // Searchable phone-number field for "Kirim Pesan WhatsApp" — lets pengurus
 // find a warga's number by unit/name instead of hunting it down manually.
 // Picking a result keeps showing "unit - Nama - No. HP" (not just the bare
@@ -46,32 +74,10 @@ export default function WargaPhoneSelect({
   onPick?: (option: PhoneOption) => void;
   hiddenKeys?: Set<string>;
 }) {
-  const options = useMemo<PhoneOption[]>(() => {
-    const list: PhoneOption[] = [];
-    for (const h of households) {
-      if (h.phone) {
-        list.push({
-          key: `${h.id}:kk`,
-          label: `${h.unit_no} - ${h.name}`,
-          phone: h.phone,
-        });
-      }
-      if (h.phone_pasangan) {
-        // alt_names is freeform (comma-separated, meant for OCR receipt
-        // matching) — best-effort read its first entry as the spouse's
-        // name, falling back to the generic "(pasangan)" tag when empty.
-        const pasanganName = h.alt_names?.split(",")[0]?.trim();
-        list.push({
-          key: `${h.id}:pasangan`,
-          label: pasanganName
-            ? `${h.unit_no} - ${pasanganName}`
-            : `${h.unit_no} - ${h.name} (pasangan)`,
-          phone: h.phone_pasangan,
-        });
-      }
-    }
-    return list;
-  }, [households]);
+  const options = useMemo<PhoneOption[]>(
+    () => households.flatMap(householdPhoneOptions),
+    [households]
+  );
 
   const [value, setValue] = useState(""); // the actual phone number submitted
   const [query, setQuery] = useState(""); // what's shown in the input

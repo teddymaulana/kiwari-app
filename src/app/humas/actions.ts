@@ -89,11 +89,12 @@ export async function sendTestWhatsApp(formData: FormData) {
   redirect("/humas?wa_success=1");
 }
 
-// Kepala keluarga blast targets ("kk:all", "kk:pengurus", "kk:blok:<n>" —
-// the group only shapes the list on the form): one message to each
-// recipient the form left in the list, submitted as "<household id>:kk"
+// Blast targets ("kk:warga", "kk:all", "kk:pengurus", "kk:blok:<n>" — the
+// group only shapes the list on the form): one message to each recipient
+// the form left in the list, submitted as "<household id>:kk"
 // (households.phone) or "<household id>:pasangan" (phone_pasangan, from
-// the Tambah penerima picker) — ones removed with ✕ are simply absent.
+// "Semua warga" or the Tambah penerima picker) — ones removed with ✕ are
+// simply absent.
 // Numbers are looked up here rather than trusted from the form, re-checked
 // as active, and deduped. Sent as a single bulk request to whichever
 // gateway is active — a per-recipient loop of sendWhatsAppMessage would

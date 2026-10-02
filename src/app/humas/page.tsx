@@ -127,9 +127,9 @@ export default async function HumasPage({
           Kirim Pesan WhatsApp
         </h2>
         <p className="text-xs text-gray-400 mb-4">
-          Kirim pesan manual ke satu nomor, atau banyak kepala keluarga
-          sekaligus (semua, pengurus, atau per blok) — lewat gateway yang
-          sedang aktif di Pengaturan.
+          Kirim pesan manual ke satu nomor, atau banyak warga sekaligus
+          (semua warga, semua kepala keluarga, pengurus, atau per blok) —
+          lewat gateway yang sedang aktif di Pengaturan.
         </p>
 
         {wa_error && <ResultPopup kind="error" message={wa_error} />}

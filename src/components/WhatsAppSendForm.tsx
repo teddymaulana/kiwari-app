@@ -2,6 +2,7 @@
 
 import { useMemo, useRef, useState } from "react";
 import WargaPhoneSelect, {
+  householdPhoneOptions,
   type PhoneOption,
   type WargaPhoneHousehold,
 } from "@/components/WargaPhoneSelect";
@@ -9,11 +10,12 @@ import SubmitButton from "@/components/SubmitButton";
 
 // Wraps the target select + phone field — plain server-rendered siblings
 // can't coordinate on their own, so this owns the shared "target" state.
-// The kepala keluarga blast targets ("kk:..." — semua, pengurus, or one
-// blok) swap No. HP for that group's recipient list (each removable, to
-// leave some warga out of the blast), plus a picker to add more numbers —
-// any kepala keluarga or pasangan — and show the final list + message in
-// a confirm dialog before submitting, since it messages them all at once.
+// The blast targets ("kk:..." — semua warga, semua kepala keluarga,
+// pengurus, or one blok) swap No. HP for that group's recipient list (each
+// removable, to leave some warga out of the blast), plus a picker to add
+// more numbers — any kepala keluarga or pasangan — and show the final list
+// + message in a confirm dialog before submitting, since it messages them
+// all at once.
 export default function WhatsAppSendForm({
   action,
   households,
@@ -24,6 +26,7 @@ export default function WhatsAppSendForm({
   pengurusHouseholdIds: string[];
 }) {
   const [target, setTarget] = useState("phone");
+  // ✕'d recipients, by "<household id>:kk|pasangan" key.
   const [excluded, setExcluded] = useState<Set<string>>(new Set());
   // Extra recipients added on top of the group, in the order added.
   const [added, setAdded] = useState<PhoneOption[]>([]);
@@ -34,58 +37,70 @@ export default function WhatsAppSendForm({
   const confirmedRef = useRef(false);
   const toAllKk = target.startsWith("kk:");
 
-  // Kepala keluarga = households.phone (not phone_pasangan); households
-  // without one can't be messaged so they aren't listed at all.
-  const kepalaKeluarga = useMemo(
-    () => households.filter((h) => h.phone?.trim()),
-    [households]
-  );
-  // Blast groups: semua, pengurus, then one per blok — the numeric part of
-  // unit_no ("18G" -> blok 18), in the order households already come in
-  // (sorted by compareUnitNo on the page).
+  // Blast groups, each a list of numbers (PhoneOption, keyed
+  // "<household id>:kk|pasangan" — also exactly what gets submitted, see
+  // blastToKepalaKeluarga). Kepala keluarga = households.phone; "Semua
+  // warga" and the blok groups add each household's phone_pasangan right
+  // after it. Households
+  // without a number on file can't be messaged so they aren't listed.
+  // Blok groups go by the numeric part of unit_no ("18G" -> blok 18), in
+  // the order households already come in (sorted by compareUnitNo).
   const kkGroups = useMemo(() => {
     const pengurus = new Set(pengurusHouseholdIds);
-    const groups: { value: string; label: string; members: WargaPhoneHousehold[] }[] = [
-      { value: "kk:all", label: "Semua kepala keluarga", members: kepalaKeluarga },
+    const kepala = (h: WargaPhoneHousehold) =>
+      householdPhoneOptions(h).filter((o) => o.key.endsWith(":kk"));
+    // shortLabel: for the confirm dialog title, where the full label's own
+    // parentheses would nest awkwardly.
+    const groups: {
+      value: string;
+      label: string;
+      shortLabel?: string;
+      members: PhoneOption[];
+    }[] = [
+      {
+        value: "kk:warga",
+        label: "Semua warga (kepala keluarga + pasangan)",
+        shortLabel: "Semua warga",
+        members: households.flatMap(householdPhoneOptions),
+      },
+      {
+        value: "kk:all",
+        label: "Semua kepala keluarga",
+        members: households.flatMap(kepala),
+      },
       {
         value: "kk:pengurus",
         label: "Pengurus",
-        members: kepalaKeluarga.filter((h) => pengurus.has(h.id)),
+        members: households.filter((h) => pengurus.has(h.id)).flatMap(kepala),
       },
     ];
-    for (const h of kepalaKeluarga) {
+    for (const h of households) {
       const blok = h.unit_no.match(/^\d+/)?.[0];
-      if (!blok) continue;
+      // Blok groups include pasangan too, like "Semua warga".
+      const members = householdPhoneOptions(h);
+      if (!blok || members.length === 0) continue;
       const value = `kk:blok:${blok}`;
       let group = groups.find((g) => g.value === value);
       if (!group) {
         group = { value, label: `Blok ${blok}`, members: [] };
         groups.push(group);
       }
-      group.members.push(h);
+      group.members.push(...members);
     }
     return groups;
-  }, [kepalaKeluarga, pengurusHouseholdIds]);
-  const groupMembers =
-    kkGroups.find((g) => g.value === target)?.members ?? [];
-  const groupRecipients = groupMembers.filter((h) => !excluded.has(h.id));
+  }, [households, pengurusHouseholdIds]);
+  const group = kkGroups.find((g) => g.value === target);
+  const groupMembers = group?.members ?? [];
+  const groupTitle = group?.shortLabel ?? group?.label;
+  const groupKeys = new Set(groupMembers.map((o) => o.key));
+  const groupRecipients = groupMembers.filter((o) => !excluded.has(o.key));
   // ✕ removals only count against the group currently shown.
   const excludedCount = groupMembers.length - groupRecipients.length;
   // Extras stay put when switching groups — skip any the new group
-  // already lists itself (a kepala keluarga added earlier, now in-group).
-  const extras = added.filter(
-    (a) => !(a.key.endsWith(":kk") && groupMembers.some((h) => `${h.id}:kk` === a.key))
-  );
-  // Everyone the blast goes to, as "<household id>:kk|pasangan" keys —
-  // also exactly what gets submitted (see blastToKepalaKeluarga).
-  const recipients: PhoneOption[] = [
-    ...groupRecipients.map((h) => ({
-      key: `${h.id}:kk`,
-      label: `${h.unit_no} - ${h.name}`,
-      phone: h.phone!,
-    })),
-    ...extras,
-  ];
+  // already lists itself (e.g. a pasangan added earlier, now in-group).
+  const extras = added.filter((a) => !groupKeys.has(a.key));
+  // Everyone the blast goes to.
+  const recipients: PhoneOption[] = [...groupRecipients, ...extras];
   const recipientKeys = new Set(recipients.map((r) => r.key));
   // What the server will actually send to — the same number twice (two
   // households sharing one, or a pasangan with the kepala's number) only
@@ -93,16 +108,12 @@ export default function WhatsAppSendForm({
   const recipientCount = new Set(recipients.map((r) => r.phone.trim())).size;
 
   function addRecipient(o: PhoneOption) {
-    // A kepala keluarga already in this group but ✕'d just comes back
-    // into the group list rather than being listed twice.
-    const householdId = o.key.split(":")[0];
-    if (
-      o.key.endsWith(":kk") &&
-      groupMembers.some((h) => h.id === householdId)
-    ) {
+    // Someone already in this group but ✕'d just comes back into the
+    // group list rather than being listed twice.
+    if (groupKeys.has(o.key)) {
       setExcluded((prev) => {
         const next = new Set(prev);
-        next.delete(householdId);
+        next.delete(o.key);
         return next;
       });
       return;
@@ -112,11 +123,11 @@ export default function WhatsAppSendForm({
     );
   }
 
-  function toggleExcluded(id: string) {
+  function toggleExcluded(key: string) {
     setExcluded((prev) => {
       const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
       return next;
     });
   }
@@ -145,7 +156,7 @@ export default function WhatsAppSendForm({
         className="w-full rounded border border-gray-300 px-3 py-2 text-sm"
       >
         <option value="phone">Nomor HP (isi di bawah)</option>
-        <optgroup label="Kepala keluarga">
+        <optgroup label="Banyak penerima">
           {kkGroups.map((g) => (
             <option key={g.value} value={g.value}>
               {g.label} ({g.members.length})
@@ -167,7 +178,7 @@ export default function WhatsAppSendForm({
                 onClick={() =>
                   setExcluded((prev) => {
                     const next = new Set(prev);
-                    for (const h of groupMembers) next.delete(h.id);
+                    for (const o of groupMembers) next.delete(o.key);
                     return next;
                   })
                 }
@@ -180,30 +191,30 @@ export default function WhatsAppSendForm({
           <ul className="max-h-72 overflow-y-auto divide-y divide-gray-100">
             {groupMembers.length === 0 && extras.length === 0 && (
               <li className="px-3 py-4 text-center text-xs text-gray-400">
-                Tidak ada kepala keluarga dengan No. HP di grup ini.
+                Tidak ada warga dengan No. HP di grup ini.
               </li>
             )}
-            {groupMembers.map((h) => {
-              const isExcluded = excluded.has(h.id);
+            {groupMembers.map((o) => {
+              const isExcluded = excluded.has(o.key);
               return (
                 <li
-                  key={h.id}
+                  key={o.key}
                   className={`flex items-center gap-2 px-3 py-1.5 text-sm ${isExcluded ? "bg-gray-50 text-gray-400" : "text-gray-800"}`}
                 >
                   {!isExcluded && (
-                    <input type="hidden" name="recipient" value={`${h.id}:kk`} />
+                    <input type="hidden" name="recipient" value={o.key} />
                   )}
                   <span className={`min-w-0 flex-1 truncate ${isExcluded ? "line-through" : ""}`}>
-                    {h.unit_no} - {h.name}
-                    <span className="ml-2 text-xs text-gray-400">{h.phone}</span>
+                    {o.label}
+                    <span className="ml-2 text-xs text-gray-400">{o.phone}</span>
                   </span>
                   <button
                     type="button"
-                    onClick={() => toggleExcluded(h.id)}
+                    onClick={() => toggleExcluded(o.key)}
                     aria-label={
                       isExcluded
-                        ? `Masukkan lagi ${h.unit_no}`
-                        : `Kecualikan ${h.unit_no}`
+                        ? `Masukkan lagi ${o.label}`
+                        : `Kecualikan ${o.label}`
                     }
                     className={`shrink-0 rounded px-1.5 text-sm ${isExcluded ? "text-blue-600 hover:bg-blue-50" : "text-gray-400 hover:bg-red-50 hover:text-red-600"}`}
                   >
@@ -290,7 +301,7 @@ export default function WhatsAppSendForm({
               className="text-sm font-semibold text-gray-900"
             >
               Kirim ke {recipientCount} nomor
-              {` (${kkGroups.find((g) => g.value === target)?.label}${extras.length > 0 ? ` + ${extras.length} tambahan` : ""})`}
+              {` (${groupTitle}${extras.length > 0 ? ` + ${extras.length} tambahan` : ""})`}
               ?
             </h3>
             <p className="text-xs text-gray-400 mt-1 mb-3">
