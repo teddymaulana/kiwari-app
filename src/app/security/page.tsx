@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { getCurrentUser, SECURITY_KEHADIRAN_ACCESS } from "@/lib/auth";
 import ScrollRight from "@/components/ScrollRight";
 import SubmitButton from "@/components/SubmitButton";
@@ -41,7 +42,8 @@ export default async function SecurityPage({
   searchParams: Promise<{ month?: string; error?: string }>;
 }) {
   const user = await getCurrentUser();
-  if (user?.role !== "pengurus") redirect("/report");
+  if (!user) redirect("/login");
+  const isPengurus = user.role === "pengurus";
 
   const sp = await searchParams;
   const { error } = sp;
@@ -60,12 +62,16 @@ export default async function SecurityPage({
   const rangeStart = `${YEAR}-${monthStr}-01`;
   const rangeEnd = `${YEAR}-${monthStr}-${String(daysInMonth).padStart(2, "0")}`;
 
-  const supabase = await createClient();
+  // security_guards/security_shifts are pengurus-only under RLS. Warga
+  // only get the schedule and Kontak Security, so they read via the admin
+  // client (same tradeoff as /denah) with an explicit column list that
+  // leaves out the guards' PIN; check-in/patrol data stays pengurus-only.
+  const supabase = isPengurus ? await createClient() : createAdminClient();
   const [{ data: guards }, { data: shifts }, { data: checkins }, { data: patrols }] =
     await Promise.all([
       supabase
         .from("security_guards")
-        .select("*")
+        .select(isPengurus ? "*" : "id, name, phone, is_active, created_at")
         .eq("is_active", true)
         .order("created_at")
         .returns<SecurityGuard[]>(),
@@ -75,18 +81,22 @@ export default async function SecurityPage({
         .gte("shift_date", rangeStart)
         .lte("shift_date", rangeEnd)
         .returns<SecurityShift[]>(),
-      supabase
-        .from("security_checkins")
-        .select("guard_id, status")
-        .gte("shift_date", rangeStart)
-        .lte("shift_date", rangeEnd)
-        .returns<{ guard_id: string; status: "pending" | "confirmed" | "rejected" }[]>(),
-      supabase
-        .from("security_patrols")
-        .select("guard_id")
-        .gte("shift_date", rangeStart)
-        .lte("shift_date", rangeEnd)
-        .returns<{ guard_id: string }[]>(),
+      isPengurus
+        ? supabase
+            .from("security_checkins")
+            .select("guard_id, status")
+            .gte("shift_date", rangeStart)
+            .lte("shift_date", rangeEnd)
+            .returns<{ guard_id: string; status: "pending" | "confirmed" | "rejected" }[]>()
+        : { data: null },
+      isPengurus
+        ? supabase
+            .from("security_patrols")
+            .select("guard_id")
+            .gte("shift_date", rangeStart)
+            .lte("shift_date", rangeEnd)
+            .returns<{ guard_id: string }[]>()
+        : { data: null },
     ]);
 
   // Stable sort, so unlisted guards keep their created_at order.
@@ -196,7 +206,7 @@ export default async function SecurityPage({
           </h1>
           <p className="text-xs text-gray-400 mt-1">
             Pagi 07.00–19.00 · Malam 19.00–07.00 · OFF: tidak bertugas
-            {SECURITY_KEHADIRAN_ACCESS.includes(user.email) && (
+            {isPengurus && SECURITY_KEHADIRAN_ACCESS.includes(user.email) && (
               <>
                 {" · "}
                 <a
@@ -210,14 +220,16 @@ export default async function SecurityPage({
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <form action={generateNextMonth}>
-            <SubmitButton
-              pendingText="Membuat..."
-              className="text-sm rounded border border-gray-300 px-3 py-1.5 hover:bg-gray-50 transition"
-            >
-              Generate Bulan Berikutnya
-            </SubmitButton>
-          </form>
+          {isPengurus && (
+            <form action={generateNextMonth}>
+              <SubmitButton
+                pendingText="Membuat..."
+                className="text-sm rounded border border-gray-300 px-3 py-1.5 hover:bg-gray-50 transition"
+              >
+                Generate Bulan Berikutnya
+              </SubmitButton>
+            </form>
+          )}
           <form className="flex gap-2 items-center text-sm" action="/security">
             <select
               name="month"
@@ -397,7 +409,7 @@ export default async function SecurityPage({
         </div>
       )}
 
-      {SECURITY_KEHADIRAN_ACCESS.includes(user.email) && (
+      {isPengurus && SECURITY_KEHADIRAN_ACCESS.includes(user.email) && (
       <div className="mt-8">
         <h2 className="text-sm font-medium text-gray-700 mb-1">
           Ringkasan Kehadiran &amp; Patroli {periodLabel}
