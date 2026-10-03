@@ -27,7 +27,7 @@ const steps = [
       <>
         Masuk ke halaman login Kiwari, lalu ketuk kotak{" "}
         <strong className="font-semibold text-[#12303a]">Bayar IPL</strong>{" "}
-        paling atas — nggak usah isi Email atau Password apa pun.
+        — nggak usah isi Email atau Password apa pun.
       </>
     ),
     image: "/tutorial-bayar-ipl/step-1.png",
@@ -107,7 +107,7 @@ export default async function TutorialBayarIplPage() {
 
         <div className="relative max-w-[620px] mx-auto">
           <Image
-            src="/kiwari-logo.png"
+            src="/kiwari-logo-transparent.png"
             alt="Forum Warga Kiwari Residence"
             width={200}
             height={140}

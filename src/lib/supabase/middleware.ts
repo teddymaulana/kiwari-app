@@ -53,9 +53,11 @@ export async function updateSession(request: NextRequest) {
   // WhatsApp group, so it must be viewable without an account. Same
   // reasoning for the security check-in/patrol pages — a guard has no
   // login, just a shared link + PIN (see security_guards.pin comment in
-  // schema.sql).
+  // schema.sql). /pengelolaan-sampah is the waste-management info page
+  // linked from /login, also meant to be shared with residents.
   const isPublicPage =
     request.nextUrl.pathname.startsWith("/tutorial-bayar-ipl") ||
+    request.nextUrl.pathname.startsWith("/pengelolaan-sampah") ||
     request.nextUrl.pathname.startsWith("/security/checkin") ||
     request.nextUrl.pathname.startsWith("/security/patroli");
 
