@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { getCurrentUser } from "@/lib/auth";
 import type { Contribution, Household, Payment, Settings } from "@/lib/types";
 import { MONTH_NAMES, formatRupiah, compareUnitNo } from "@/lib/types";
+import SampahBanner from "@/components/SampahBanner";
 
 // Unifies IPL payments and Sumbangan contributions into one row shape so
 // the warga-facing "Riwayat Pembayaran" table can show both together,
@@ -167,6 +168,7 @@ export default async function DashboardPage({
 
   return (
     <div className="max-w-5xl mx-auto px-4 py-8">
+      <SampahBanner className="mb-6" />
       {sp.success && (
         <div className="mb-4 text-sm text-green-700 bg-green-50 border border-green-200 rounded px-3 py-2">
           Pembayaran berhasil dicatat.

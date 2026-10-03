@@ -4,6 +4,7 @@ import type { Household, KasType, Payment, Settings } from "@/lib/types";
 import { MONTH_NAMES, formatRupiah, KAS_LABELS, compareUnitNo } from "@/lib/types";
 import ReportTabs from "./ReportTabs";
 import ScrollRight from "@/components/ScrollRight";
+import SampahBanner from "@/components/SampahBanner";
 
 type UnitRow = { id: string; unit_no: string; label: string };
 type PaidEntry = { household_id: string; period_month: number; amount: number };
@@ -313,6 +314,7 @@ export default async function ReportPage({
 
   return (
     <div className="max-w-6xl mx-auto px-4 py-8">
+      <SampahBanner className="mb-6" />
       <div className="flex flex-wrap items-center justify-between gap-4 mb-6">
         <div>
           <h1 className="text-lg font-semibold text-gray-900">
