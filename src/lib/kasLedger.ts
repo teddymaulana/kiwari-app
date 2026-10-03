@@ -76,6 +76,7 @@ export function buildKasLedgerRows({
   loans,
   householdNameMap,
   transferReceiptUrls,
+  sortBy = "date",
 }: {
   kasType: KasType;
   payments: PaymentRow[];
@@ -85,6 +86,9 @@ export function buildKasLedgerRows({
   loans: LoanRow[];
   householdNameMap: Map<string, string>;
   transferReceiptUrls?: Map<string, string>;
+  // "created_at" orders rows by when they were entered rather than their
+  // transaction date — Kas BRI uses this so it reads in input order.
+  sortBy?: "date" | "created_at";
 }): KasLedgerRow[] {
   const rows: KasLedgerRow[] = [];
 
@@ -202,7 +206,11 @@ export function buildKasLedgerRows({
       }
     });
 
-  rows.sort((a, b) => a.date.localeCompare(b.date));
+  rows.sort((a, b) =>
+    sortBy === "created_at"
+      ? a.created_at.localeCompare(b.created_at)
+      : a.date.localeCompare(b.date)
+  );
   return rows;
 }
 

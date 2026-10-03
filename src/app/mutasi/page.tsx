@@ -195,7 +195,11 @@ export default async function MutasiPage() {
   const openingBri = Number(settings?.opening_balance_bri ?? 0);
 
   const tunaiRows = buildKasLedgerRows({ kasType: "tunai", ...commonArgs });
-  const briRows = buildKasLedgerRows({ kasType: "bri", ...commonArgs });
+  const briRows = buildKasLedgerRows({
+    kasType: "bri",
+    ...commonArgs,
+    sortBy: "created_at",
+  });
 
   // Petty Cash's Saldo here matches the "Petty Cash" figure on /report
   // exactly (kasBalance.tunai + piutangPersonel) — Kas BRI doesn't fold
