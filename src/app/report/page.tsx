@@ -19,6 +19,13 @@ const YEAR = 2026;
 // (Petty Cash's displayed total and Kas Saat Ini are unaffected by it).
 const PENDING_DANA_BU_YANE = 1_000_000;
 
+// Display-only relabels of acara names for warga — the stored event_name
+// (and what pengurus see) stays unchanged.
+const WARGA_EVENT_LABELS: Record<string, string> = {
+  "Pembayaran Developer IPL setahun untuk 8A":
+    "Pembayaran Developer IPL setahun untuk 1 rumah",
+};
+
 export default async function ReportPage({
   searchParams,
 }: {
@@ -35,6 +42,8 @@ export default async function ReportPage({
   // Warga always land on a specific month (defaulting to the current one)
   // — only pengurus can pick "Semua Bulan".
   const selectedMonth = Number(sp.month) || (isPengurus ? null : currentMonth);
+  const eventLabel = (ev: string) =>
+    isPengurus ? ev : WARGA_EVENT_LABELS[ev] ?? ev;
 
   const supabase = await createClient();
 
@@ -448,7 +457,7 @@ export default async function ReportPage({
             </div>
             {cardContributions.map(([ev, amount]) => (
               <div key={ev} className="flex items-center justify-between text-xs gap-3">
-                <span className="text-gray-500">{ev}</span>
+                <span className="text-gray-500">{eventLabel(ev)}</span>
                 <span className="text-gray-700 whitespace-nowrap">
                   {formatRupiah(amount)}
                 </span>
@@ -620,7 +629,7 @@ export default async function ReportPage({
                         <div>IPL: {formatRupiah(s.iplTotal)}</div>
                         {s.contributions.map(([eventName, amount]) => (
                           <div key={eventName}>
-                            {eventName}: {formatRupiah(amount)}
+                            {eventLabel(eventName)}: {formatRupiah(amount)}
                           </div>
                         ))}
                       </div>
