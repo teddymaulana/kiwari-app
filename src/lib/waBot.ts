@@ -18,8 +18,10 @@ import {
 // in the background. It only answers private messages that mention
 // "@tanyakiwari" (see TRIGGER) — everything else is left for pengurus.
 //
-// Gated by settings.whatsapp_bot_enabled (Pengaturan > Asisten WhatsApp,
-// default off) and never fires while Layanan WhatsApp is "off". Who's
+// Gated by settings.whatsapp_bot_enabled (default off) and never fires
+// while Layanan WhatsApp is "off". The bot is private for now: there's no
+// UI for the switch (flip it in the Supabase SQL editor), its activity_log
+// rows are hidden on /settings, and its messages are hidden on /humas. Who's
 // asking is resolved from the sender's number, never from anything in the
 // message, and decides which tools the model gets:
 //   - pengurus (kepala keluarga number of a pengurus unit): IPL status of

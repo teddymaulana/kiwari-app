@@ -114,6 +114,11 @@ export default async function HumasPage({
   const { data: messages } = await supabase
     .from("wa_messages")
     .select("*")
+    // Asisten Kiwari (src/lib/waBot.ts) is private for now — keep its
+    // replies and the @tanyakiwari questions that triggered them off this
+    // thread.
+    .or("sent_by.is.null,sent_by.neq.bot")
+    .or("message.is.null,message.not.ilike.*@tanyakiwari*")
     .order("created_at", { ascending: false })
     .limit(50)
     .returns<WaMessage[]>();

@@ -146,30 +146,6 @@ export async function setWhatsAppProvider(formData: FormData) {
   revalidatePath("/settings");
 }
 
-// On/off switch for Asisten Kiwari (src/lib/waBot.ts), the WhatsApp
-// auto-reply for warga — same managers as Layanan WhatsApp above.
-export async function setWhatsAppBotEnabled(formData: FormData) {
-  const user = await getCurrentUser();
-  if (user?.role !== "pengurus") redirect("/dashboard");
-  if (!WHATSAPP_PROVIDER_MANAGERS.includes(user.email)) redirect("/settings");
-
-  const enabled = formData.get("enabled") === "1";
-  const supabase = await createClient();
-
-  await supabase
-    .from("settings")
-    .update({ whatsapp_bot_enabled: enabled, updated_at: new Date().toISOString() })
-    .eq("id", 1);
-
-  await supabase.from("activity_log").insert({
-    actor_email: user.email,
-    action: "settings.set_whatsapp_bot",
-    detail: enabled ? "on" : "off",
-  });
-
-  revalidatePath("/settings");
-}
-
 // Manual trigger for the weekly Kas/Laporan report — same message and
 // recipient (18G, as a test) as the Sunday cron job in
 // api/cron/weekly-report/route.ts, both backed by sendWeeklyReport.

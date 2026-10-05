@@ -12,7 +12,6 @@ import {
   createWargaUser,
   recordCashTransfer,
   setWhatsAppProvider,
-  setWhatsAppBotEnabled,
   sendWeeklyReportNow,
 } from "./actions";
 import type { Household, Settings } from "@/lib/types";
@@ -66,6 +65,9 @@ export default async function SettingsPage({
   const { data: log } = await supabase
     .from("activity_log")
     .select("*")
+    // Asisten Kiwari (src/lib/waBot.ts) logs as "bot" — kept off this list
+    // while the bot is private.
+    .or("actor_email.is.null,actor_email.neq.bot")
     .order("created_at", { ascending: false })
     .limit(20);
 
@@ -267,45 +269,6 @@ export default async function SettingsPage({
                   type="submit"
                   className={`px-3 py-1 rounded-full transition ${
                     (settings?.whatsapp_provider ?? "fonnte") === value
-                      ? "bg-blue-600 text-white"
-                      : "text-gray-500 hover:text-gray-700"
-                  }`}
-                >
-                  {label}
-                </button>
-              </form>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {WHATSAPP_PROVIDER_MANAGERS.includes(user.email) && (
-        <div>
-          <h2 className="text-sm font-medium text-gray-700 mb-1">
-            Asisten WhatsApp
-          </h2>
-          <p className="text-xs text-gray-400 mb-4">
-            Balas otomatis pakai AI (Claude Sonnet) untuk pesan ke nomor
-            Wablas yang menyebut <strong>@tanyakiwari</strong>. Saat ini
-            hanya untuk pengurus (nomor kepala keluarga unit pengurus): status
-            IPL unit mana pun, rekap IPL bulanan, kas, dan jadwal security.
-            Pesan dari nomor lain atau tanpa @tanyakiwari tidak dibalas. Maks.
-            15 balasan per nomor per hari. Tidak berjalan kalau Layanan
-            WhatsApp diatur Off.
-          </p>
-          <div className="flex items-center rounded-full border border-gray-300 p-0.5 text-xs w-fit">
-            {(
-              [
-                ["1", "On"],
-                ["0", "Off"],
-              ] as const
-            ).map(([value, label]) => (
-              <form action={setWhatsAppBotEnabled} key={value}>
-                <input type="hidden" name="enabled" value={value} />
-                <button
-                  type="submit"
-                  className={`px-3 py-1 rounded-full transition ${
-                    (settings?.whatsapp_bot_enabled ? "1" : "0") === value
                       ? "bg-blue-600 text-white"
                       : "text-gray-500 hover:text-gray-700"
                   }`}
