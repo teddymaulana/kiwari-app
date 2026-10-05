@@ -101,6 +101,12 @@ export const LOGIN_INVITE_SENDERS = ["18g@kiwari.local"];
 // again in the server action (settings/actions.ts).
 export const WEEKLY_REPORT_SENDERS = ["18g@kiwari.local"];
 
+// Asisten Kiwari (src/lib/waBot.ts) is private for now — its on/off switch
+// and question history on /settings are shown only to this account,
+// checked both in the UI (settings/page.tsx) and again in the server
+// action (settings/actions.ts, setWhatsAppBotEnabled).
+export const WHATSAPP_BOT_MANAGERS = ["18g@kiwari.local"];
+
 export type CurrentUser = {
   id: string;
   email: string;

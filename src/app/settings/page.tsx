@@ -6,12 +6,14 @@ import {
   OPENING_BALANCE_EDITORS,
   WHATSAPP_PROVIDER_MANAGERS,
   WEEKLY_REPORT_SENDERS,
+  WHATSAPP_BOT_MANAGERS,
 } from "@/lib/auth";
 import {
   updateOpeningBalance,
   createWargaUser,
   recordCashTransfer,
   setWhatsAppProvider,
+  setWhatsAppBotEnabled,
   sendWeeklyReportNow,
 } from "./actions";
 import type { Household, Settings } from "@/lib/types";
@@ -19,6 +21,7 @@ import { formatRupiah, compareUnitNo } from "@/lib/types";
 import HouseholdSelect from "@/components/HouseholdSelect";
 import SubmitButton from "@/components/SubmitButton";
 import ResultPopup from "@/components/ResultPopup";
+import BotHistory from "./BotHistory";
 
 // sendWeeklyReportNow (./actions.ts) can wait up to TIMEOUT_MS (wablas.ts,
 // currently 45s) for a slow Wablas reply — see the same comment on
@@ -278,6 +281,63 @@ export default async function SettingsPage({
               </form>
             ))}
           </div>
+        </div>
+      )}
+
+      {WHATSAPP_BOT_MANAGERS.includes(user.email) && (
+        <div>
+          <h2 className="text-sm font-medium text-gray-700 mb-1">
+            Asisten WhatsApp
+          </h2>
+          <p className="text-xs text-gray-400 mb-4">
+            Hanya terlihat oleh akun ini. Bot AI (Claude Sonnet) membalas
+            pesan ke nomor Wablas yang menyebut <strong>@tanyakiwari</strong>:
+            pengurus bisa tanya IPL unit mana pun dan rekap bulanan, warga
+            hanya IPL unitnya sendiri + kas + jadwal security, nomor tidak
+            terdaftar hanya info umum + jadwal security. Maks. 15 balasan per
+            nomor per hari. Tidak berjalan kalau Layanan WhatsApp diatur Off.
+          </p>
+
+          {settings && settings.whatsapp_bot_enabled === undefined && (
+            <p className="mb-3 text-xs text-red-700 bg-red-50 border border-red-200 rounded px-3 py-2">
+              Kolom whatsapp_bot_enabled belum ada — jalankan
+              supabase/migrations/2026-10-05_whatsapp_bot.sql dulu.
+            </p>
+          )}
+          {!process.env.ANTHROPIC_API_KEY && (
+            <p className="mb-3 text-xs text-red-700 bg-red-50 border border-red-200 rounded px-3 py-2">
+              ANTHROPIC_API_KEY belum diatur di environment — bot tidak bisa
+              menjawab.
+            </p>
+          )}
+
+          <div className="flex items-center rounded-full border border-gray-300 p-0.5 text-xs w-fit mb-4">
+            {(
+              [
+                ["1", "On"],
+                ["0", "Off"],
+              ] as const
+            ).map(([value, label]) => (
+              <form action={setWhatsAppBotEnabled} key={value}>
+                <input type="hidden" name="enabled" value={value} />
+                <button
+                  type="submit"
+                  className={`px-3 py-1 rounded-full transition ${
+                    (settings?.whatsapp_bot_enabled ? "1" : "0") === value
+                      ? "bg-blue-600 text-white"
+                      : "text-gray-500 hover:text-gray-700"
+                  }`}
+                >
+                  {label}
+                </button>
+              </form>
+            ))}
+          </div>
+
+          <h3 className="text-xs font-medium text-gray-600 mb-2">
+            Riwayat Pertanyaan (30 terakhir)
+          </h3>
+          <BotHistory households={households ?? []} />
         </div>
       )}
 

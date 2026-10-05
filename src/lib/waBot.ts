@@ -56,7 +56,7 @@ function hasTrigger(message: string | null | undefined): boolean {
   return TRIGGER.test(message ?? "");
 }
 
-function stripTrigger(message: string): string {
+export function stripTrigger(message: string): string {
   return message.replace(new RegExp(TRIGGER.source, "gi"), "").trim();
 }
 

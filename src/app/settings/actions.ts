@@ -10,6 +10,7 @@ import {
   OPENING_BALANCE_EDITORS,
   WHATSAPP_PROVIDER_MANAGERS,
   WEEKLY_REPORT_SENDERS,
+  WHATSAPP_BOT_MANAGERS,
 } from "@/lib/auth";
 import { sendWeeklyReport } from "@/lib/weeklyReport";
 
@@ -141,6 +142,32 @@ export async function setWhatsAppProvider(formData: FormData) {
     actor_email: user.email,
     action: "settings.set_whatsapp_provider",
     detail: provider,
+  });
+
+  revalidatePath("/settings");
+}
+
+// On/off switch for Asisten Kiwari (src/lib/waBot.ts) — 18G only while
+// the bot is private (WHATSAPP_BOT_MANAGERS).
+export async function setWhatsAppBotEnabled(formData: FormData) {
+  const user = await getCurrentUser();
+  if (user?.role !== "pengurus") redirect("/dashboard");
+  if (!WHATSAPP_BOT_MANAGERS.includes(user.email)) redirect("/settings");
+
+  const enabled = formData.get("enabled") === "1";
+  const supabase = await createClient();
+
+  await supabase
+    .from("settings")
+    .update({ whatsapp_bot_enabled: enabled, updated_at: new Date().toISOString() })
+    .eq("id", 1);
+
+  // Logged as "bot" so it stays off the Riwayat Aktivitas list other
+  // pengurus see (settings/page.tsx filters those rows out).
+  await supabase.from("activity_log").insert({
+    actor_email: "bot",
+    action: "settings.set_whatsapp_bot",
+    detail: `${enabled ? "on" : "off"} by ${user.email}`,
   });
 
   revalidatePath("/settings");
