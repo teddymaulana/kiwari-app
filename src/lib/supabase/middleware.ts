@@ -42,11 +42,15 @@ export async function updateSession(request: NextRequest) {
   // Vercel Cron requests carry no Supabase session cookie, only
   // "Authorization: Bearer $CRON_SECRET" — which the route itself checks
   // (see src/app/api/cron/weekly-report/route.ts) — so this can't gate on
-  // `user` the way session-backed routes do.
+  // `user` the way session-backed routes do. Same for the Wablas webhooks
+  // (incoming messages, delivery tracking): no session, just
+  // ?token=$WABLAS_WEBHOOK_SECRET, which each route checks and fails
+  // closed on — without this they were silently 307'd to /login.
   const isPublicApi =
     request.nextUrl.pathname.startsWith("/api/extract-receipt") ||
     request.nextUrl.pathname.startsWith("/api/unpaid-months") ||
-    request.nextUrl.pathname.startsWith("/api/cron/");
+    request.nextUrl.pathname.startsWith("/api/cron/") ||
+    request.nextUrl.pathname.startsWith("/api/webhooks/");
 
   // Shareable how-to-pay guide (real screenshots of the public Bayar IPL
   // form) — meant to be sent directly to residents, e.g. in the warga
