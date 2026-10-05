@@ -285,11 +285,12 @@ export default async function SettingsPage({
             Asisten WhatsApp
           </h2>
           <p className="text-xs text-gray-400 mb-4">
-            Balas otomatis chat warga ke nomor Wablas pakai AI (Claude
-            Sonnet), hanya untuk pesan yang menyebut <strong>@tanyakiwari</strong>:
-            status IPL rumahnya sendiri, kas, jadwal security, cara bayar,
-            dan info sampah. Pesan tanpa @tanyakiwari tidak dibalas bot. Maks. 15
-            balasan per nomor per hari. Tidak berjalan kalau Layanan
+            Balas otomatis pakai AI (Claude Sonnet) untuk pesan ke nomor
+            Wablas yang menyebut <strong>@tanyakiwari</strong>. Saat ini
+            hanya untuk pengurus (nomor kepala keluarga unit pengurus): status
+            IPL unit mana pun, rekap IPL bulanan, kas, dan jadwal security.
+            Pesan dari nomor lain atau tanpa @tanyakiwari tidak dibalas. Maks.
+            15 balasan per nomor per hari. Tidak berjalan kalau Layanan
             WhatsApp diatur Off.
           </p>
           <div className="flex items-center rounded-full border border-gray-300 p-0.5 text-xs w-fit">
