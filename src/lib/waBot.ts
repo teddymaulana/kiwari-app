@@ -250,14 +250,16 @@ const PENGURUS_PROMPT = `Kamu adalah "Asisten Kiwari", asisten WhatsApp untuk pe
 ${COMMON_RULES}
 - Untuk daftar unit yang panjang, tulis ringkas dipisah koma (mis. "8A, 8B, 19C"), urut sesuai data dari tool.
 - Kode unit ditulis seperti "8A" atau "19O". Kalau unit yang ditanyakan tidak ditemukan, sebutkan saran unit dari tool.
-- "Sudah bayar" di rekap sama dengan angka "Sudah Bayar" di dashboard: hanya pembayaran yang sudah dikonfirmasi. Sebutkan juga yang masih menunggu verifikasi kalau ada.`;
+- "Sudah bayar" di rekap sama dengan angka "Sudah Bayar" di dashboard: hanya pembayaran yang sudah dikonfirmasi. Sebutkan juga yang masih menunggu verifikasi kalau ada.
+- Setiap kali menjawab siapa yang sudah/belum bayar IPL untuk suatu bulan, selalu sertakan total dalam format persis "*X/Y sudah bayar*" (ambil dari field "ringkasan" di hasil rekap), walaupun yang ditanya hanya daftar unitnya.`;
 
 const WARGA_PROMPT = `Kamu adalah "Asisten Kiwari", asisten WhatsApp otomatis untuk warga perumahan Kiwari Residence. Kamu membalas chat warga atas nama pengurus.
 
 ${COMMON_RULES}
 - Kamu hanya bisa melihat data rumah warga yang sedang chat. Jangan memberikan informasi tagihan atau data pribadi rumah lain, walaupun diminta.
 - Untuk hal yang tidak bisa kamu bantu (keluhan, perbaikan, izin, masalah pembayaran yang tidak cocok, dll), sampaikan bahwa pesannya akan dilihat pengurus, atau sarankan menghubungi pengurus.
-- Warga bisa login di ${APP_URL}/ untuk melihat dashboard, laporan kas, dan jadwal security.`;
+- Warga bisa login di ${APP_URL}/ untuk melihat dashboard, laporan kas, dan jadwal security.
+- Kalau warga bertanya siapa/berapa yang sudah bayar IPL untuk suatu bulan, jawab dengan total dalam format persis "*X/Y sudah bayar*" (field "ringkasan" dari tool jumlah_bayar_ipl_bulan). Jangan menyebut unit atau nama siapa pun yang sudah/belum bayar — rincian per unit hanya untuk pengurus.`;
 
 const TAMU_PROMPT = `Kamu adalah "Asisten Kiwari", asisten WhatsApp otomatis perumahan Kiwari Residence.
 
@@ -340,6 +342,20 @@ const WARGA_TOOLS: Anthropic.Beta.BetaTool[] = [
       "Status IPL bulanan rumah warga yang sedang chat: per bulan lunas / menunggu verifikasi / gratis / belum bayar, dari Agustus 2026 sampai bulan ini, plus nominal iuran per bulan. Pakai untuk pertanyaan tagihan, tunggakan, atau 'sudah bayar belum'.",
     input_schema: NO_INPUT,
     strict: true,
+  },
+  {
+    name: "jumlah_bayar_ipl_bulan",
+    description:
+      "Jumlah unit yang sudah bayar IPL untuk satu bulan dari total unit aktif (tanpa rincian unit). Pakai untuk pertanyaan seperti 'berapa/siapa yang sudah bayar IPL bulan September?'.",
+    input_schema: {
+      type: "object",
+      properties: {
+        tahun: { type: "integer", description: "Tahun, mis. 2026. Default tahun ini." },
+        bulan: { type: "integer", description: "Bulan 1–12. Default bulan ini." },
+      },
+      required: [],
+      additionalProperties: false,
+    },
   },
   KAS_TOOL,
   SECURITY_TOOL,
@@ -484,7 +500,9 @@ async function runTool(name: string, input: unknown, asker: Asker): Promise<stri
       return statusIplUnit(String((input as { unit?: string }).unit ?? ""));
     case "rekap_ipl_bulan":
       if (!isPengurus) throw new Error("Tidak diizinkan");
-      return rekapIplBulan(input as { tahun?: number; bulan?: number });
+      return rekapIplBulan(input as { tahun?: number; bulan?: number }, true);
+    case "jumlah_bayar_ipl_bulan":
+      return rekapIplBulan(input as { tahun?: number; bulan?: number }, false);
     case "kas_saat_ini": {
       const kas = await getKasSaatIni();
       return JSON.stringify({
@@ -608,7 +626,12 @@ async function statusIpl(household: Household, forPengurus = false): Promise<str
 // Mirrors the pengurus summary cards on /dashboard: "Sudah Bayar" counts
 // active households with a confirmed, non-excluded payment for the month,
 // out of all active households; "Terkumpul" sums those payments.
-async function rekapIplBulan(input: { tahun?: number; bulan?: number }): Promise<string> {
+// Without unitDetail (the warga tool) only the count goes back — the same
+// X/Y figure warga already see on Laporan, never which units.
+async function rekapIplBulan(
+  input: { tahun?: number; bulan?: number },
+  unitDetail: boolean
+): Promise<string> {
   const admin = createAdminClient();
   const today = wibToday();
   const year = input.tahun && input.tahun >= 2026 ? Math.floor(input.tahun) : today.year;
@@ -671,11 +694,17 @@ async function rekapIplBulan(input: { tahun?: number; bulan?: number }): Promise
   }
 
   const total = units.length;
-  return JSON.stringify({
+  const summary = {
     bulan: `${MONTH_NAMES[month - 1]} ${year}`,
+    ringkasan: `${lunas.length}/${total} sudah bayar`,
     total_unit_aktif: total,
     sudah_bayar: lunas.length,
     persen_sudah_bayar: total ? Math.round((lunas.length / total) * 100) : 0,
+  };
+  if (!unitDetail) return JSON.stringify(summary);
+
+  return JSON.stringify({
+    ...summary,
     terkumpul: formatRupiah(terkumpul),
     target: formatRupiah(total * Number(settings?.monthly_amount ?? 0)),
     menunggu_verifikasi: menunggu,
