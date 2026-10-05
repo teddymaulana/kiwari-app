@@ -107,6 +107,11 @@ export const WEEKLY_REPORT_SENDERS = ["18g@kiwari.local"];
 // action (settings/actions.ts, setWhatsAppBotEnabled).
 export const WHATSAPP_BOT_MANAGERS = ["18g@kiwari.local"];
 
+// Riwayat Aktivitas (the activity_log list at the bottom of /settings) is
+// shown only to this account — settings/page.tsx skips both the query and
+// the section for anyone else.
+export const ACTIVITY_LOG_VIEWERS = ["18g@kiwari.local"];
+
 export type CurrentUser = {
   id: string;
   email: string;

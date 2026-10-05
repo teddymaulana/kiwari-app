@@ -7,6 +7,7 @@ import {
   WHATSAPP_PROVIDER_MANAGERS,
   WEEKLY_REPORT_SENDERS,
   WHATSAPP_BOT_MANAGERS,
+  ACTIVITY_LOG_VIEWERS,
 } from "@/lib/auth";
 import {
   updateOpeningBalance,
@@ -65,14 +66,16 @@ export default async function SettingsPage({
     .eq("id", 1)
     .single<Settings>();
 
-  const { data: log } = await supabase
-    .from("activity_log")
-    .select("*")
-    // Asisten Kiwari (src/lib/waBot.ts) logs as "bot" — kept off this list
-    // while the bot is private.
-    .or("actor_email.is.null,actor_email.neq.bot")
-    .order("created_at", { ascending: false })
-    .limit(20);
+  // 18G only (ACTIVITY_LOG_VIEWERS) — which also means Asisten Kiwari's
+  // "bot" rows can show here without revealing the bot to other pengurus.
+  const canViewLog = ACTIVITY_LOG_VIEWERS.includes(user.email);
+  const { data: log } = canViewLog
+    ? await supabase
+        .from("activity_log")
+        .select("*")
+        .order("created_at", { ascending: false })
+        .limit(20)
+    : { data: null };
 
   const { data: households } = await supabase
     .from("households")
@@ -293,9 +296,9 @@ export default async function SettingsPage({
             Hanya terlihat oleh akun ini. Bot AI (Claude Sonnet) membalas
             pesan ke nomor Wablas yang menyebut <strong>@tanyakiwari</strong>:
             pengurus bisa tanya IPL unit mana pun dan rekap bulanan, warga
-            hanya IPL unitnya sendiri + kas + jadwal security, nomor tidak
-            terdaftar hanya info umum + jadwal security. Maks. 15 balasan per
-            nomor per hari. Tidak berjalan kalau Layanan WhatsApp diatur Off.
+            hanya IPL unitnya sendiri + kas + jadwal security. Nomor yang
+            bukan nomor kepala keluarga/pasangan di data warga diabaikan.
+            Maks. 3 pertanyaan per nomor per hari (18G tanpa batas). Tidak berjalan kalau Layanan WhatsApp diatur Off.
           </p>
 
           {settings && settings.whatsapp_bot_enabled === undefined && (
@@ -431,26 +434,28 @@ export default async function SettingsPage({
         </form>
       </div>
 
-      <div>
-        <h2 className="text-sm font-medium text-gray-700 mb-3">
-          Riwayat Aktivitas
-        </h2>
-        <div className="bg-white border border-gray-200 rounded-lg divide-y divide-gray-100">
-          {(log ?? []).map((l) => (
-            <div key={l.id} className="px-4 py-2 text-xs text-gray-500">
-              <span className="text-gray-400">
-                {new Date(l.created_at).toLocaleString("id-ID")}
-              </span>{" "}
-              — {l.actor_email} — {l.action} {l.detail && `(${l.detail})`}
-            </div>
-          ))}
-          {(log ?? []).length === 0 && (
-            <div className="px-4 py-6 text-center text-gray-400 text-xs">
-              Belum ada aktivitas.
-            </div>
-          )}
+      {canViewLog && (
+        <div>
+          <h2 className="text-sm font-medium text-gray-700 mb-3">
+            Riwayat Aktivitas
+          </h2>
+          <div className="bg-white border border-gray-200 rounded-lg divide-y divide-gray-100">
+            {(log ?? []).map((l) => (
+              <div key={l.id} className="px-4 py-2 text-xs text-gray-500">
+                <span className="text-gray-400">
+                  {new Date(l.created_at).toLocaleString("id-ID")}
+                </span>{" "}
+                — {l.actor_email} — {l.action} {l.detail && `(${l.detail})`}
+              </div>
+            ))}
+            {(log ?? []).length === 0 && (
+              <div className="px-4 py-6 text-center text-gray-400 text-xs">
+                Belum ada aktivitas.
+              </div>
+            )}
+          </div>
         </div>
-      </div>
+      )}
     </div>
   );
 }
