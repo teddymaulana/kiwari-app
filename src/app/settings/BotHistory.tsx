@@ -92,8 +92,9 @@ export default async function BotHistory({
               </details>
             ) : (
               <p className="text-xs text-amber-700">
-                Tidak dibalas — bot Off, batas 15 balasan/hari, atau gagal
-                (cek activity_log: whatsapp.bot_failed)
+                Tidak dibalas — nomor tidak terdaftar, bot Off, sudah lewat
+                batas 3 pertanyaan/hari, atau gagal (cek Riwayat Aktivitas:
+                whatsapp.bot_failed)
               </p>
             )}
           </div>

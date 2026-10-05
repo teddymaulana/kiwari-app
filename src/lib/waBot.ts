@@ -29,16 +29,23 @@ import {
 //   - warga (any number on an active household): only their own unit's
 //     IPL status, kas, security schedule — bound to their household
 //     server-side, so they can't talk the bot into reading another unit.
-//   - tamu (unregistered number): general info from the prompt plus the
-//     security schedule/contacts — no unit or kas data.
-// All tools are read-only.
+// Numbers that aren't a kepala keluarga or pasangan number on an active
+// household are ignored entirely — no Claude call, no reply. All tools are
+// read-only.
 
 const MODEL = "claude-sonnet-5-5";
 const APP_URL = "https://kiwari-app.vercel.app";
 
-// Replies per number per rolling 24h — caps API spend and keeps the
-// number from looking spammy to WhatsApp if someone chats non-stop.
-const DAILY_REPLY_LIMIT = 15;
+// Answered questions per number per rolling 24h — caps API spend and
+// keeps the number from looking spammy to WhatsApp. Both numbers of the
+// units in UNLIMITED_UNITS skip the cap.
+const DAILY_QUESTION_LIMIT = 3;
+const UNLIMITED_UNITS = ["18G"];
+
+// Sent (without calling Claude) the first time a number goes over the cap
+// in a window; anything after that is ignored silently. Not counted as an
+// answered question.
+const LIMIT_REPLY = `Mohon maaf, Asisten Kiwari hanya bisa menjawab ${DAILY_QUESTION_LIMIT} pertanyaan per hari untuk setiap nomor. Silakan bertanya lagi besok, atau hubungi pengurus untuk hal yang mendesak.`;
 // Recent @tanyakiwari messages and the bot's own replies, replayed as
 // conversation context.
 const HISTORY_LIMIT = 10;
@@ -99,16 +106,14 @@ async function getPengurusUnits(): Promise<Set<string>> {
   );
 }
 
-type Asker =
-  | { role: "pengurus" | "warga"; household: Household }
-  | { role: "tamu"; household: null };
+type Asker = { role: "pengurus" | "warga"; household: Household };
 
 // Pengurus are matched on the kepala keluarga number only (the person
 // holding the pengurus login), not phone_pasangan.
 async function identifyAsker(
   phoneKey: string,
   households: Household[]
-): Promise<Asker> {
+): Promise<Asker | null> {
   const pengurusUnits = await getPengurusUnits();
   const pengurusHousehold = households.find(
     (h) =>
@@ -122,9 +127,7 @@ async function identifyAsker(
       normalizePhone(h.phone) === phoneKey ||
       normalizePhone(h.phone_pasangan) === phoneKey
   );
-  return wargaHousehold
-    ? { role: "warga", household: wargaHousehold }
-    : { role: "tamu", household: null };
+  return wargaHousehold ? { role: "warga", household: wargaHousehold } : null;
 }
 
 type Incoming = {
@@ -151,6 +154,7 @@ export async function handleIncomingMessage(incoming: Incoming): Promise<void> {
     .eq("is_active", true)
     .returns<Household[]>();
   const asker = await identifyAsker(phoneKey, households ?? []);
+  if (!asker) return;
 
   // Every recent row, whichever raw format Wablas used for this number —
   // filtered by normalized phone here rather than in SQL.
@@ -177,15 +181,28 @@ export async function handleIncomingMessage(incoming: Incoming): Promise<void> {
   const botReplies = thread.filter(
     (r) => r.direction === "out" && r.sent_by === BOT_SENDER
   );
-  if (botReplies.length >= DAILY_REPLY_LIMIT) return;
+  const unlimited = UNLIMITED_UNITS.includes(asker.household.unit_no.toUpperCase());
+  const answered = botReplies.filter((r) => r.message !== LIMIT_REPLY).length;
+  if (!unlimited && answered >= DAILY_QUESTION_LIMIT) {
+    if (!botReplies.some((r) => r.message === LIMIT_REPLY)) {
+      await sendBotReply(
+        incoming.phone,
+        LIMIT_REPLY,
+        `${asker.role} ${asker.household.unit_no} (limit)`
+      );
+    }
+    return;
+  }
 
   // Only the bot's side of the thread: messages that called it, and its
   // own replies — not chats meant for pengurus.
   const conversation = thread.filter((r) =>
-    r.direction === "in" ? hasTrigger(r.message) : r.sent_by === BOT_SENDER
+    r.direction === "in"
+      ? hasTrigger(r.message)
+      : r.sent_by === BOT_SENDER && r.message !== LIMIT_REPLY
   );
 
-  const label = asker.household ? `${asker.role} ${asker.household.unit_no}` : asker.role;
+  const label = `${asker.role} ${asker.household.unit_no}`;
   let reply: string;
   try {
     reply = await generateReply(asker, incoming.phone, conversation);
@@ -260,12 +277,6 @@ ${COMMON_RULES}
 - Untuk hal yang tidak bisa kamu bantu (keluhan, perbaikan, izin, masalah pembayaran yang tidak cocok, dll), sampaikan bahwa pesannya akan dilihat pengurus, atau sarankan menghubungi pengurus.
 - Warga bisa login di ${APP_URL}/ untuk melihat dashboard, laporan kas, dan jadwal security.
 - Kalau warga bertanya siapa/berapa yang sudah bayar IPL untuk suatu bulan, jawab dengan total dalam format persis "*X/Y sudah bayar*" (field "ringkasan" dari tool jumlah_bayar_ipl_bulan). Jangan menyebut unit atau nama siapa pun yang sudah/belum bayar — rincian per unit hanya untuk pengurus.`;
-
-const TAMU_PROMPT = `Kamu adalah "Asisten Kiwari", asisten WhatsApp otomatis perumahan Kiwari Residence.
-
-Nomor yang chat denganmu tidak terdaftar sebagai warga, jadi kamu hanya bisa memberi informasi umum di bawah serta jadwal dan kontak security. Kamu tidak punya akses ke data tagihan/pembayaran unit mana pun atau saldo kas — kalau ditanya, jelaskan bahwa informasi itu hanya untuk nomor warga yang terdaftar, dan sarankan menghubungi pengurus untuk mendaftarkan nomor (atau chat dari nomor yang terdaftar).
-
-${COMMON_RULES}`;
 
 const NO_INPUT = {
   type: "object" as const,
@@ -364,13 +375,11 @@ const WARGA_TOOLS: Anthropic.Beta.BetaTool[] = [
 const PROMPTS: Record<Asker["role"], string> = {
   pengurus: PENGURUS_PROMPT,
   warga: WARGA_PROMPT,
-  tamu: TAMU_PROMPT,
 };
 
 const TOOLS: Record<Asker["role"], Anthropic.Beta.BetaTool[]> = {
   pengurus: PENGURUS_TOOLS,
   warga: WARGA_TOOLS,
-  tamu: [SECURITY_TOOL],
 };
 
 type ThreadRow = {
@@ -408,14 +417,11 @@ async function generateReply(
   if (!history.length || history[history.length - 1].role !== "user") return "";
 
   const today = wibToday();
+  const { household } = asker;
   let context: string;
-  if (asker.role === "tamu") {
-    context = `Yang chat: nomor tidak terdaftar. Hari ini ${today.date} (WIB).`;
-  } else if (asker.role === "pengurus") {
-    const { household } = asker;
+  if (asker.role === "pengurus") {
     context = `Yang chat: pengurus, ${household.name} (unit ${household.unit_no}). Hari ini ${today.date} (WIB).`;
   } else {
-    const { household } = asker;
     const isPasangan =
       normalizePhone(household.phone_pasangan) === normalizePhone(phone) &&
       normalizePhone(household.phone) !== normalizePhone(phone);
@@ -486,14 +492,11 @@ async function generateReply(
 }
 
 // Tool access is enforced here as well as by which tool list the model
-// was given — a warga can never reach the all-units tools, and a tamu
-// only gets the security schedule.
+// was given — a warga can never reach the all-units tools.
 async function runTool(name: string, input: unknown, asker: Asker): Promise<string> {
-  if (asker.role === "tamu" && name !== "jadwal_security") throw new Error("Tidak diizinkan");
   const isPengurus = asker.role === "pengurus";
   switch (name) {
     case "cek_status_ipl":
-      if (!asker.household) throw new Error("Tidak diizinkan");
       return statusIpl(asker.household);
     case "status_ipl_unit":
       if (!isPengurus) throw new Error("Tidak diizinkan");
