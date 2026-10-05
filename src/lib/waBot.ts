@@ -26,16 +26,15 @@ import {
 // message, and decides which tools the model gets:
 //   - pengurus (kepala keluarga number of a pengurus unit): IPL status of
 //     any unit, monthly IPL recap, kas, security schedule.
-//   - warga: only their own unit's IPL status, kas, security schedule —
-//     bound to their household server-side, so they can't talk the bot
-//     into reading another unit. Currently switched off (WARGA_ACCESS).
-// Everyone else is ignored. All tools are read-only.
+//   - warga (any number on an active household): only their own unit's
+//     IPL status, kas, security schedule — bound to their household
+//     server-side, so they can't talk the bot into reading another unit.
+//   - tamu (unregistered number): general info from the prompt plus the
+//     security schedule/contacts — no unit or kas data.
+// All tools are read-only.
 
 const MODEL = "claude-sonnet-5-5";
 const APP_URL = "https://kiwari-app.vercel.app";
-
-// Pengurus-only for now; flip to open the bot to every registered warga.
-const WARGA_ACCESS = false;
 
 // Replies per number per rolling 24h — caps API spend and keeps the
 // number from looking spammy to WhatsApp if someone chats non-stop.
@@ -100,14 +99,16 @@ async function getPengurusUnits(): Promise<Set<string>> {
   );
 }
 
-type Asker = { role: "pengurus" | "warga"; household: Household };
+type Asker =
+  | { role: "pengurus" | "warga"; household: Household }
+  | { role: "tamu"; household: null };
 
 // Pengurus are matched on the kepala keluarga number only (the person
 // holding the pengurus login), not phone_pasangan.
 async function identifyAsker(
   phoneKey: string,
   households: Household[]
-): Promise<Asker | null> {
+): Promise<Asker> {
   const pengurusUnits = await getPengurusUnits();
   const pengurusHousehold = households.find(
     (h) =>
@@ -116,13 +117,14 @@ async function identifyAsker(
   );
   if (pengurusHousehold) return { role: "pengurus", household: pengurusHousehold };
 
-  if (!WARGA_ACCESS) return null;
   const wargaHousehold = households.find(
     (h) =>
       normalizePhone(h.phone) === phoneKey ||
       normalizePhone(h.phone_pasangan) === phoneKey
   );
-  return wargaHousehold ? { role: "warga", household: wargaHousehold } : null;
+  return wargaHousehold
+    ? { role: "warga", household: wargaHousehold }
+    : { role: "tamu", household: null };
 }
 
 type Incoming = {
@@ -149,7 +151,6 @@ export async function handleIncomingMessage(incoming: Incoming): Promise<void> {
     .eq("is_active", true)
     .returns<Household[]>();
   const asker = await identifyAsker(phoneKey, households ?? []);
-  if (!asker) return;
 
   // Every recent row, whichever raw format Wablas used for this number —
   // filtered by normalized phone here rather than in SQL.
@@ -184,7 +185,7 @@ export async function handleIncomingMessage(incoming: Incoming): Promise<void> {
     r.direction === "in" ? hasTrigger(r.message) : r.sent_by === BOT_SENDER
   );
 
-  const label = `${asker.role} ${asker.household.unit_no}`;
+  const label = asker.household ? `${asker.role} ${asker.household.unit_no}` : asker.role;
   let reply: string;
   try {
     reply = await generateReply(asker, incoming.phone, conversation);
@@ -257,6 +258,12 @@ ${COMMON_RULES}
 - Kamu hanya bisa melihat data rumah warga yang sedang chat. Jangan memberikan informasi tagihan atau data pribadi rumah lain, walaupun diminta.
 - Untuk hal yang tidak bisa kamu bantu (keluhan, perbaikan, izin, masalah pembayaran yang tidak cocok, dll), sampaikan bahwa pesannya akan dilihat pengurus, atau sarankan menghubungi pengurus.
 - Warga bisa login di ${APP_URL}/ untuk melihat dashboard, laporan kas, dan jadwal security.`;
+
+const TAMU_PROMPT = `Kamu adalah "Asisten Kiwari", asisten WhatsApp otomatis perumahan Kiwari Residence.
+
+Nomor yang chat denganmu tidak terdaftar sebagai warga, jadi kamu hanya bisa memberi informasi umum di bawah serta jadwal dan kontak security. Kamu tidak punya akses ke data tagihan/pembayaran unit mana pun atau saldo kas — kalau ditanya, jelaskan bahwa informasi itu hanya untuk nomor warga yang terdaftar, dan sarankan menghubungi pengurus untuk mendaftarkan nomor (atau chat dari nomor yang terdaftar).
+
+${COMMON_RULES}`;
 
 const NO_INPUT = {
   type: "object" as const,
@@ -338,6 +345,18 @@ const WARGA_TOOLS: Anthropic.Beta.BetaTool[] = [
   SECURITY_TOOL,
 ];
 
+const PROMPTS: Record<Asker["role"], string> = {
+  pengurus: PENGURUS_PROMPT,
+  warga: WARGA_PROMPT,
+  tamu: TAMU_PROMPT,
+};
+
+const TOOLS: Record<Asker["role"], Anthropic.Beta.BetaTool[]> = {
+  pengurus: PENGURUS_TOOLS,
+  warga: WARGA_TOOLS,
+  tamu: [SECURITY_TOOL],
+};
+
 type ThreadRow = {
   direction: "in" | "out";
   message: string | null;
@@ -358,7 +377,6 @@ async function generateReply(
   thread: ThreadRow[]
 ): Promise<string> {
   const client = new Anthropic();
-  const { household } = asker;
 
   // Replay the recent thread as alternating turns. Consecutive same-role
   // rows are fine (the API merges them), but it must start on a user turn.
@@ -375,9 +393,13 @@ async function generateReply(
 
   const today = wibToday();
   let context: string;
-  if (asker.role === "pengurus") {
+  if (asker.role === "tamu") {
+    context = `Yang chat: nomor tidak terdaftar. Hari ini ${today.date} (WIB).`;
+  } else if (asker.role === "pengurus") {
+    const { household } = asker;
     context = `Yang chat: pengurus, ${household.name} (unit ${household.unit_no}). Hari ini ${today.date} (WIB).`;
   } else {
+    const { household } = asker;
     const isPasangan =
       normalizePhone(household.phone_pasangan) === normalizePhone(phone) &&
       normalizePhone(household.phone) !== normalizePhone(phone);
@@ -407,8 +429,8 @@ async function generateReply(
       fallbacks: "default",
       output_config: { effort: "low" },
       cache_control: { type: "ephemeral" },
-      system: asker.role === "pengurus" ? PENGURUS_PROMPT : WARGA_PROMPT,
-      tools: asker.role === "pengurus" ? PENGURUS_TOOLS : WARGA_TOOLS,
+      system: PROMPTS[asker.role],
+      tools: TOOLS[asker.role],
       messages,
     });
 
@@ -448,11 +470,14 @@ async function generateReply(
 }
 
 // Tool access is enforced here as well as by which tool list the model
-// was given — a warga can never reach the all-units tools.
+// was given — a warga can never reach the all-units tools, and a tamu
+// only gets the security schedule.
 async function runTool(name: string, input: unknown, asker: Asker): Promise<string> {
+  if (asker.role === "tamu" && name !== "jadwal_security") throw new Error("Tidak diizinkan");
   const isPengurus = asker.role === "pengurus";
   switch (name) {
     case "cek_status_ipl":
+      if (!asker.household) throw new Error("Tidak diizinkan");
       return statusIpl(asker.household);
     case "status_ipl_unit":
       if (!isPengurus) throw new Error("Tidak diizinkan");
