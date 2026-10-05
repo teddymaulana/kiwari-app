@@ -15,6 +15,8 @@ import ResultPopup from "@/components/ResultPopup";
 // instead of that timeout's own graceful message.
 export const maxDuration = 60;
 
+const MESSAGES_PER_PAGE = 20;
+
 // Best-effort "who is this" label for a wa_messages.phone value — matches
 // it against every household's phone/phone_pasangan (same numbers
 // WargaPhoneSelect offers), falling back to the raw number when it's
@@ -93,12 +95,14 @@ export default async function HumasPage({
     wa_error?: string;
     wa_success?: string;
     wa_blast?: string;
+    page?: string;
   }>;
 }) {
   const user = await getCurrentUser();
   if (user?.role !== "pengurus") redirect("/dashboard");
 
-  const { wa_error, wa_success, wa_blast } = await searchParams;
+  const { wa_error, wa_success, wa_blast, page } = await searchParams;
+  const currentPage = Math.max(1, Math.floor(Number(page)) || 1);
 
   const supabase = await createClient();
   const { data: households } = await supabase
@@ -111,17 +115,19 @@ export default async function HumasPage({
 
   const pengurusHouseholdIds = await getPengurusHouseholdIds(households ?? []);
 
-  const { data: messages } = await supabase
+  const from = (currentPage - 1) * MESSAGES_PER_PAGE;
+  const { data: messages, count } = await supabase
     .from("wa_messages")
-    .select("*")
+    .select("*", { count: "exact" })
     // Asisten Kiwari (src/lib/waBot.ts) is private for now — keep its
     // replies and the @tanyakiwari questions that triggered them off this
     // thread.
     .or("sent_by.is.null,sent_by.neq.bot")
     .or("message.is.null,message.not.ilike.*@tanyakiwari*")
     .order("created_at", { ascending: false })
-    .limit(50)
+    .range(from, from + MESSAGES_PER_PAGE - 1)
     .returns<WaMessage[]>();
+  const totalPages = Math.max(1, Math.ceil((count ?? 0) / MESSAGES_PER_PAGE));
 
   return (
     <div className="max-w-2xl mx-auto px-4 py-8 space-y-8">
@@ -155,7 +161,7 @@ export default async function HumasPage({
         />
       </div>
 
-      <div>
+      <div id="percakapan">
         <h2 className="text-sm font-medium text-gray-700 mb-1">
           Percakapan WhatsApp
         </h2>
@@ -171,6 +177,10 @@ export default async function HumasPage({
               m.direction === "in"
                 ? { label: "Masuk", className: "bg-green-50 text-green-700" }
                 : outStatusBadge(m.status);
+            // Only the first line is shown — "..." marks a multi-line
+            // message, and the full text is in the hover title.
+            const [firstLine, ...restLines] = (m.message ?? "").trim().split("\n");
+            const preview = restLines.length > 0 ? `${firstLine}...` : firstLine;
             return (
               <div key={m.id} className="px-4 py-2.5 text-sm flex gap-3">
                 <span
@@ -187,8 +197,11 @@ export default async function HumasPage({
                       {new Date(m.created_at).toLocaleString("id-ID")}
                     </span>
                   </div>
-                  <p className="text-gray-800 whitespace-pre-wrap break-words">
-                    {m.message || (
+                  <p
+                    className="text-gray-800 truncate"
+                    title={m.message || undefined}
+                  >
+                    {preview || (
                       <span className="text-gray-400 italic">
                         ({m.message_type || "non-teks"})
                       </span>
@@ -204,6 +217,33 @@ export default async function HumasPage({
             </div>
           )}
         </div>
+        {totalPages > 1 && (
+          <div className="flex items-center justify-between mt-3 text-xs">
+            {currentPage > 1 ? (
+              <a
+                href={`/humas?page=${currentPage - 1}#percakapan`}
+                className="rounded border border-gray-300 px-3 py-1 hover:bg-gray-50"
+              >
+                ← Sebelumnya
+              </a>
+            ) : (
+              <span />
+            )}
+            <span className="text-gray-500">
+              Halaman {currentPage} dari {totalPages}
+            </span>
+            {currentPage < totalPages ? (
+              <a
+                href={`/humas?page=${currentPage + 1}#percakapan`}
+                className="rounded border border-gray-300 px-3 py-1 hover:bg-gray-50"
+              >
+                Berikutnya →
+              </a>
+            ) : (
+              <span />
+            )}
+          </div>
+        )}
       </div>
     </div>
   );
