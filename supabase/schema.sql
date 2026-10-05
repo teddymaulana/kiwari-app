@@ -33,6 +33,12 @@ alter table settings drop constraint if exists settings_whatsapp_provider_check;
 alter table settings add constraint settings_whatsapp_provider_check
   check (whatsapp_provider in ('fonnte', 'wablas', 'manual', 'off'));
 
+-- On/off switch for Asisten Kiwari, the WhatsApp auto-reply for warga who
+-- chat the Wablas number (src/lib/waBot.ts). Off by default; toggled from
+-- Pengaturan > Asisten WhatsApp. Bot replies are logged in wa_messages
+-- with sent_by = 'bot'.
+alter table settings add column if not exists whatsapp_bot_enabled boolean not null default false;
+
 create table if not exists households (
   id uuid primary key default gen_random_uuid(),
   unit_no text not null,           -- e.g. "Blok A No. 12"

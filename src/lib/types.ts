@@ -228,7 +228,8 @@ export type Settings = {
   monthly_amount: number;
   opening_balance_bri: number;
   opening_balance_tunai: number;
-  whatsapp_provider: "fonnte" | "wablas" | "manual";
+  whatsapp_provider: "fonnte" | "wablas" | "manual" | "off";
+  whatsapp_bot_enabled: boolean;
   updated_at: string;
 };
 

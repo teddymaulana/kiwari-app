@@ -1,5 +1,10 @@
-import { NextRequest, NextResponse } from "next/server";
+import { after, NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { handleIncomingMessage } from "@/lib/waBot";
+
+// Covers the Asisten Kiwari auto-reply that runs in after() below — a
+// Claude call plus a Wablas send (up to 45s on its own, see wablas.ts).
+export const maxDuration = 60;
 
 // Receives Wablas's incoming-message webhook — paste this route's full URL
 // into the Wablas dashboard under Device > Setting > Webhook Receive, with
@@ -51,6 +56,22 @@ export async function POST(request: NextRequest) {
     wablas_message_id: wablasMessageId,
     raw: body,
   });
+
+  // Asisten Kiwari (src/lib/waBot.ts) answers after the response is sent,
+  // so a slow Claude/Wablas round trip never delays Wablas's delivery ack.
+  // It checks its own on/off switch and skips group messages itself.
+  // Some gateways also echo the device's own outgoing messages to this
+  // webhook — never let the bot answer itself.
+  const fromMe = Boolean(body.isFromMe ?? body.fromMe ?? body.from_me);
+  if (!fromMe)
+    after(() =>
+      handleIncomingMessage({
+        phone,
+        message,
+        isGroup,
+        messageType,
+      })
+    );
 
   // Wablas just needs a 2xx to consider the webhook delivered.
   return NextResponse.json({ success: true });
