@@ -46,11 +46,15 @@ export async function updateSession(request: NextRequest) {
   // (incoming messages, delivery tracking): no session, just
   // ?token=$WABLAS_WEBHOOK_SECRET, which each route checks and fails
   // closed on — without this they were silently 307'd to /login.
+  // /api/security/* backs the Android security app (mobile/): no session —
+  // submissions are guard_id + PIN checked per request (same as the public
+  // check-in/patrol pages below), /sync checks SECURITY_APP_KEY itself.
   const isPublicApi =
     request.nextUrl.pathname.startsWith("/api/extract-receipt") ||
     request.nextUrl.pathname.startsWith("/api/unpaid-months") ||
     request.nextUrl.pathname.startsWith("/api/cron/") ||
-    request.nextUrl.pathname.startsWith("/api/webhooks/");
+    request.nextUrl.pathname.startsWith("/api/webhooks/") ||
+    request.nextUrl.pathname.startsWith("/api/security/");
 
   // Shareable how-to-pay guide (real screenshots of the public Bayar IPL
   // form) — meant to be sent directly to residents, e.g. in the warga

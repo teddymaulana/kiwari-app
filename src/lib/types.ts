@@ -205,6 +205,7 @@ export type SecurityCheckin = {
   shift_date: string;
   shift_type: "pagi" | "malam";
   checked_in_at: string;
+  captured_at: string | null;
   photo_path: string;
   status: CheckinStatus;
   confirmed_by: string | null;
@@ -220,6 +221,7 @@ export type SecurityPatrol = {
   report: string;
   photo_path: string | null;
   submitted_at: string;
+  captured_at: string | null;
   created_at: string;
 };
 

@@ -1,0 +1,26 @@
+{
+  "expo": {
+    "name": "Security Kiwari",
+    "slug": "kiwari-security",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
+    "android": {
+      "adaptiveIcon": {
+        "backgroundColor": "#E6F4FE",
+        "foregroundImage": "./assets/android-icon-foreground.png",
+        "backgroundImage": "./assets/android-icon-background.png",
+        "monochromeImage": "./assets/android-icon-monochrome.png"
+      },
+      "predictiveBackGestureEnabled": false,
+      "package": "com.kiwari.security"
+    },
+    "extra": {
+      "eas": {
+        "projectId": "f12618dd-ba95-4018-b003-522675459379"
+      }
+    },
+    "owner": "teddymaulana"
+  }
+}

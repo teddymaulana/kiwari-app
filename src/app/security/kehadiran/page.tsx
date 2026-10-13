@@ -8,6 +8,15 @@ import SubmitButton from "@/components/SubmitButton";
 import type { SecurityGuard, SecurityCheckin, SecurityPatrol } from "@/lib/types";
 import { SHIFT_LABELS, CHECKIN_STATUS_LABELS } from "@/lib/types";
 
+// When a submission carries captured_at (sent from the Android app, which
+// may queue it offline — see schema.sql), show when the photo was taken
+// alongside when it actually arrived, so a late send is visible.
+function sentTimes(sentAt: string, capturedAt: string | null, label: string) {
+  const sent = new Date(sentAt).toLocaleString("id-ID");
+  if (!capturedAt) return `${label} ${sent}`;
+  return `Foto ${new Date(capturedAt).toLocaleString("id-ID")} · Dikirim ${sent}`;
+}
+
 export default async function SecurityKehadiranPage({
   searchParams,
 }: {
@@ -128,7 +137,7 @@ export default async function SecurityKehadiranPage({
                   {new Date(c.shift_date).toLocaleDateString("id-ID")}
                 </span>
                 <div className="text-xs text-gray-400">
-                  Absen {new Date(c.checked_in_at).toLocaleString("id-ID")} ·{" "}
+                  {sentTimes(c.checked_in_at, c.captured_at, "Absen")} ·{" "}
                   <a
                     href={photoUrls.get(`checkin-${c.id}`)}
                     target="_blank"
@@ -191,6 +200,11 @@ export default async function SecurityKehadiranPage({
                   <td className="px-3 py-2 text-gray-500">{SHIFT_LABELS[c.shift_type]}</td>
                   <td className="px-3 py-2 text-gray-500 whitespace-nowrap">
                     {new Date(c.checked_in_at).toLocaleString("id-ID")}
+                    {c.captured_at && (
+                      <div className="text-xs text-gray-400">
+                        Foto {new Date(c.captured_at).toLocaleString("id-ID")}
+                      </div>
+                    )}
                   </td>
                   <td className="px-3 py-2">
                     <span
@@ -243,7 +257,7 @@ export default async function SecurityKehadiranPage({
               </div>
               <p className="text-sm text-gray-700 mt-1 whitespace-pre-wrap">{p.report}</p>
               <div className="text-xs text-gray-400 mt-1">
-                {new Date(p.submitted_at).toLocaleString("id-ID")}
+                {sentTimes(p.submitted_at, p.captured_at, "Dikirim")}
                 {photoUrls.get(`patrol-${p.id}`) && (
                   <>
                     {" · "}

@@ -12,6 +12,8 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // Expo app (Android security app), linted/typechecked on its own.
+    "mobile/**",
   ]),
 ]);
 

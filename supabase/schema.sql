@@ -584,6 +584,14 @@ create table if not exists security_patrols (
 
 create index if not exists security_patrols_date_idx on security_patrols (shift_date);
 
+-- When the guard took the photo (or pressed Kirim, for a patrol with no
+-- photo) on their phone — vs checked_in_at/submitted_at, when the row
+-- reached the server. The Android security app (mobile/) queues
+-- submissions while offline, so these can be hours apart. Phone clock, so
+-- informational rather than proof; null for web submissions.
+alter table security_checkins add column if not exists captured_at timestamptz;
+alter table security_patrols add column if not exists captured_at timestamptz;
+
 alter table security_checkins enable row level security;
 alter table security_patrols enable row level security;
 
