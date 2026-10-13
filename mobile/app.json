@@ -2,7 +2,7 @@
   "expo": {
     "name": "Security Kiwari",
     "slug": "kiwari-security",
-    "version": "1.0.0",
+    "version": "1.0.2",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
@@ -14,13 +14,20 @@
         "monochromeImage": "./assets/android-icon-monochrome.png"
       },
       "predictiveBackGestureEnabled": false,
-      "package": "com.kiwari.security"
+      "package": "com.kiwari.security",
+      "runtimeVersion": {
+        "policy": "appVersion"
+      }
     },
     "extra": {
       "eas": {
         "projectId": "f12618dd-ba95-4018-b003-522675459379"
       }
     },
-    "owner": "teddymaulana"
+    "owner": "teddymaulana",
+    "updates": {
+      "url": "https://u.expo.dev/f12618dd-ba95-4018-b003-522675459379"
+    },
+    "ios": {}
   }
 }

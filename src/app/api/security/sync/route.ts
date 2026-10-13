@@ -8,7 +8,9 @@ function toDateStr(d: Date): string {
 }
 
 // Offline data for the Android security app (mobile/): active guards with
-// their PINs, plus their shifts from yesterday through a week ahead. The
+// their PINs, plus their shifts from yesterday through a week ahead and
+// the absen/patroli already on file for those shifts (so the app shows
+// "Sudah absen" instead of the button, even on a different phone). The
 // app caches this so a guard can log in and pick a shift with no signal;
 // submissions are still PIN-checked again server-side when they arrive.
 // Because this hands out PINs, it's gated on SECURITY_APP_KEY (baked into
@@ -26,23 +28,58 @@ export async function GET(request: NextRequest) {
   to.setDate(to.getDate() + 7);
 
   const admin = createAdminClient();
-  const [{ data: guards, error: guardsError }, { data: shifts, error: shiftsError }] =
-    await Promise.all([
-      admin
-        .from("security_guards")
-        .select("id, name, pin")
-        .eq("is_active", true)
-        .not("pin", "is", null)
-        .order("name"),
-      admin
-        .from("security_shifts")
-        .select("guard_id, shift_date, shift_type")
-        .gte("shift_date", toDateStr(from))
-        .lte("shift_date", toDateStr(to))
-        .in("shift_type", ["pagi", "malam"]),
-    ]);
-  const error = guardsError ?? shiftsError;
+  const range = { from: toDateStr(from), to: toDateStr(to) };
+  const [guardsRes, shiftsRes, checkinsRes, patrolsRes] = await Promise.all([
+    admin
+      .from("security_guards")
+      .select("id, name, pin")
+      .eq("is_active", true)
+      .not("pin", "is", null)
+      .order("name"),
+    admin
+      .from("security_shifts")
+      .select("guard_id, shift_date, shift_type")
+      .gte("shift_date", range.from)
+      .lte("shift_date", range.to)
+      .in("shift_type", ["pagi", "malam"]),
+    admin
+      .from("security_checkins")
+      .select("guard_id, shift_date, shift_type, status, checked_in_at, captured_at")
+      .gte("shift_date", range.from)
+      .lte("shift_date", range.to),
+    admin
+      .from("security_patrols")
+      .select("guard_id, shift_date, shift_type, submitted_at, captured_at")
+      .gte("shift_date", range.from)
+      .lte("shift_date", range.to),
+  ]);
+  const error = guardsRes.error ?? shiftsRes.error ?? checkinsRes.error ?? patrolsRes.error;
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
-  return NextResponse.json({ guards: guards ?? [], shifts: shifts ?? [] });
+  // at: when the guard took the photo / pressed Kirim, falling back to
+  // arrival for web submissions (no captured_at).
+  const done = [
+    ...(checkinsRes.data ?? []).map((c) => ({
+      kind: "checkin",
+      guard_id: c.guard_id,
+      shift_date: c.shift_date,
+      shift_type: c.shift_type,
+      at: c.captured_at ?? c.checked_in_at,
+      rejected: c.status === "rejected",
+    })),
+    ...(patrolsRes.data ?? []).map((p) => ({
+      kind: "patroli",
+      guard_id: p.guard_id,
+      shift_date: p.shift_date,
+      shift_type: p.shift_type,
+      at: p.captured_at ?? p.submitted_at,
+      rejected: false,
+    })),
+  ];
+
+  return NextResponse.json({
+    guards: guardsRes.data ?? [],
+    shifts: shiftsRes.data ?? [],
+    done,
+  });
 }

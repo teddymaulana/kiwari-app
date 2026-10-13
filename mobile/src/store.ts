@@ -5,6 +5,7 @@ import {
   OfflineError,
   send,
   ServerError,
+  type Done,
   type Shift,
   type Submission,
   type SyncData,
@@ -57,23 +58,75 @@ export async function refreshCache(): Promise<SyncData | null> {
   }
 }
 
-function toDateStr(d: Date): string {
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(
-    d.getDate()
-  ).padStart(2, "0")}`;
+// A shift's window: Pagi 07.00–19.00, Malam 19.00–07.00 the next
+// morning (so at 02.00 the current shift is yesterday's Malam).
+const HOUR = 60 * 60 * 1000;
+
+function shiftWindow({ shift_date, shift_type }: Shift): [number, number] {
+  const [y, m, d] = shift_date.split("-").map(Number);
+  const start = new Date(y, m - 1, d, shift_type === "pagi" ? 7 : 19).getTime();
+  return [start, start + 12 * HOUR];
 }
 
-// Same candidates the website offers (lib/securityActiveShift.ts): the
-// guard's Pagi/Malam shifts dated today or yesterday (an overnight Malam
-// is still active through the early morning), newest first.
-export function shiftCandidates(data: SyncData, guardId: string, now = new Date()): Shift[] {
-  const yesterday = new Date(now);
-  yesterday.setDate(yesterday.getDate() - 1);
-  const dates = [toDateStr(now), toDateStr(yesterday)];
-  return data.shifts
-    .filter((s) => s.guard_id === guardId && dates.includes(s.shift_date))
-    .map(({ shift_date, shift_type }) => ({ shift_date, shift_type }))
-    .sort((a, b) => (a.shift_date < b.shift_date ? 1 : -1));
+// The guard's shift happening now, from the cached schedule. Falls back
+// to one starting or ending within the hour, so arriving at 06.45 or
+// filing a patrol report at 19.20 still lands on the right shift.
+export function currentShift(data: SyncData, guardId: string, now = new Date()): Shift | null {
+  const t = now.getTime();
+  const mine: Shift[] = data.shifts
+    .filter((s) => s.guard_id === guardId && (s.shift_type === "pagi" || s.shift_type === "malam"))
+    .map(({ shift_date, shift_type }) => ({ shift_date, shift_type }));
+  const within = (grace: number) =>
+    mine.find((s) => {
+      const [start, end] = shiftWindow(s);
+      return t >= start - grace && t < end + grace;
+    });
+  return within(0) ?? within(HOUR) ?? null;
+}
+
+// Is this guard's absen/patroli for the shift already done — on the
+// server (per the last sync) or waiting in the queue?
+export type Status =
+  | { state: "done"; at: string }
+  | { state: "rejected" }
+  | { state: "waiting" }
+  | null;
+
+const sameShift = (a: Shift & { guard_id: string }, b: Shift & { guard_id: string }) =>
+  a.guard_id === b.guard_id && a.shift_date === b.shift_date && a.shift_type === b.shift_type;
+
+export function submissionStatus(
+  cache: SyncData | null,
+  queue: QueueItem[],
+  kind: "checkin" | "patroli",
+  guardId: string,
+  shift: Shift
+): Status {
+  const key = { ...shift, guard_id: guardId };
+  const done = cache?.done?.find((d) => d.kind === kind && sameShift(d, key));
+  if (done) return done.rejected ? { state: "rejected" } : { state: "done", at: done.at };
+  if (queue.some((q) => !q.error && q.kind === kind && sameShift(q, key))) {
+    return { state: "waiting" };
+  }
+  return null;
+}
+
+// Records a delivered item in the cache straight away, so its status is
+// right even if the follow-up sync doesn't get through.
+function markDone(item: QueueItem) {
+  const cache = loadCache();
+  if (!cache) return;
+  const entry: Done = {
+    kind: item.kind,
+    guard_id: item.guard_id,
+    shift_date: item.shift_date,
+    shift_type: item.shift_type,
+    at: item.captured_at,
+    rejected: false,
+  };
+  const done = cache.done ?? [];
+  if (done.some((d) => d.kind === entry.kind && sameShift(d, entry))) return;
+  writeJson(cacheFile, { ...cache, done: [...done, entry] });
 }
 
 export function loadQueue(): QueueItem[] {
@@ -141,10 +194,12 @@ async function flushOnce(): Promise<string[]> {
     if (item.error) continue;
     try {
       await send(item);
+      markDone(item);
       discardItem(item);
     } catch (e) {
       if (e instanceof OfflineError) break;
       if (e instanceof ServerError && e.duplicate) {
+        markDone(item);
         discardItem(item);
         duplicates.push(item.id);
         continue;
