@@ -267,7 +267,7 @@ const PENGURUS_PROMPT = `Kamu adalah "Asisten Kiwari", asisten WhatsApp untuk pe
 ${COMMON_RULES}
 - Untuk daftar unit yang panjang, tulis ringkas dipisah koma (mis. "8A, 8B, 19C"), urut sesuai data dari tool.
 - Kode unit ditulis seperti "8A" atau "19O". Kalau unit yang ditanyakan tidak ditemukan, sebutkan saran unit dari tool.
-- "Sudah bayar" di rekap sama dengan angka "Sudah Bayar" di dashboard: hanya pembayaran yang sudah dikonfirmasi. Sebutkan juga yang masih menunggu verifikasi kalau ada.
+- "Sudah bayar" di rekap sama dengan angka "Sudah Bayar" di dashboard: pembayaran yang sudah dikonfirmasi ditambah unit gratis (IPL gratis dihitung sudah bayar). Sebutkan juga yang masih menunggu verifikasi kalau ada.
 - Setiap kali menjawab siapa yang sudah/belum bayar IPL untuk suatu bulan, selalu sertakan total dalam format persis "*X/Y sudah bayar*" (ambil dari field "ringkasan" di hasil rekap), walaupun yang ditanya hanya daftar unitnya.`;
 
 const WARGA_PROMPT = `Kamu adalah "Asisten Kiwari", asisten WhatsApp otomatis untuk warga perumahan Kiwari Residence. Kamu membalas chat warga atas nama pengurus.
@@ -627,8 +627,8 @@ async function statusIpl(household: Household, forPengurus = false): Promise<str
 }
 
 // Mirrors the pengurus summary cards on /dashboard: "Sudah Bayar" counts
-// active households with a confirmed, non-excluded payment for the month,
-// out of all active households; "Terkumpul" sums those payments.
+// active households with a confirmed, non-excluded payment or a Gratis
+// exemption for the month, out of all active households; "Terkumpul" sums those payments.
 // Without unitDetail (the warga tool) only the count goes back — the same
 // X/Y figure warga already see on Laporan, never which units.
 async function rekapIplBulan(
@@ -697,12 +697,13 @@ async function rekapIplBulan(
   }
 
   const total = units.length;
+  const settled = lunas.length + gratis.length;
   const summary = {
     bulan: `${MONTH_NAMES[month - 1]} ${year}`,
-    ringkasan: `${lunas.length}/${total} sudah bayar`,
+    ringkasan: `${settled}/${total} sudah bayar`,
     total_unit_aktif: total,
-    sudah_bayar: lunas.length,
-    persen_sudah_bayar: total ? Math.round((lunas.length / total) * 100) : 0,
+    sudah_bayar: settled,
+    persen_sudah_bayar: total ? Math.round((settled / total) * 100) : 0,
   };
   if (!unitDetail) return JSON.stringify(summary);
 
