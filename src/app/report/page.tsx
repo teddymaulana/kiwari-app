@@ -117,7 +117,8 @@ export default async function ReportPage({
 
   units.sort((a, b) => compareUnitNo(a.unit_no, b.unit_no));
 
-  // Gratis (exempt) months count toward "X/Y sudah bayar" for everyone.
+  // Gratis (exempt) months count toward "X/Y sudah bayar" for everyone,
+  // and only active units count — same rule as the dashboard card.
   // Warga can only read their own exemptions under RLS, so this goes
   // through the admin client — only household_id/month, which reveals no
   // more than the paid count itself.
@@ -307,9 +308,9 @@ export default async function ReportPage({
       paidCount: new Set([
         ...entriesThisMonth.map((p) => p.household_id),
         ...(yearExemptions ?? [])
-          .filter((e) => e.period_month === month && unitIds.has(e.household_id))
+          .filter((e) => e.period_month === month)
           .map((e) => e.household_id),
-      ]).size,
+      ].filter((id) => unitIds.has(id))).size,
       pengeluaran: expensesThisMonth.reduce((s, e) => s + Number(e.amount), 0),
     };
   });
