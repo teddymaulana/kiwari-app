@@ -160,10 +160,8 @@ export default async function DashboardPage({
     (paidThrough.year > realNowYear ||
       (paidThrough.year === realNowYear && paidThrough.month > realNowMonth));
   const totalHouseholds = households?.length ?? 0;
-  // A Gratis (exempt) household owes nothing this month, so it counts as
-  // settled in "Sudah Bayar" alongside confirmed payments.
-  const paidCount = (households ?? []).filter(
-    (h) => paidByHousehold.has(h.id) || exemptHouseholds.has(h.id)
+  const paidCount = (households ?? []).filter((h) =>
+    paidByHousehold.has(h.id)
   ).length;
   const totalCollected = (payments ?? []).reduce((sum, p) => sum + Number(p.amount), 0);
   const expectedTotal = totalHouseholds * Number(settings?.monthly_amount ?? 0);

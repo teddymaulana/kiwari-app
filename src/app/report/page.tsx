@@ -1,5 +1,4 @@
 import { createClient } from "@/lib/supabase/server";
-import { createAdminClient } from "@/lib/supabase/admin";
 import { getCurrentUser } from "@/lib/auth";
 import type { Household, KasType, Payment, Settings } from "@/lib/types";
 import { MONTH_NAMES, formatRupiah, KAS_LABELS, compareUnitNo } from "@/lib/types";
@@ -116,16 +115,6 @@ export default async function ReportPage({
   }
 
   units.sort((a, b) => compareUnitNo(a.unit_no, b.unit_no));
-
-  // Gratis (exempt) months count toward "X/Y sudah bayar" for everyone.
-  // Warga can only read their own exemptions under RLS, so this goes
-  // through the admin client — only household_id/month, which reveals no
-  // more than the paid count itself.
-  const { data: yearExemptions } = await createAdminClient()
-    .from("ipl_exemptions")
-    .select("household_id, period_month")
-    .eq("period_year", year)
-    .returns<{ household_id: string; period_month: number }[]>();
 
   const paidMap = new Map<string, number>();
   paidEntries.forEach((p) => {
@@ -273,7 +262,6 @@ export default async function ReportPage({
     0
   );
 
-  const unitIds = new Set(units.map((u) => u.id));
   const monthlyStats = MONTH_NAMES.map((_, i) => {
     const month = i + 1;
     const entriesThisMonth = paidEntries.filter((p) => p.period_month === month);
@@ -304,12 +292,7 @@ export default async function ReportPage({
       contributionTotal,
       total: iplTotal + contributionTotal,
       contributions: Array.from(contributionTotalsThisMonth.entries()),
-      paidCount: new Set([
-        ...entriesThisMonth.map((p) => p.household_id),
-        ...(yearExemptions ?? [])
-          .filter((e) => e.period_month === month && unitIds.has(e.household_id))
-          .map((e) => e.household_id),
-      ]).size,
+      paidCount: new Set(entriesThisMonth.map((p) => p.household_id)).size,
       pengeluaran: expensesThisMonth.reduce((s, e) => s + Number(e.amount), 0),
     };
   });
