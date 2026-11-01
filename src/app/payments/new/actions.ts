@@ -2,6 +2,8 @@
 
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
+import { after } from "next/server";
+import { syncYearToSheet } from "@/lib/googleSheets";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getCurrentUser, PAYMENT_RECORDERS, PAYMENT_VERIFIERS } from "@/lib/auth";
@@ -96,6 +98,7 @@ export async function recordPayments(formData: FormData) {
   });
 
   revalidatePath("/report");
+  after(() => syncYearToSheet(period_year));
 
   if (failed.length > 0) {
     redirect(
@@ -143,6 +146,8 @@ export async function confirmPaymentClaim(id: string) {
     }>();
 
   if (claim) {
+    after(() => syncYearToSheet(claim.period_year));
+
     await supabase.from("activity_log").insert({
       actor_email: user.email,
       action: "payment.confirm_claim",
@@ -214,6 +219,7 @@ export async function confirmPaymentClaimManual(id: string): Promise<{ success: 
     }>();
 
   if (!claim) return { success: false };
+  after(() => syncYearToSheet(claim.period_year));
 
   await supabase.from("activity_log").insert({
     actor_email: user.email,

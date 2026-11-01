@@ -1,6 +1,8 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { after } from "next/server";
+import { syncYearToSheet } from "@/lib/googleSheets";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentUser, PAYMENT_RECORDERS, PAYMENT_DELETERS } from "@/lib/auth";
 
@@ -23,6 +25,7 @@ export async function deletePayment(id: string) {
     .single();
 
   if (payment) {
+    after(() => syncYearToSheet(payment.period_year));
     await supabase.from("activity_log").insert({
       actor_email: user.email,
       action: "payment.delete",
@@ -54,6 +57,7 @@ export async function excludePayment(id: string) {
     .single();
 
   if (payment) {
+    after(() => syncYearToSheet(payment.period_year));
     await supabase.from("activity_log").insert({
       actor_email: user.email,
       action: "payment.exclude",
@@ -161,6 +165,7 @@ export async function includePayment(id: string) {
     .single();
 
   if (payment) {
+    after(() => syncYearToSheet(payment.period_year));
     await supabase.from("activity_log").insert({
       actor_email: user.email,
       action: "payment.include",

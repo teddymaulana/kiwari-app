@@ -1,8 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentUser } from "@/lib/auth";
-import type { Household, Payment } from "@/lib/types";
-import { compareUnitNo } from "@/lib/types";
+import { buildYearTable } from "@/lib/googleSheets";
 
 export async function GET(request: NextRequest) {
   const year =
@@ -15,39 +14,10 @@ export async function GET(request: NextRequest) {
   }
 
   const supabase = await createClient();
+  const table = await buildYearTable(supabase, year);
 
-  const [{ data: households }, { data: payments }] = await Promise.all([
-    supabase.from("households").select("*").returns<Household[]>(),
-    supabase
-      .from("payments")
-      .select("*")
-      .eq("period_year", year)
-      .eq("status", "confirmed")
-      .eq("excluded", false)
-      .returns<Payment[]>(),
-  ]);
-
-  households?.sort((a, b) => compareUnitNo(a.unit_no, b.unit_no));
-
-  const paidMap = new Map<string, Payment>();
-  (payments ?? []).forEach((p) => {
-    paidMap.set(`${p.household_id}-${p.period_month}`, p);
-  });
-
-  const months = Array.from({ length: 12 }, (_, i) => i + 1);
-  const header = ["No. Rumah", "Nama", ...months.map((m) => `Bulan ${m}`), "Total"];
-  const rows = (households ?? []).map((h) => {
-    let total = 0;
-    const cells = months.map((m) => {
-      const p = paidMap.get(`${h.id}-${m}`);
-      if (p) total += Number(p.amount);
-      return p ? String(Number(p.amount)) : "";
-    });
-    return [h.unit_no, h.name, ...cells, String(total)];
-  });
-
-  const csv = [header, ...rows]
-    .map((row) => row.map(csvEscape).join(","))
+  const csv = table
+    .map((row) => row.map((v) => csvEscape(String(v))).join(","))
     .join("\n");
 
   return new NextResponse(csv, {
