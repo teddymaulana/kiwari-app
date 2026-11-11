@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import { createAdminClient } from "@/lib/supabase/admin";
+import { buktiHref } from "@/lib/bukti";
 import { getCurrentUser } from "@/lib/auth";
 import type { Settings } from "@/lib/types";
 import { formatRupiah } from "@/lib/types";
@@ -165,21 +165,12 @@ export default async function MutasiPage() {
     else piutangPersonel -= amount;
   });
 
-  // Private bucket, service_role-only (see schema.sql) — same signed-URL
-  // pattern as bukti-pengeluaran on expenses/page.tsx.
+  // Private bucket, service_role-only (see schema.sql) — opened through
+  // /api/bukti, which signs a fresh URL per click.
   const transferReceiptUrls = new Map<string, string>();
-  const withReceipt = (transfers ?? []).filter((t) => t.receipt_path);
-  if (withReceipt.length > 0) {
-    const admin = createAdminClient();
-    await Promise.all(
-      withReceipt.map(async (t) => {
-        const { data } = await admin.storage
-          .from("bukti-transfer-kas")
-          .createSignedUrl(t.receipt_path!, 60 * 10);
-        if (data?.signedUrl) transferReceiptUrls.set(t.id, data.signedUrl);
-      })
-    );
-  }
+  (transfers ?? [])
+    .filter((t) => t.receipt_path)
+    .forEach((t) => transferReceiptUrls.set(t.id, buktiHref("transfer", t.id)));
 
   const commonArgs = {
     payments: payments ?? [],

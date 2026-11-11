@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import { createAdminClient } from "@/lib/supabase/admin";
+import { buktiHref } from "@/lib/bukti";
 import { getCurrentUser, PAYMENT_RECORDERS, PAYMENT_VERIFIERS } from "@/lib/auth";
 import { getWhatsAppProvider } from "@/lib/whatsapp";
 import { buildWaMeUrl } from "@/lib/waMe";
@@ -51,18 +51,10 @@ export default async function NewPaymentPage({
 
   households?.sort((a, b) => compareUnitNo(a.unit_no, b.unit_no));
 
-  const admin = createAdminClient();
   const receiptUrls = new Map<string, string>();
-  await Promise.all(
-    (pendingClaims ?? [])
-      .filter((c) => c.receipt_path)
-      .map(async (c) => {
-        const { data } = await admin.storage
-          .from("bukti-transfer")
-          .createSignedUrl(c.receipt_path!, 60 * 10);
-        if (data?.signedUrl) receiptUrls.set(c.id, data.signedUrl);
-      })
-  );
+  (pendingClaims ?? [])
+    .filter((c) => c.receipt_path)
+    .forEach((c) => receiptUrls.set(c.id, buktiHref("payment", c.id)));
 
   return (
     <div className="max-w-lg mx-auto px-4 py-8">

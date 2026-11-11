@@ -1,7 +1,7 @@
 import { Fragment } from "react";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import { createAdminClient } from "@/lib/supabase/admin";
+import { buktiHref } from "@/lib/bukti";
 import { getCurrentUser, EXPENSE_RECORDERS } from "@/lib/auth";
 import { addExpense, updateExpense, deleteExpense, releaseExpense, releaseAllDrafts } from "./actions";
 import DeleteExpenseButton from "./DeleteExpenseButton";
@@ -55,18 +55,10 @@ export default async function ExpensesPage({
     monthTotals.set(m, (monthTotals.get(m) ?? 0) + Number(e.amount));
   });
 
-  const admin = createAdminClient();
   const receiptUrls = new Map<string, string>();
-  await Promise.all(
-    expenses
-      .filter((e) => e.receipt_path)
-      .map(async (e) => {
-        const { data } = await admin.storage
-          .from("bukti-pengeluaran")
-          .createSignedUrl(e.receipt_path!, 60 * 10);
-        if (data?.signedUrl) receiptUrls.set(e.id, data.signedUrl);
-      })
-  );
+  expenses
+    .filter((e) => e.receipt_path)
+    .forEach((e) => receiptUrls.set(e.id, buktiHref("expense", e.id)));
 
   return (
     <div className="max-w-4xl mx-auto px-4 py-8">

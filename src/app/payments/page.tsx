@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import { createAdminClient } from "@/lib/supabase/admin";
+import { buktiHref } from "@/lib/bukti";
 import {
   getCurrentUser,
   PAYMENT_RECORDERS,
@@ -94,18 +94,10 @@ export default async function PaymentsPage({
         )
       : [];
 
-  const admin = createAdminClient();
   const receiptUrls = new Map<string, string>();
-  await Promise.all(
-    (history ?? [])
-      .filter((p) => p.receipt_path)
-      .map(async (p) => {
-        const { data } = await admin.storage
-          .from("bukti-transfer")
-          .createSignedUrl(p.receipt_path!, 60 * 10);
-        if (data?.signedUrl) receiptUrls.set(p.id, data.signedUrl);
-      })
-  );
+  (history ?? [])
+    .filter((p) => p.receipt_path)
+    .forEach((p) => receiptUrls.set(p.id, buktiHref("payment", p.id)));
 
   return (
     <div className="max-w-3xl mx-auto px-4 py-8">

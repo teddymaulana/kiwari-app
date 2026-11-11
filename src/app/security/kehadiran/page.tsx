@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import { createAdminClient } from "@/lib/supabase/admin";
+import { buktiHref } from "@/lib/bukti";
 import { getCurrentUser, SECURITY_KEHADIRAN_ACCESS } from "@/lib/auth";
 import { setGuardPin, confirmCheckin, rejectCheckin } from "./actions";
 import GuardPinForm from "./GuardPinForm";
@@ -50,24 +50,13 @@ export default async function SecurityKehadiranPage({
 
   const guardMap = new Map((guards ?? []).map((g) => [g.id, g.name]));
 
-  const admin = createAdminClient();
   const photoUrls = new Map<string, string>();
-  await Promise.all([
-    ...(checkins ?? []).map(async (c) => {
-      const { data } = await admin.storage
-        .from("bukti-kehadiran")
-        .createSignedUrl(c.photo_path, 60 * 10);
-      if (data?.signedUrl) photoUrls.set(`checkin-${c.id}`, data.signedUrl);
-    }),
-    ...(patrols ?? [])
-      .filter((p) => p.photo_path)
-      .map(async (p) => {
-        const { data } = await admin.storage
-          .from("bukti-kehadiran")
-          .createSignedUrl(p.photo_path!, 60 * 10);
-        if (data?.signedUrl) photoUrls.set(`patrol-${p.id}`, data.signedUrl);
-      }),
-  ]);
+  (checkins ?? [])
+    .filter((c) => c.photo_path)
+    .forEach((c) => photoUrls.set(`checkin-${c.id}`, buktiHref("checkin", c.id)));
+  (patrols ?? [])
+    .filter((p) => p.photo_path)
+    .forEach((p) => photoUrls.set(`patrol-${p.id}`, buktiHref("patrol", p.id)));
 
   const pending = (checkins ?? []).filter((c) => c.status === "pending");
   const resolved = (checkins ?? []).filter((c) => c.status !== "pending");
