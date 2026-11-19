@@ -47,6 +47,7 @@ export default async function SecurityPage({
   if (!user) redirect("/login");
   const isPengurus = user.role === "pengurus";
   const canAlert = isPengurus && SECURITY_ALERT_SENDERS.includes(user.email);
+  const canKehadiran = isPengurus && SECURITY_KEHADIRAN_ACCESS.includes(user.email);
 
   const sp = await searchParams;
   const { error } = sp;
@@ -123,6 +124,16 @@ export default async function SecurityPage({
         .limit(10)
         .returns<AlertRow[]>()
     : { data: null };
+
+  // Check-ins waiting for Konfirmasi/Tolak — same (undated) set as the
+  // "Menunggu Konfirmasi" list on /security/kehadiran — for the badge on
+  // the Kehadiran & Patroli button.
+  const { count: pendingCheckins } = canKehadiran
+    ? await supabase
+        .from("security_checkins")
+        .select("id", { count: "exact", head: true })
+        .eq("status", "pending")
+    : { count: null };
 
   // Stable sort, so unlisted guards keep their created_at order.
   guards?.sort((a, b) => guardRank(a.name) - guardRank(b.name));
@@ -231,20 +242,26 @@ export default async function SecurityPage({
           </h1>
           <p className="text-xs text-gray-400 mt-1">
             Pagi 07.00–19.00 · Malam 19.00–07.00 · OFF: tidak bertugas
-            {isPengurus && SECURITY_KEHADIRAN_ACCESS.includes(user.email) && (
-              <>
-                {" · "}
-                <a
-                  href="/security/kehadiran"
-                  className="text-blue-600 hover:underline"
-                >
-                  Kehadiran &amp; Patroli
-                </a>
-              </>
-            )}
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
+          {canKehadiran && (
+            <a
+              href="/security/kehadiran"
+              className="inline-flex items-center gap-2 rounded bg-amber-400 px-3 py-1.5 text-sm font-semibold text-amber-950 shadow-sm hover:bg-amber-300 transition"
+            >
+              Kehadiran &amp; Patroli Security
+              {!!pendingCheckins && (
+                <span
+                  title="Absen menunggu konfirmasi"
+                  className="rounded-full bg-red-600 px-1.5 py-0.5 text-[11px] font-bold leading-none text-white"
+                >
+                  {pendingCheckins}
+                </span>
+              )}
+              <span aria-hidden="true">→</span>
+            </a>
+          )}
           {isPengurus && (
             <form action={generateNextMonth}>
               <SubmitButton
@@ -520,7 +537,7 @@ export default async function SecurityPage({
         </div>
       )}
 
-      {isPengurus && SECURITY_KEHADIRAN_ACCESS.includes(user.email) && (
+      {canKehadiran && (
       <div className="mt-8">
         <h2 className="text-sm font-medium text-gray-700 mb-1">
           Ringkasan Kehadiran &amp; Patroli {periodLabel}
