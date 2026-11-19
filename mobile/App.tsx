@@ -4,17 +4,21 @@ import {
   Alert,
   AppState,
   Image,
+  KeyboardAvoidingView,
   Pressable,
   ScrollView,
   StyleSheet,
   Text,
   TextInput,
+  Vibration,
   View,
 } from "react-native";
 import { StatusBar } from "expo-status-bar";
 import * as ImagePicker from "expo-image-picker";
 import * as Network from "expo-network";
-import type { Guard, Shift, SyncData } from "./src/api";
+import type { Guard, SecurityAlert, Shift, SyncData } from "./src/api";
+import { ackAlert, fetchAlerts, OfflineError } from "./src/api";
+import { onAlertPush, setUpPush } from "./src/push";
 import {
   discardItem,
   enqueue,
@@ -40,6 +44,14 @@ type Draft = { photoUri?: string; report?: string; captured_at: string };
 
 // How often to retry the queue while the app is open.
 const FLUSH_INTERVAL_MS = 60_000;
+// How often to check for new Alert Sekuriti while the app is open. A
+// push notification (src/push.ts) also triggers an immediate check, and
+// is what reaches the phone while the app is closed.
+const ALERT_POLL_MS = 15_000;
+// Long buzz, pause — repeated until the alert is handled or closed.
+const ALERT_VIBRATION = [0, 1000, 600];
+
+const LOGO = require("./assets/kiwari-logo.png");
 
 const SHIFT_LABELS = { pagi: "Pagi (07.00–19.00)", malam: "Malam (19.00–07.00)" };
 
@@ -60,6 +72,63 @@ export default function App() {
   const [session, setSession] = useState<Session | null>(null);
   const [screen, setScreen] = useState<Screen>("home");
   const shift = session?.shift ?? null;
+  const [alerts, setAlerts] = useState<SecurityAlert[]>([]);
+  // Open alerts a guard closed the full-screen view of without taking them
+  // (e.g. nobody logged in yet) — they stay listed, just stop buzzing.
+  const [silenced, setSilenced] = useState<string[]>([]);
+
+  const loadAlerts = useCallback(async () => {
+    try {
+      setAlerts(await fetchAlerts());
+    } catch {
+      // Offline or server hiccup — keep what we have, try again next tick.
+    }
+  }, []);
+
+  useEffect(() => {
+    setUpPush();
+    return onAlertPush(loadAlerts);
+  }, [loadAlerts]);
+
+  useEffect(() => {
+    loadAlerts();
+    let timer = setInterval(loadAlerts, ALERT_POLL_MS);
+    const sub = AppState.addEventListener("change", (state) => {
+      clearInterval(timer);
+      if (state === "active") {
+        loadAlerts();
+        timer = setInterval(loadAlerts, ALERT_POLL_MS);
+      }
+    });
+    return () => {
+      clearInterval(timer);
+      sub.remove();
+    };
+  }, [loadAlerts]);
+
+  const ringing = alerts.find((a) => a.status === "open" && !silenced.includes(a.id)) ?? null;
+
+  useEffect(() => {
+    if (!ringing) return;
+    Vibration.vibrate(ALERT_VIBRATION, true);
+    return () => Vibration.cancel();
+  }, [ringing?.id]);
+
+  const takeAlert = async (alert: SecurityAlert) => {
+    if (!session) return;
+    try {
+      const already = await ackAlert(alert.id, session.guard.id, session.pin);
+      if (already) Alert.alert("Sudah ditangani", `Alert ini sudah diambil ${already}.`);
+    } catch (e) {
+      Alert.alert(
+        "Gagal",
+        e instanceof OfflineError ? "Tidak ada koneksi internet. Coba lagi." : (e as Error).message
+      );
+      return;
+    }
+    setSilenced((s) => [...s, alert.id]);
+    loadAlerts();
+  };
 
   // Send whatever's queued, then pull fresh guards/shifts. Both fail
   // quietly when offline — the cached data and the queue just stay.
@@ -169,8 +238,17 @@ export default function App() {
   return (
     <View style={styles.root}>
       <StatusBar style="dark" />
+      {ringing && (
+        <AlertOverlay
+          alert={ringing}
+          guardName={session?.guard.name ?? null}
+          onTake={() => takeAlert(ringing)}
+          onClose={() => setSilenced((s) => [...s, ringing.id])}
+        />
+      )}
       {!session ? (
         <LoginScreen
+          alerts={alerts}
           cache={cache}
           queue={queue}
           syncing={syncing}
@@ -185,6 +263,8 @@ export default function App() {
         />
       ) : screen === "home" || !shift ? (
         <HomeScreen
+          alerts={alerts}
+          onTakeAlert={takeAlert}
           session={session}
           shift={shift}
           checkin={shift && submissionStatus(cache, queue, "checkin", session.guard.id, shift)}
@@ -212,6 +292,7 @@ export default function App() {
 // Step 1: tap your name tile. Step 2: enter your PIN (with a way back in
 // case the wrong name was tapped).
 function LoginScreen({
+  alerts,
   cache,
   queue,
   syncing,
@@ -219,6 +300,7 @@ function LoginScreen({
   onDiscard,
   onLogin,
 }: {
+  alerts: SecurityAlert[];
   cache: SyncData | null;
   queue: QueueItem[];
   syncing: boolean;
@@ -234,14 +316,16 @@ function LoginScreen({
 
   return (
     <ScrollView contentContainerStyle={styles.page}>
-      <Text style={styles.title}>Security Kiwari</Text>
+      <Image source={LOGO} style={styles.logo} resizeMode="contain" />
+      <Text style={styles.appName}>SECURITY</Text>
+      <AlertList alerts={alerts} hint="Masuk dulu untuk menangani alert." />
       <Text style={styles.muted}>Pilih nama Anda.</Text>
 
       <QueuePanel queue={queue} syncing={syncing} onSync={onSync} onDiscard={onDiscard} />
 
       {!cache ? (
         syncing ? (
-          <ActivityIndicator style={{ marginTop: 24 }} />
+          <ActivityIndicator style={{ marginTop: 24 }} color="#ca8a04" />
         ) : (
           <>
             <Text style={styles.error}>
@@ -273,7 +357,9 @@ function LoginScreen({
 }
 
 // Checked against the cached list so it works with no signal; the server
-// checks the PIN again when the submission arrives.
+// checks the PIN again when the submission arrives. Logs in as soon as the
+// last digit is typed — the Masuk button can sit under the keyboard
+// (Android draws edge-to-edge), so guards shouldn't have to reach it.
 function PinScreen({
   guard,
   onBack,
@@ -284,43 +370,74 @@ function PinScreen({
   onLogin: (guard: Guard, pin: string) => void;
 }) {
   const [pin, setPin] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  const submit = () => {
-    if (guard.pin !== pin.trim()) {
-      Alert.alert("PIN salah", "Periksa lagi PIN Anda.");
-      setPin("");
-      return;
-    }
-    onLogin(guard, guard.pin);
+  const tryLogin = (value: string) => {
+    if (busy) return;
+    setBusy(true);
+    setError(null);
+    // Let the spinner paint before the (synchronous) login work runs.
+    setTimeout(() => {
+      try {
+        if (guard.pin !== value.trim()) {
+          setError("PIN salah. Coba lagi.");
+          setPin("");
+          setBusy(false);
+          return;
+        }
+        onLogin(guard, guard.pin);
+      } catch (e) {
+        setError(`Gagal masuk: ${(e as Error).message}`);
+        setBusy(false);
+      }
+    }, 0);
+  };
+
+  const onChange = (v: string) => {
+    const digits = v.replace(/\D/g, "");
+    setPin(digits);
+    if (error) setError(null);
+    if (digits.length === guard.pin.length) tryLogin(digits);
   };
 
   return (
-    <ScrollView contentContainerStyle={styles.page} keyboardShouldPersistTaps="handled">
-      <Pressable onPress={onBack} hitSlop={12}>
-        <Text style={styles.back}>‹ Ganti nama</Text>
-      </Pressable>
-      <View style={styles.pinHeader}>
-        <View style={[styles.avatar, styles.avatarBig]}>
-          <Text style={[styles.avatarText, styles.avatarTextBig]}>
-            {guard.name.charAt(0).toUpperCase()}
-          </Text>
+    <KeyboardAvoidingView style={{ flex: 1 }} behavior="padding">
+      <ScrollView contentContainerStyle={styles.page} keyboardShouldPersistTaps="handled">
+        <Pressable onPress={onBack} hitSlop={12} disabled={busy}>
+          <Text style={styles.back}>‹ Ganti nama</Text>
+        </Pressable>
+        <View style={styles.pinHeader}>
+          <View style={[styles.avatar, styles.avatarBig]}>
+            <Text style={[styles.avatarText, styles.avatarTextBig]}>
+              {guard.name.charAt(0).toUpperCase()}
+            </Text>
+          </View>
+          <Text style={styles.title}>{guard.name}</Text>
+          <Text style={styles.muted}>Masukkan PIN Anda</Text>
         </View>
-        <Text style={styles.title}>{guard.name}</Text>
-        <Text style={styles.muted}>Masukkan PIN Anda</Text>
-      </View>
-      <TextInput
-        style={[styles.input, styles.pinInput]}
-        value={pin}
-        onChangeText={(v) => setPin(v.replace(/\D/g, ""))}
-        onSubmitEditing={submit}
-        secureTextEntry
-        keyboardType="number-pad"
-        maxLength={6}
-        autoFocus
-        placeholder="••••"
-      />
-      <Button label="Masuk" big onPress={submit} disabled={pin.length < 4} />
-    </ScrollView>
+        <TextInput
+          style={[styles.input, styles.pinInput, error && styles.inputError]}
+          value={pin}
+          onChangeText={onChange}
+          onSubmitEditing={() => tryLogin(pin)}
+          secureTextEntry
+          keyboardType="number-pad"
+          maxLength={6}
+          autoFocus
+          editable={!busy}
+          placeholder="••••"
+        />
+        {error && <Text style={[styles.error, styles.pinError]}>{error}</Text>}
+        <Button
+          label="Masuk"
+          big
+          onPress={() => tryLogin(pin)}
+          busy={busy}
+          disabled={pin.length < 4}
+        />
+      </ScrollView>
+    </KeyboardAvoidingView>
   );
 }
 
@@ -372,6 +489,8 @@ function QueuePanel({
 }
 
 function HomeScreen({
+  alerts,
+  onTakeAlert,
   session,
   shift,
   checkin,
@@ -379,6 +498,8 @@ function HomeScreen({
   onOpen,
   onLogout,
 }: {
+  alerts: SecurityAlert[];
+  onTakeAlert: (alert: SecurityAlert) => Promise<void>;
   session: Session;
   shift: Shift | null;
   checkin: Status;
@@ -388,7 +509,9 @@ function HomeScreen({
 }) {
   return (
     <ScrollView contentContainerStyle={styles.page}>
+      <Image source={LOGO} style={styles.logoSmall} resizeMode="contain" />
       <Text style={styles.title}>Halo, {session.guard.name}</Text>
+      <AlertList alerts={alerts} onTake={onTakeAlert} />
 
       {!shift ? (
         <Text style={styles.error}>
@@ -461,6 +584,107 @@ function ActionOrStatus({
           ? `Pukul ${formatTime(status.at)}`
           : "Akan terkirim otomatis saat ada internet"}
       </Text>
+    </View>
+  );
+}
+
+function alertTime(iso: string) {
+  const d = new Date(iso);
+  return `${formatTime(iso)}, ${String(d.getDate()).padStart(2, "0")}/${String(
+    d.getMonth() + 1
+  ).padStart(2, "0")}`;
+}
+
+// Full-screen, buzzing until a logged-in guard takes it or someone closes
+// it. Closing only silences it on this phone; it stays in the list.
+function AlertOverlay({
+  alert,
+  guardName,
+  onTake,
+  onClose,
+}: {
+  alert: SecurityAlert;
+  guardName: string | null;
+  onTake: () => Promise<void>;
+  onClose: () => void;
+}) {
+  const [busy, setBusy] = useState(false);
+  return (
+    <View style={styles.overlay}>
+      <ScrollView contentContainerStyle={styles.page}>
+        <Text style={styles.overlayTag}>ALERT DARI WARGA</Text>
+        <Text style={styles.overlayMeta}>
+          {alert.unit_no ? `Rumah ${alert.unit_no} · ` : ""}
+          {alertTime(alert.created_at)}
+        </Text>
+        <Text style={styles.overlayMessage}>{alert.message}</Text>
+        {alert.photo_url && (
+          <Image source={{ uri: alert.photo_url }} style={styles.photo} resizeMode="contain" />
+        )}
+        {guardName ? (
+          <Button
+            label={`Saya Tangani (${guardName})`}
+            big
+            busy={busy}
+            onPress={async () => {
+              setBusy(true);
+              await onTake();
+              setBusy(false);
+            }}
+          />
+        ) : (
+          <Text style={styles.overlayHint}>Masuk dengan nama & PIN untuk menangani alert ini.</Text>
+        )}
+        <Button label={guardName ? "Tutup" : "Tutup & Masuk"} variant="secondary" onPress={onClose} />
+      </ScrollView>
+    </View>
+  );
+}
+
+// Active alerts (last 24 jam, not closed by pengurus), shown on the login
+// and home screens.
+function AlertList({
+  alerts,
+  hint,
+  onTake,
+}: {
+  alerts: SecurityAlert[];
+  hint?: string;
+  onTake?: (alert: SecurityAlert) => Promise<void>;
+}) {
+  const [busyId, setBusyId] = useState<string | null>(null);
+  if (alerts.length === 0) return null;
+  return (
+    <View style={{ marginTop: 8, marginBottom: 8 }}>
+      {alerts.map((a) => (
+        <View key={a.id} style={[styles.alertCard, a.status === "acknowledged" && styles.alertCardTaken]}>
+          <Text style={styles.alertCardTitle}>
+            {a.status === "open" ? "🚨 Alert belum ditangani" : `✓ Ditangani ${a.acknowledged_by ?? ""}`}
+          </Text>
+          <Text style={styles.statusDetail}>
+            {a.unit_no ? `Rumah ${a.unit_no} · ` : ""}
+            {alertTime(a.created_at)}
+          </Text>
+          <Text style={styles.alertCardMessage}>{a.message}</Text>
+          {a.photo_url && (
+            <Image source={{ uri: a.photo_url }} style={styles.alertThumb} resizeMode="cover" />
+          )}
+          {a.status === "open" &&
+            (onTake ? (
+              <Button
+                label="Saya Tangani"
+                busy={busyId === a.id}
+                onPress={async () => {
+                  setBusyId(a.id);
+                  await onTake(a);
+                  setBusyId(null);
+                }}
+              />
+            ) : (
+              hint && <Text style={styles.statusDetail}>{hint}</Text>
+            ))}
+        </View>
+      ))}
     </View>
   );
 }
@@ -606,7 +830,7 @@ function Button({
       ]}
     >
       {busy ? (
-        <ActivityIndicator color="#fff" />
+        <ActivityIndicator color="#422006" />
       ) : (
         <Text style={[styles.buttonText, variant === "secondary" && styles.buttonTextSecondary]}>
           {label}
@@ -617,22 +841,68 @@ function Button({
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: "#f9fafb" },
+  overlay: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: "#fef2f2",
+    zIndex: 10,
+    elevation: 10,
+  },
+  overlayTag: {
+    fontSize: 15,
+    fontWeight: "800",
+    letterSpacing: 2,
+    color: "#fff",
+    backgroundColor: "#dc2626",
+    alignSelf: "flex-start",
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 6,
+  },
+  overlayMeta: { fontSize: 15, color: "#991b1b", marginTop: 12 },
+  overlayMessage: { fontSize: 24, fontWeight: "700", color: "#111827", marginVertical: 16 },
+  overlayHint: { fontSize: 15, color: "#991b1b", marginTop: 8 },
+  alertCard: {
+    backgroundColor: "#fef2f2",
+    borderWidth: 1,
+    borderColor: "#fca5a5",
+    borderRadius: 8,
+    padding: 12,
+    marginTop: 8,
+  },
+  alertCardTaken: { backgroundColor: "#fffbeb", borderColor: "#fcd34d" },
+  alertCardTitle: { fontSize: 16, fontWeight: "700", color: "#b91c1c" },
+  alertCardMessage: { fontSize: 16, color: "#111827", marginTop: 6 },
+  alertThumb: { width: "100%", height: 160, borderRadius: 6, marginTop: 8 },
+  root: { flex: 1, backgroundColor: "#fffdf5" },
   page: { padding: 20, paddingTop: 56, paddingBottom: 40 },
+  logo: { width: 200, height: 137, alignSelf: "center", marginBottom: 4 },
+  logoSmall: { width: 96, height: 66, marginBottom: 8 },
+  appName: {
+    fontSize: 13,
+    fontWeight: "700",
+    letterSpacing: 2,
+    color: "#a16207",
+    textAlign: "center",
+    marginBottom: 12,
+  },
   title: { fontSize: 22, fontWeight: "600", color: "#111827", marginBottom: 4 },
   muted: { fontSize: 14, color: "#6b7280", marginBottom: 8 },
   label: { fontSize: 14, fontWeight: "500", color: "#374151", marginTop: 16, marginBottom: 6 },
   error: { fontSize: 14, color: "#b91c1c", marginTop: 16 },
   panel: {
-    backgroundColor: "#fffbeb",
+    backgroundColor: "#fff7ed",
     borderWidth: 1,
-    borderColor: "#fcd34d",
+    borderColor: "#fdba74",
     borderRadius: 8,
     padding: 12,
     marginTop: 12,
   },
-  panelText: { fontSize: 14, color: "#92400e" },
-  back: { fontSize: 16, color: "#2563eb", marginBottom: 12 },
+  panelText: { fontSize: 14, color: "#9a3412" },
+  back: { fontSize: 16, color: "#a16207", fontWeight: "500", marginBottom: 12 },
   input: {
     backgroundColor: "#fff",
     borderWidth: 1,
@@ -649,39 +919,41 @@ const styles = StyleSheet.create({
     aspectRatio: 1,
     backgroundColor: "#fff",
     borderWidth: 1,
-    borderColor: "#e5e7eb",
+    borderColor: "#fde68a",
     borderRadius: 16,
     alignItems: "center",
     justifyContent: "center",
     padding: 12,
     marginBottom: 12,
   },
-  tilePressed: { backgroundColor: "#eff6ff", borderColor: "#2563eb" },
+  tilePressed: { backgroundColor: "#fef9c3", borderColor: "#eab308" },
   avatar: {
     width: 56,
     height: 56,
     borderRadius: 28,
-    backgroundColor: "#dbeafe",
+    backgroundColor: "#fde047",
     alignItems: "center",
     justifyContent: "center",
     marginBottom: 10,
   },
-  avatarText: { fontSize: 24, fontWeight: "700", color: "#1d4ed8" },
+  avatarText: { fontSize: 24, fontWeight: "700", color: "#713f12" },
   avatarBig: { width: 80, height: 80, borderRadius: 40 },
   avatarTextBig: { fontSize: 34 },
   tileName: { fontSize: 17, fontWeight: "600", color: "#111827", textAlign: "center" },
   pinHeader: { alignItems: "center", marginTop: 16, marginBottom: 16 },
+  inputError: { borderColor: "#dc2626" },
+  pinError: { textAlign: "center", marginTop: 8 },
   pinInput: { fontSize: 28, textAlign: "center", letterSpacing: 12, paddingVertical: 14 },
   shiftCard: {
-    backgroundColor: "#eff6ff",
+    backgroundColor: "#fef9c3",
     borderWidth: 1,
-    borderColor: "#bfdbfe",
+    borderColor: "#fde047",
     borderRadius: 12,
     padding: 16,
     marginTop: 16,
     marginBottom: 4,
   },
-  shiftLabel: { fontSize: 13, color: "#1d4ed8", fontWeight: "500" },
+  shiftLabel: { fontSize: 13, color: "#a16207", fontWeight: "500" },
   shiftName: { fontSize: 20, fontWeight: "700", color: "#111827", marginTop: 2 },
   status: {
     backgroundColor: "#ecfdf5",
@@ -691,23 +963,23 @@ const styles = StyleSheet.create({
     padding: 14,
     marginTop: 12,
   },
-  statusWaiting: { backgroundColor: "#fffbeb", borderColor: "#fcd34d" },
+  statusWaiting: { backgroundColor: "#fff7ed", borderColor: "#fdba74" },
   statusRejected: { backgroundColor: "#fef2f2", borderColor: "#fecaca" },
   statusTitle: { fontSize: 16, fontWeight: "600", color: "#047857" },
-  statusTitleWaiting: { color: "#92400e" },
+  statusTitleWaiting: { color: "#9a3412" },
   statusTitleRejected: { color: "#b91c1c" },
   statusDetail: { fontSize: 14, color: "#4b5563", marginTop: 2 },
   photo: { width: "100%", aspectRatio: 3 / 4, borderRadius: 8, marginBottom: 8 },
   button: {
-    backgroundColor: "#2563eb",
+    backgroundColor: "#facc15",
     borderRadius: 8,
     paddingVertical: 12,
     alignItems: "center",
     marginTop: 12,
   },
   buttonBig: { paddingVertical: 18 },
-  buttonSecondary: { backgroundColor: "#fff", borderWidth: 1, borderColor: "#d1d5db" },
+  buttonSecondary: { backgroundColor: "#fff", borderWidth: 1, borderColor: "#e7e5e4" },
   buttonDisabled: { opacity: 0.5 },
-  buttonText: { color: "#fff", fontSize: 16, fontWeight: "600" },
-  buttonTextSecondary: { color: "#374151" },
+  buttonText: { color: "#422006", fontSize: 16, fontWeight: "700" },
+  buttonTextSecondary: { color: "#44403c", fontWeight: "600" },
 });

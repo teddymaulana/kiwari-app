@@ -1,10 +1,12 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { getCurrentUser, SECURITY_KEHADIRAN_ACCESS } from "@/lib/auth";
+import { getCurrentUser, SECURITY_ALERT_SENDERS, SECURITY_KEHADIRAN_ACCESS } from "@/lib/auth";
 import ScrollRight from "@/components/ScrollRight";
 import SubmitButton from "@/components/SubmitButton";
-import { generateNextMonth } from "./actions";
+import { generateNextMonth, resolveSecurityAlert } from "./actions";
+import AlertForm from "./AlertForm";
+import { buktiHref } from "@/lib/bukti";
 import type { SecurityGuard, SecurityShift, ShiftType } from "@/lib/types";
 import { MONTH_NAMES, SHIFT_LABELS, SHIFT_HOURS } from "@/lib/types";
 import { buildWaMeUrl } from "@/lib/waMe";
@@ -44,6 +46,7 @@ export default async function SecurityPage({
   const user = await getCurrentUser();
   if (!user) redirect("/login");
   const isPengurus = user.role === "pengurus";
+  const canAlert = isPengurus && SECURITY_ALERT_SENDERS.includes(user.email);
 
   const sp = await searchParams;
   const { error } = sp;
@@ -98,6 +101,28 @@ export default async function SecurityPage({
             .returns<{ guard_id: string }[]>()
         : { data: null },
     ]);
+
+  // Alert Sekuriti — 18G only for now (SECURITY_ALERT_SENDERS).
+  type AlertRow = {
+    id: string;
+    message: string;
+    photo_path: string | null;
+    status: "open" | "acknowledged" | "resolved";
+    created_at: string;
+    acknowledged_at: string | null;
+    households: { unit_no: string } | null;
+    security_guards: { name: string } | null;
+  };
+  const { data: alerts } = canAlert
+    ? await supabase
+        .from("security_alerts")
+        .select(
+          "id, message, photo_path, status, created_at, acknowledged_at, households(unit_no), security_guards(name)"
+        )
+        .order("created_at", { ascending: false })
+        .limit(10)
+        .returns<AlertRow[]>()
+    : { data: null };
 
   // Stable sort, so unlisted guards keep their created_at order.
   guards?.sort((a, b) => guardRank(a.name) - guardRank(b.name));
@@ -260,6 +285,92 @@ export default async function SecurityPage({
       {error && (
         <div className="mb-4 text-sm text-red-700 bg-red-50 border border-red-200 rounded px-3 py-2">
           {error}
+        </div>
+      )}
+
+      {canAlert && (
+        <div className="mb-8 grid gap-4 lg:grid-cols-2">
+          <div className="bg-white border border-red-200 rounded-lg p-4">
+            <h2 className="text-sm font-semibold text-red-700 mb-1">
+              Kirim Alert ke Sekuriti
+            </h2>
+            <p className="text-xs text-gray-400 mb-3">
+              Muncul di aplikasi Security Kiwari di HP petugas. Untuk keadaan
+              darurat, tetap telepon langsung (Kontak Security di bawah).
+            </p>
+            <AlertForm />
+          </div>
+          <div className="bg-white border border-gray-200 rounded-lg p-4">
+            <h2 className="text-sm font-medium text-gray-700 mb-3">Alert Terakhir</h2>
+            {(alerts ?? []).length === 0 ? (
+              <p className="text-sm text-gray-400">Belum ada alert.</p>
+            ) : (
+              <ul className="divide-y divide-gray-100">
+                {alerts!.map((a) => (
+                  <li key={a.id} className="py-2 text-sm">
+                    <div className="flex items-start justify-between gap-2">
+                      <p className="text-gray-900 whitespace-pre-wrap break-words">{a.message}</p>
+                      <span
+                        className={`shrink-0 text-[10px] font-medium rounded px-1.5 py-0.5 ${
+                          a.status === "open"
+                            ? "bg-red-50 text-red-700"
+                            : a.status === "acknowledged"
+                              ? "bg-amber-50 text-amber-700"
+                              : "bg-gray-100 text-gray-500"
+                        }`}
+                      >
+                        {a.status === "open"
+                          ? "Belum ditangani"
+                          : a.status === "acknowledged"
+                            ? "Ditangani"
+                            : "Selesai"}
+                      </span>
+                    </div>
+                    <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-gray-400">
+                      <span>
+                        {new Date(a.created_at).toLocaleString("id-ID", {
+                          dateStyle: "short",
+                          timeStyle: "short",
+                          timeZone: "Asia/Jakarta",
+                        })}
+                        {a.households && ` · ${a.households.unit_no}`}
+                      </span>
+                      {a.security_guards && a.acknowledged_at && (
+                        <span>
+                          Diterima {a.security_guards.name}{" "}
+                          {new Date(a.acknowledged_at).toLocaleTimeString("id-ID", {
+                            timeStyle: "short",
+                            timeZone: "Asia/Jakarta",
+                          })}
+                        </span>
+                      )}
+                      {a.photo_path && (
+                        <a
+                          href={buktiHref("alert", a.id)}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-blue-600 hover:underline"
+                        >
+                          Lihat Foto
+                        </a>
+                      )}
+                      {a.status !== "resolved" && (
+                        <form action={resolveSecurityAlert}>
+                          <input type="hidden" name="id" value={a.id} />
+                          <SubmitButton
+                            pendingText="..."
+                            className="text-blue-600 hover:underline"
+                          >
+                            Tandai Selesai
+                          </SubmitButton>
+                        </form>
+                      )}
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
         </div>
       )}
 

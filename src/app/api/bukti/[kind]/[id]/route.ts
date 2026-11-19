@@ -17,6 +17,7 @@ const KINDS: Record<BuktiKind, { table: string; column: string; bucket: string }
   transfer: { table: "cash_transfers", column: "receipt_path", bucket: "bukti-transfer-kas" },
   checkin: { table: "security_checkins", column: "photo_path", bucket: "bukti-kehadiran" },
   patrol: { table: "security_patrols", column: "photo_path", bucket: "bukti-kehadiran" },
+  alert: { table: "security_alerts", column: "photo_path", bucket: "bukti-kehadiran" },
 };
 
 // Short: the link is used immediately by the redirect.

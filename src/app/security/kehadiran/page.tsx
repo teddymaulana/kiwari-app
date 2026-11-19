@@ -1,8 +1,10 @@
+import Image from "next/image";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { buktiHref } from "@/lib/bukti";
 import { getCurrentUser, SECURITY_KEHADIRAN_ACCESS } from "@/lib/auth";
 import { setGuardPin, confirmCheckin, rejectCheckin } from "./actions";
+import RejectCheckinForm from "./RejectCheckinForm";
 import GuardPinForm from "./GuardPinForm";
 import SubmitButton from "@/components/SubmitButton";
 import type { SecurityGuard, SecurityCheckin, SecurityPatrol } from "@/lib/types";
@@ -117,7 +119,26 @@ export default async function SecurityKehadiranPage({
         <div className="bg-white border border-gray-200 rounded-lg divide-y divide-gray-100">
           {pending.map((c) => (
             <div key={c.id} className="px-4 py-3 flex items-center justify-between gap-3">
-              <div className="text-sm">
+              {/* Thumbnail so the photo can be checked at a glance; click
+                  for the full size. Signed URL, so not optimized. */}
+              {photoUrls.get(`checkin-${c.id}`) && (
+                <a
+                  href={photoUrls.get(`checkin-${c.id}`)}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="shrink-0"
+                >
+                  <Image
+                    src={photoUrls.get(`checkin-${c.id}`)!}
+                    alt={`Foto absen ${guardMap.get(c.guard_id) ?? ""}`}
+                    width={48}
+                    height={48}
+                    unoptimized
+                    className="w-12 h-12 rounded object-cover border border-gray-200"
+                  />
+                </a>
+              )}
+              <div className="text-sm flex-1 min-w-0">
                 <span className="font-medium text-gray-900">
                   {guardMap.get(c.guard_id) ?? c.guard_id}
                 </span>{" "}
@@ -126,15 +147,7 @@ export default async function SecurityKehadiranPage({
                   {new Date(c.shift_date).toLocaleDateString("id-ID")}
                 </span>
                 <div className="text-xs text-gray-400">
-                  {sentTimes(c.checked_in_at, c.captured_at, "Absen")} ·{" "}
-                  <a
-                    href={photoUrls.get(`checkin-${c.id}`)}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-blue-600 hover:text-blue-700"
-                  >
-                    Lihat foto
-                  </a>
+                  {sentTimes(c.checked_in_at, c.captured_at, "Absen")}
                 </div>
               </div>
               <div className="flex items-center gap-2 shrink-0">
@@ -146,14 +159,11 @@ export default async function SecurityKehadiranPage({
                     Konfirmasi
                   </SubmitButton>
                 </form>
-                <form action={rejectCheckin.bind(null, c.id)}>
-                  <SubmitButton
-                    pendingText="..."
-                    className="text-xs text-red-600 hover:text-red-700 transition"
-                  >
-                    Tolak
-                  </SubmitButton>
-                </form>
+                <RejectCheckinForm
+                  action={rejectCheckin.bind(null, c.id)}
+                  guardName={guardMap.get(c.guard_id) ?? "security"}
+                  shiftLabel={`${SHIFT_LABELS[c.shift_type]}, ${new Date(c.shift_date).toLocaleDateString("id-ID")}`}
+                />
               </div>
             </div>
           ))}

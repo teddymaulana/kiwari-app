@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024"><defs><linearGradient id="bg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#2f86b0"/><stop offset="1" stop-color="#17587a"/></linearGradient></defs><rect width="1024" height="1024" fill="url(#bg)"/>  <path d="M512 150 L800 254 V488 C800 690 676 816 512 886 C348 816 224 690 224 488 V254 Z" fill="#ffffff"/>
+  <path d="M296 566 L462 400 L548 486 L622 412 L734 524" fill="none" stroke="#1f6c93" stroke-width="58" stroke-linecap="round" stroke-linejoin="round"/>
+  <rect x="578" y="478" width="40" height="40" rx="5" fill="#facc15"/>
+  <rect x="626" y="478" width="40" height="40" rx="5" fill="#facc15"/>
+  <rect x="578" y="526" width="40" height="40" rx="5" fill="#facc15"/>
+  <rect x="626" y="526" width="40" height="40" rx="5" fill="#facc15"/>
+  <path d="M318 662 C398 622 458 692 528 662 C598 632 640 672 706 650" fill="none" stroke="#3b9fd1" stroke-width="24" stroke-linecap="round"/></svg>

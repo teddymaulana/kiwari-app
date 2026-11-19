@@ -3,7 +3,9 @@
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
-import { getCurrentUser } from "@/lib/auth";
+import { createAdminClient } from "@/lib/supabase/admin";
+import { getCurrentUser, SECURITY_ALERT_SENDERS } from "@/lib/auth";
+import { pushSecurityAlert } from "@/lib/securityPush";
 import { findOffsetAfter, generateRotationShifts } from "@/lib/securityRotation";
 import type { ShiftType } from "@/lib/types";
 
@@ -122,4 +124,79 @@ export async function generateNextMonth() {
     );
   }
   redirect(`/security?month=${nextMonthStart.getMonth() + 1}`);
+}
+
+// Alert Sekuriti — a resident's message (+ optional photo) for the guards
+// on duty, picked up by the Android security app polling
+// /api/security/alerts. 18G only for now (SECURITY_ALERT_SENDERS); widen
+// this check, the page gate and the security_alerts read policy together
+// when opening it to other pengurus or warga.
+// Returns a result instead of redirecting so the form can show it inline.
+const ALERT_MAX_LENGTH = 1000;
+
+export async function sendSecurityAlert(
+  formData: FormData
+): Promise<{ error?: string }> {
+  const user = await getCurrentUser();
+  if (user?.role !== "pengurus" || !SECURITY_ALERT_SENDERS.includes(user.email)) {
+    return { error: "Tidak diizinkan" };
+  }
+
+  const message = String(formData.get("message") || "").trim();
+  if (!message) return { error: "Isi pesan alert dulu" };
+  if (message.length > ALERT_MAX_LENGTH) {
+    return { error: `Pesan terlalu panjang (maks ${ALERT_MAX_LENGTH} karakter)` };
+  }
+
+  const admin = createAdminClient();
+  const photo = formData.get("photo");
+  let photo_path: string | null = null;
+  if (photo instanceof File && photo.size > 0) {
+    if (!photo.type.startsWith("image/")) return { error: "File harus berupa foto" };
+    const path = `alert/${user.id}/${Date.now()}-${crypto.randomUUID()}.jpg`;
+    const { error: uploadError } = await admin.storage
+      .from("bukti-kehadiran")
+      .upload(path, photo, { contentType: photo.type });
+    if (uploadError) return { error: "Gagal mengunggah foto: " + uploadError.message };
+    photo_path = path;
+  }
+
+  const { data: inserted, error } = await admin
+    .from("security_alerts")
+    .insert({
+      created_by: user.id,
+      household_id: user.householdId,
+      message,
+      photo_path,
+    })
+    .select("id")
+    .single<{ id: string }>();
+  if (error) {
+    if (photo_path) await admin.storage.from("bukti-kehadiran").remove([photo_path]);
+    return { error: error.message };
+  }
+
+  await pushSecurityAlert({ id: inserted.id, message, unitNo: user.unitNo });
+
+  revalidatePath("/security");
+  return {};
+}
+
+// Pengurus closes an alert once it's dealt with — the app stops showing
+// it either way once a guard has tapped "Saya Tangani".
+export async function resolveSecurityAlert(formData: FormData) {
+  const user = await getCurrentUser();
+  if (user?.role !== "pengurus" || !SECURITY_ALERT_SENDERS.includes(user.email)) {
+    redirect("/security");
+  }
+
+  const id = String(formData.get("id") || "");
+  const admin = createAdminClient();
+  const { error } = await admin
+    .from("security_alerts")
+    .update({ status: "resolved", resolved_at: new Date().toISOString() })
+    .eq("id", id)
+    .neq("status", "resolved");
+  if (error) redirect("/security?error=" + encodeURIComponent(error.message));
+  revalidatePath("/security");
 }

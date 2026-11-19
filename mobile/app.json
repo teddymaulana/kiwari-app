@@ -2,13 +2,13 @@
   "expo": {
     "name": "Security Kiwari",
     "slug": "kiwari-security",
-    "version": "1.0.2",
+    "version": "1.1.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
     "android": {
       "adaptiveIcon": {
-        "backgroundColor": "#E6F4FE",
+        "backgroundColor": "#2f86b0",
         "foregroundImage": "./assets/android-icon-foreground.png",
         "backgroundImage": "./assets/android-icon-background.png",
         "monochromeImage": "./assets/android-icon-monochrome.png"
@@ -17,7 +17,8 @@
       "package": "com.kiwari.security",
       "runtimeVersion": {
         "policy": "appVersion"
-      }
+      },
+      "googleServicesFile": "./google-services.json"
     },
     "extra": {
       "eas": {
@@ -28,6 +29,15 @@
     "updates": {
       "url": "https://u.expo.dev/f12618dd-ba95-4018-b003-522675459379"
     },
-    "ios": {}
+    "ios": {},
+    "plugins": [
+      [
+        "expo-notifications",
+        {
+          "color": "#dc2626",
+          "icon": "./assets/android-icon-monochrome.png"
+        }
+      ]
+    ]
   }
 }

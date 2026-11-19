@@ -43,7 +43,7 @@ export async function confirmCheckin(id: string) {
   if (!SECURITY_KEHADIRAN_ACCESS.includes(user.email)) return;
 
   const supabase = await createClient();
-  const { data: checkin } = await supabase
+  const { data: checkin, error } = await supabase
     .from("security_checkins")
     .update({
       status: "confirmed",
@@ -52,15 +52,22 @@ export async function confirmCheckin(id: string) {
     })
     .eq("id", id)
     .select("guard_id, shift_date, shift_type")
-    .single();
+    .maybeSingle();
 
-  if (checkin) {
-    await supabase.from("activity_log").insert({
-      actor_email: user.email,
-      action: "security.confirm_checkin",
-      detail: `${id} - ${checkin.shift_date} ${checkin.shift_type}`,
-    });
+  // No row back means nothing changed (e.g. blocked by RLS) — say so
+  // instead of leaving the entry sitting there with no feedback.
+  if (!checkin) {
+    redirect(
+      "/security/kehadiran?error=" +
+        encodeURIComponent(error?.message ?? "Gagal menyimpan, data tidak berubah")
+    );
   }
+
+  await supabase.from("activity_log").insert({
+    actor_email: user.email,
+    action: "security.confirm_checkin",
+    detail: `${id} - ${checkin.shift_date} ${checkin.shift_type}`,
+  });
 
   revalidatePath("/security/kehadiran");
 }
@@ -71,7 +78,7 @@ export async function rejectCheckin(id: string) {
   if (!SECURITY_KEHADIRAN_ACCESS.includes(user.email)) return;
 
   const supabase = await createClient();
-  const { data: checkin } = await supabase
+  const { data: checkin, error } = await supabase
     .from("security_checkins")
     .update({
       status: "rejected",
@@ -80,15 +87,22 @@ export async function rejectCheckin(id: string) {
     })
     .eq("id", id)
     .select("guard_id, shift_date, shift_type")
-    .single();
+    .maybeSingle();
 
-  if (checkin) {
-    await supabase.from("activity_log").insert({
-      actor_email: user.email,
-      action: "security.reject_checkin",
-      detail: `${id} - ${checkin.shift_date} ${checkin.shift_type}`,
-    });
+  // No row back means nothing changed (e.g. blocked by RLS) — say so
+  // instead of leaving the entry sitting there with no feedback.
+  if (!checkin) {
+    redirect(
+      "/security/kehadiran?error=" +
+        encodeURIComponent(error?.message ?? "Gagal menyimpan, data tidak berubah")
+    );
   }
+
+  await supabase.from("activity_log").insert({
+    actor_email: user.email,
+    action: "security.reject_checkin",
+    detail: `${id} - ${checkin.shift_date} ${checkin.shift_type}`,
+  });
 
   revalidatePath("/security/kehadiran");
 }

@@ -112,3 +112,42 @@ export async function send(item: Submission) {
   }
   parseResponse(result.status, result.body);
 }
+
+// Alert Sekuriti from residents (see /api/security/alerts on the website).
+export type SecurityAlert = {
+  id: string;
+  message: string;
+  unit_no: string | null;
+  status: "open" | "acknowledged";
+  created_at: string;
+  acknowledged_at: string | null;
+  acknowledged_by: string | null;
+  photo_url: string | null;
+};
+
+export async function fetchAlerts(): Promise<SecurityAlert[]> {
+  const { alerts } = await request<{ alerts: SecurityAlert[] }>("/api/security/alerts", {
+    headers: { "x-app-key": APP_KEY },
+  });
+  return alerts;
+}
+
+// Returns the name of the guard who already took it, if someone beat us.
+export async function ackAlert(id: string, guard_id: string, pin: string): Promise<string | null> {
+  const form = new FormData();
+  form.append("guard_id", guard_id);
+  form.append("pin", pin);
+  const { already } = await request<{ already?: string | null }>(
+    `/api/security/alerts/${id}/ack`,
+    { method: "POST", headers: { "x-app-key": APP_KEY }, body: form }
+  );
+  return already ?? null;
+}
+
+export async function registerPushToken(token: string, device_name: string | null) {
+  await request("/api/security/push-token", {
+    method: "POST",
+    headers: { "x-app-key": APP_KEY, "Content-Type": "application/json" },
+    body: JSON.stringify({ token, device_name }),
+  });
+}

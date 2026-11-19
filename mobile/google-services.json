@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "283581659613",
+    "project_id": "kiwari-security",
+    "storage_bucket": "kiwari-security.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:283581659613:android:1f51e86d64179b37fa1e34",
+        "android_client_info": {
+          "package_name": "com.kiwari.security"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyB6CMqJR4HKkn82ETozb9G4uC4N7pzR4XM"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

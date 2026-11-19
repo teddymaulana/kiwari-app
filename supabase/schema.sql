@@ -604,6 +604,11 @@ drop policy if exists "pengurus read security_checkins" on security_checkins;
 create policy "pengurus read security_checkins" on security_checkins
   for select to authenticated using (is_pengurus());
 
+-- Confirm/reject on /security/kehadiran (migration 2026-10-13_security_checkins_update_policy).
+drop policy if exists "pengurus update security_checkins" on security_checkins;
+create policy "pengurus update security_checkins" on security_checkins
+  for update to authenticated using (is_pengurus()) with check (is_pengurus());
+
 drop policy if exists "pengurus read security_patrols" on security_patrols;
 create policy "pengurus read security_patrols" on security_patrols
   for select to authenticated using (is_pengurus());
@@ -614,6 +619,42 @@ create policy "pengurus read security_patrols" on security_patrols
 insert into storage.buckets (id, name, public)
 values ('bukti-kehadiran', 'bukti-kehadiran', false)
 on conflict (id) do nothing;
+
+-- Alert Sekuriti (migration 2026-11-19_security_alerts).
+-- Alert Sekuriti: a resident (pengurus only for now) sends a message +
+-- optional photo from /security, and the Android security app (mobile/)
+-- picks it up by polling /api/security/alerts, vibrates and shows it
+-- full-screen until a guard taps "Saya Tangani".
+--
+-- status: open → acknowledged (a guard took it, from the app) →
+-- resolved (pengurus closed it on /security).
+-- Writes only go through the service-role client (server actions on
+-- /security and the app's /api/security/alerts routes), so the only RLS
+-- policy is a pengurus read. Photos live in the existing private
+-- bukti-kehadiran bucket under alert/.
+
+create table if not exists security_alerts (
+  id uuid primary key default gen_random_uuid(),
+  created_by uuid references auth.users(id) on delete set null,
+  household_id uuid references households(id) on delete set null,
+  message text not null,
+  photo_path text,
+  status text not null default 'open'
+    check (status in ('open', 'acknowledged', 'resolved')),
+  acknowledged_at timestamptz,
+  acknowledged_by uuid references security_guards(id) on delete set null,
+  resolved_at timestamptz,
+  created_at timestamptz not null default now()
+);
+
+create index if not exists security_alerts_created_idx on security_alerts (created_at desc);
+create index if not exists security_alerts_status_idx on security_alerts (status);
+
+alter table security_alerts enable row level security;
+
+drop policy if exists "pengurus read security_alerts" on security_alerts;
+create policy "pengurus read security_alerts" on security_alerts
+  for select to authenticated using (is_pengurus());
 
 -- Marks one household's IPL for one month as not owed at all — e.g. a
 -- doorprize/reward month — distinct from both "Lunas" (payments row,
@@ -697,3 +738,20 @@ alter table wa_messages enable row level security;
 drop policy if exists "pengurus all wa_messages" on wa_messages;
 create policy "pengurus all wa_messages" on wa_messages
   for all to authenticated using (is_pengurus()) with check (is_pengurus());
+
+-- Alert Sekuriti push tokens (migration 2026-11-19_security_push_tokens).
+-- Expo push tokens of the phones running the Android security app
+-- (mobile/), registered via /api/security/push-token on app start. When a
+-- resident sends an Alert Sekuriti, every token here gets a push — so the
+-- alert arrives even when the app is closed. Tokens Expo reports as
+-- DeviceNotRegistered (app uninstalled) are deleted on send.
+-- Service-role only: no RLS policy, nothing reads this from the browser.
+
+create table if not exists security_push_tokens (
+  token text primary key,
+  device_name text,
+  created_at timestamptz not null default now(),
+  last_seen_at timestamptz not null default now()
+);
+
+alter table security_push_tokens enable row level security;
