@@ -103,7 +103,7 @@ export default async function SecurityPage({
         : { data: null },
     ]);
 
-  // Alert Sekuriti — 18G only for now (SECURITY_ALERT_SENDERS).
+  // Alert Sekuriti — SECURITY_ALERT_SENDERS only for now.
   type AlertRow = {
     id: string;
     message: string;

@@ -75,18 +75,26 @@ export const OPENING_BALANCE_EDITORS = ["18g@kiwari.local"];
 // Kehadiran & Patroli — both the Ringkasan summary on /security (hidden
 // for anyone else, since it's bonus/insentif-sensitive) and the whole
 // /security/kehadiran page (PIN management, confirm/reject queue,
-// history, patrol log) — are restricted to this one pengurus account for
+// history, patrol log) — are restricted to these pengurus accounts for
 // now. Checked in the UI (security/page.tsx hides the section;
 // security/kehadiran/page.tsx redirects) and again in the server actions
 // (security/kehadiran/actions.ts).
-export const SECURITY_KEHADIRAN_ACCESS = ["18g@kiwari.local"];
+export const SECURITY_KEHADIRAN_ACCESS = [
+  "18g@kiwari.local",
+  "19k@kiwari.local",
+  "19n@kiwari.local",
+];
 
 // Alert Sekuriti (Kirim Alert ke Sekuriti + Alert Terakhir on /security,
-// pushed to the Android security app) is restricted to this one pengurus
-// account while it's being tested, checked both in the UI
+// pushed to the Android security app) is restricted to these pengurus
+// accounts while it's being tested, checked both in the UI
 // (security/page.tsx) and again in the server actions
 // (security/actions.ts, sendSecurityAlert / resolveSecurityAlert).
-export const SECURITY_ALERT_SENDERS = ["18g@kiwari.local"];
+export const SECURITY_ALERT_SENDERS = [
+  "18g@kiwari.local",
+  "19k@kiwari.local",
+  "19n@kiwari.local",
+];
 
 // Switching the WhatsApp gateway (Layanan WhatsApp on /settings, backing
 // src/lib/whatsapp.ts's provider toggle) is restricted to this one

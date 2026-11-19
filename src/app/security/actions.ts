@@ -128,7 +128,7 @@ export async function generateNextMonth() {
 
 // Alert Sekuriti — a resident's message (+ optional photo) for the guards
 // on duty, picked up by the Android security app polling
-// /api/security/alerts. 18G only for now (SECURITY_ALERT_SENDERS); widen
+// /api/security/alerts. Limited to SECURITY_ALERT_SENDERS for now; widen
 // this check, the page gate and the security_alerts read policy together
 // when opening it to other pengurus or warga.
 // Returns a result instead of redirecting so the form can show it inline.
