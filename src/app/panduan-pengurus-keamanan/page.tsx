@@ -11,7 +11,9 @@ function Shot({ src, alt, width, height }: { src: string; alt: string; width: nu
       width={width}
       height={height}
       unoptimized
-      className="mt-3 w-full max-w-[375px] h-auto border border-gray-200 rounded"
+      className={`mt-3 w-full h-auto border border-gray-200 rounded ${
+        width > 375 ? "" : "max-w-[375px]"
+      }`}
     />
   );
 }
@@ -108,15 +110,48 @@ export default function PanduanPengurusKeamananPage() {
           </p>
           <Shot src="/panduan/pengurus-konfirmasi.png" alt="Absen menunggu konfirmasi dengan tombol Konfirmasi dan Tolak" width={375} height={146} />
           <p className="mt-2">
-            <b>Rekap per Shift</b> menampilkan jam masuk, jam pulang dan jam setiap patroli
-            per petugas (14 hari terakhir). <b>Riwayat Kehadiran</b> dan{" "}
-            <b>Laporan Patroli</b> (isi laporan dan foto) ada di halaman yang sama.
             Ringkasan per bulan (bahan bonus/insentif) ada di bawah halaman Keamanan.
           </p>
         </section>
 
         <section>
-          <h2 className="text-lg font-semibold mb-2">4. Kirim Alert ke Sekuriti 🚨</h2>
+          <h2 className="text-lg font-semibold mb-2">4. Laporan per personel dan tanggal</h2>
+          <ol className="list-decimal pl-5 space-y-1">
+            <li>
+              Di halaman <b>Kehadiran &amp; Patroli Security</b>, pilih <b>Personel</b>{" "}
+              (atau <b>Semua</b>).
+            </li>
+            <li>
+              Pilih tanggal dengan tombol cepat <b>Hari ini</b>, <b>Kemarin</b> atau{" "}
+              <b>Minggu ini</b> (Senin sampai hari ini), atau isi <b>Dari tanggal</b> dan{" "}
+              <b>Sampai tanggal</b> lalu ketuk <b>Tampilkan</b>.
+            </li>
+            <li>
+              <b>Reset</b> kembali ke semua personel, 14 hari terakhir.
+            </li>
+          </ol>
+          <p className="mt-2">Yang ikut tersaring:</p>
+          <ul className="list-disc pl-5 space-y-1">
+            <li>
+              <b>Rekap per Shift</b>: jam masuk, jam pulang, dan jumlah + jam setiap patroli
+              per petugas per shift.
+            </li>
+            <li>
+              <b>Riwayat Kehadiran</b>: setiap absen (Masuk/Pulang) dan statusnya.
+            </li>
+            <li>
+              <b>Laporan Patroli</b>: isi laporan dan foto.
+            </li>
+          </ul>
+          <p className="mt-2">
+            Tanggal = tanggal mulai shift. Shift Malam 19/11 (19.00–07.00) masuk ke tanggal
+            19/11. Menunggu Konfirmasi selalu menampilkan semua.
+          </p>
+          <Shot src="/panduan/pengurus-filter-rekap.png" alt="Filter Personel dan tanggal dengan tombol Hari ini, Kemarin, Minggu ini, dan tabel Rekap per Shift" width={688} height={388} />
+        </section>
+
+        <section>
+          <h2 className="text-lg font-semibold mb-2">5. Kirim Alert ke Sekuriti 🚨</h2>
           <ol className="list-decimal pl-5 space-y-1">
             <li>
               Di halaman Keamanan, kotak merah <b>Kirim Alert ke Sekuriti</b>.
@@ -150,7 +185,7 @@ export default function PanduanPengurusKeamananPage() {
         </section>
 
         <section>
-          <h2 className="text-lg font-semibold mb-2">5. Aplikasi di HP petugas</h2>
+          <h2 className="text-lg font-semibold mb-2">6. Aplikasi di HP petugas</h2>
           <ul className="list-disc pl-5 space-y-1">
             <li>
               Link pasang aplikasi:{" "}
