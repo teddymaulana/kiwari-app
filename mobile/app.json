@@ -38,6 +38,9 @@
           "icon": "./assets/android-icon-monochrome.png"
         }
       ]
-    ]
+    ],
+    "runtimeVersion": {
+      "policy": "appVersion"
+    }
   }
 }
