@@ -88,10 +88,16 @@ export default async function SecurityPage({
       isPengurus
         ? supabase
             .from("security_checkins")
-            .select("guard_id, status")
+            .select("guard_id, status, checkin_type")
             .gte("shift_date", rangeStart)
             .lte("shift_date", rangeEnd)
-            .returns<{ guard_id: string; status: "pending" | "confirmed" | "rejected" }[]>()
+            .returns<
+              {
+                guard_id: string;
+                status: "pending" | "confirmed" | "rejected";
+                checkin_type: "masuk" | "pulang" | null;
+              }[]
+            >()
         : { data: null },
       isPengurus
         ? supabase
@@ -188,7 +194,16 @@ export default async function SecurityPage({
     string,
     { pending: number; confirmed: number; rejected: number }
   >();
+  // Attendance counts absen masuk (once per shift); confirmed absen
+  // pulang is tallied separately.
+  const pulangCounts = new Map<string, number>();
   (checkins ?? []).forEach((c) => {
+    if (c.checkin_type === "pulang") {
+      if (c.status === "confirmed") {
+        pulangCounts.set(c.guard_id, (pulangCounts.get(c.guard_id) ?? 0) + 1);
+      }
+      return;
+    }
     const entry = checkinCounts.get(c.guard_id) ?? {
       pending: 0,
       confirmed: 0,
@@ -217,6 +232,7 @@ export default async function SecurityPage({
       scheduledShifts,
       ...counts,
       attendanceRate,
+      pulangCount: pulangCounts.get(guard.id) ?? 0,
       patrolCount: patrolCounts.get(guard.id) ?? 0,
     };
   });
@@ -245,6 +261,14 @@ export default async function SecurityPage({
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
+          {(canKehadiran || canAlert) && (
+            <a
+              href="/panduan-pengurus-keamanan"
+              className="text-sm text-blue-600 hover:underline"
+            >
+              Panduan
+            </a>
+          )}
           {canKehadiran && (
             <a
               href="/security/kehadiran"
@@ -559,12 +583,15 @@ export default async function SecurityPage({
                   Shift Terjadwal
                 </th>
                 <th className="px-3 py-2 font-medium text-center">
-                  Absen Dikonfirmasi
+                  Absen Masuk Dikonfirmasi
                 </th>
                 <th className="px-3 py-2 font-medium text-center">Menunggu</th>
                 <th className="px-3 py-2 font-medium text-center">Ditolak</th>
                 <th className="px-3 py-2 font-medium text-center">
                   Tingkat Kehadiran
+                </th>
+                <th className="px-3 py-2 font-medium text-center">
+                  Absen Pulang
                 </th>
                 <th className="px-3 py-2 font-medium text-center">
                   Laporan Patroli
@@ -607,13 +634,16 @@ export default async function SecurityPage({
                     )}
                   </td>
                   <td className="px-3 py-2 text-center text-gray-500">
+                    {s.pulangCount}
+                  </td>
+                  <td className="px-3 py-2 text-center text-gray-500">
                     {s.patrolCount}
                   </td>
                 </tr>
               ))}
               {summaryRows.length === 0 && (
                 <tr>
-                  <td colSpan={7} className="px-3 py-6 text-center text-gray-400">
+                  <td colSpan={8} className="px-3 py-6 text-center text-gray-400">
                     Belum ada data.
                   </td>
                 </tr>

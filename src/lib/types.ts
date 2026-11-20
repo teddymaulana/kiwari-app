@@ -199,6 +199,12 @@ export const CHECKIN_STATUS_LABELS: Record<CheckinStatus, string> = {
   rejected: "Ditolak",
 };
 
+export type CheckinType = "masuk" | "pulang";
+export const CHECKIN_TYPE_LABELS: Record<CheckinType, string> = {
+  masuk: "Absen Masuk",
+  pulang: "Absen Pulang",
+};
+
 export type SecurityCheckin = {
   id: string;
   guard_id: string;
@@ -208,6 +214,8 @@ export type SecurityCheckin = {
   captured_at: string | null;
   photo_path: string;
   status: CheckinStatus;
+  // Absen at the start (masuk) or end (pulang) of the shift.
+  checkin_type: CheckinType;
   confirmed_by: string | null;
   confirmed_at: string | null;
   created_at: string;
@@ -222,6 +230,8 @@ export type SecurityPatrol = {
   photo_path: string | null;
   submitted_at: string;
   captured_at: string | null;
+  // The app's queue id, so a resend after a lost reply isn't saved twice.
+  client_id: string | null;
   created_at: string;
 };
 

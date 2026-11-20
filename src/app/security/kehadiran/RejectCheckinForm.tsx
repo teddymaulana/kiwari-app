@@ -43,7 +43,7 @@ export default function RejectCheckinForm({
             </h3>
             <p className="mt-2 text-sm text-gray-500">
               Absen {shiftLabel} akan ditandai ditolak. {guardName} tidak bisa
-              absen ulang untuk shift ini.
+              mengulang absen ini untuk shift tersebut.
             </p>
             <div className="mt-5 flex justify-end gap-2">
               <button

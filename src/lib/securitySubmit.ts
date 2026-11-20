@@ -1,12 +1,8 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 
-// Shared write path for a guard's Absen Kehadiran and Laporan Patroli —
-// used by both the public web pages' server actions (security/checkin,
-// security/patroli) and the Android app's JSON API (api/security/*), so
-// the PIN check, photo upload and insert behave identically whichever one
-// a guard submits from. Returns an Indonesian error message for the
-// caller to show (redirect param on the web, JSON body for the app)
-// rather than redirecting itself.
+// Write path for a guard's Absen Kehadiran and Laporan Patroli, used by
+// the Android app's JSON API (api/security/checkin, api/security/patroli).
+// Returns an Indonesian error message for the caller to send back as JSON.
 
 type ShiftType = "pagi" | "malam";
 // duplicate: the unique (guard, shift) row already exists — for the app's
@@ -21,6 +17,14 @@ function parseCapturedAt(value: string | undefined): string | null {
   if (!value) return null;
   const date = new Date(value);
   return Number.isNaN(date.getTime()) ? null : date.toISOString();
+}
+
+type CheckinType = "masuk" | "pulang";
+
+// Older app builds don't send checkin_type — their absen is the masuk one.
+function parseCheckinType(value: string | undefined): CheckinType | null {
+  if (!value) return "masuk";
+  return value === "masuk" || value === "pulang" ? value : null;
 }
 
 export function isShiftType(value: string): value is ShiftType {
@@ -51,8 +55,11 @@ export async function saveCheckin(input: {
   shift_type: string;
   photo: File | null;
   captured_at?: string;
+  checkin_type?: string;
 }): Promise<Result> {
   const { guard_id, pin, shift_date, shift_type, photo } = input;
+  const checkin_type = parseCheckinType(input.checkin_type);
+  if (!checkin_type) return { error: "Jenis absen tidak valid" };
   if (!guard_id || !pin) return { error: "Pilih nama dan isi PIN" };
   if (!shift_date || !isShiftType(shift_type)) return { error: "Shift tidak valid" };
   if (!photo || photo.size === 0) return { error: "Foto wajib diisi" };
@@ -61,7 +68,7 @@ export async function saveCheckin(input: {
 
   const admin = createAdminClient();
   const ext = photo.name.split(".").pop() || "jpg";
-  const path = `checkin/${guard_id}/${Date.now()}-${crypto.randomUUID()}.${ext}`;
+  const path = `checkin/${guard_id}/${Date.now()}-${checkin_type}-${crypto.randomUUID()}.${ext}`;
   const { error: uploadError } = await admin.storage
     .from("bukti-kehadiran")
     .upload(path, photo, { contentType: photo.type });
@@ -73,11 +80,15 @@ export async function saveCheckin(input: {
     shift_type,
     photo_path: path,
     captured_at: parseCapturedAt(input.captured_at),
+    checkin_type,
   });
   if (error) {
     await admin.storage.from("bukti-kehadiran").remove([path]);
     if (error.code === "23505") {
-      return { error: "Sudah pernah absen untuk shift ini", duplicate: true };
+      return {
+        error: `Sudah pernah absen ${checkin_type} untuk shift ini`,
+        duplicate: true,
+      };
     }
     return { error: error.message };
   }
@@ -92,8 +103,12 @@ export async function savePatrol(input: {
   report: string;
   photo: File | null;
   captured_at?: string;
+  client_id?: string;
 }): Promise<Result> {
   const { guard_id, pin, shift_date, shift_type, report, photo } = input;
+  // Any number of patrols per shift. client_id is the app's queue id: the
+  // same id arriving twice is a resend whose first reply was lost.
+  const client_id = input.client_id?.slice(0, 100) || null;
   if (!guard_id || !pin) return { error: "Pilih nama dan isi PIN" };
   if (!shift_date || !isShiftType(shift_type)) return { error: "Shift tidak valid" };
 
@@ -119,11 +134,12 @@ export async function savePatrol(input: {
     report,
     photo_path,
     captured_at: parseCapturedAt(input.captured_at),
+    client_id,
   });
   if (error) {
     if (photo_path) await admin.storage.from("bukti-kehadiran").remove([photo_path]);
     if (error.code === "23505") {
-      return { error: "Sudah pernah lapor patroli untuk shift ini", duplicate: true };
+      return { error: "Laporan patroli ini sudah terkirim", duplicate: true };
     }
     return { error: error.message };
   }

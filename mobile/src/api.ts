@@ -11,14 +11,20 @@ const APP_KEY = process.env.EXPO_PUBLIC_APP_KEY || "";
 
 export type Guard = { id: string; name: string; pin: string };
 export type ShiftType = "pagi" | "malam";
+// Absen twice per shift: masuk at the start, pulang at the end.
+export type CheckinType = "masuk" | "pulang";
 export type Shift = { shift_date: string; shift_type: ShiftType };
 // An absen/patroli the server already has. rejected: pengurus rejected
-// the check-in (it still blocks a resend for that shift).
+// the check-in (it still blocks a resend of that absen for the shift).
 export type Done = Shift & {
   kind: "checkin" | "patroli";
   guard_id: string;
   at: string;
   rejected: boolean;
+  // Absen only; missing in caches/servers from before masuk/pulang = masuk.
+  checkin_type?: CheckinType;
+  // Patroli only: the queue id it was sent with (several per shift).
+  client_id?: string | null;
 };
 export type SyncData = {
   guards: Guard[];
@@ -73,9 +79,10 @@ export type Submission = {
   report?: string;
   photoUri?: string;
   captured_at: string;
+  checkin_type?: CheckinType;
 };
 
-export async function send(item: Submission) {
+export async function send(item: Submission & { id: string }) {
   const path = item.kind === "checkin" ? "/api/security/checkin" : "/api/security/patroli";
   const fields: Record<string, string> = {
     guard_id: item.guard_id,
@@ -85,6 +92,9 @@ export async function send(item: Submission) {
     captured_at: item.captured_at,
   };
   if (item.report !== undefined) fields.report = item.report;
+  if (item.checkin_type) fields.checkin_type = item.checkin_type;
+  // Lets the server spot a resend of a patrol it already saved.
+  if (item.kind === "patroli") fields.client_id = item.id;
 
   if (!item.photoUri) {
     const form = new FormData();

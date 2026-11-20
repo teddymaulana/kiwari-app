@@ -16,7 +16,7 @@ import {
 import { StatusBar } from "expo-status-bar";
 import * as ImagePicker from "expo-image-picker";
 import * as Network from "expo-network";
-import type { Guard, SecurityAlert, Shift, SyncData } from "./src/api";
+import type { CheckinType, Guard, SecurityAlert, Shift, SyncData } from "./src/api";
 import { ackAlert, fetchAlerts, OfflineError } from "./src/api";
 import { onAlertPush, setUpPush } from "./src/push";
 import {
@@ -26,7 +26,9 @@ import {
   loadCache,
   loadQueue,
   refreshCache,
-  submissionStatus,
+  checkinStatus,
+  shiftPatrols,
+  type PatrolEntry,
   type Status,
   currentShift,
   type QueueItem,
@@ -38,7 +40,9 @@ import {
 // the current shift work offline from the cached guard list/schedule (see
 // src/store.ts); submissions go into a queue that's sent whenever there's
 // a connection.
-type Screen = "home" | "absen" | "patroli";
+// Absen twice per shift (masuk at the start, pulang at the end); patroli
+// as many times as needed.
+type Screen = "home" | "absen-masuk" | "absen-pulang" | "patroli";
 type Session = { guard: Guard; pin: string; shift: Shift | null };
 type Draft = { photoUri?: string; report?: string; captured_at: string };
 
@@ -169,24 +173,27 @@ export default function App() {
     setScreen("home");
   };
 
-  const submit = async (kind: "checkin" | "patroli", draft: Draft) => {
+  const submit = async (kind: "checkin" | "patroli", draft: Draft, checkinType?: CheckinType) => {
     if (!session || !shift) return false;
-    // The server takes one absen/patroli per guard per shift, so a second
-    // one still waiting on the phone would only be dropped later.
-    const pending = loadQueue().find(
-      (q) =>
-        !q.error &&
-        q.kind === kind &&
-        q.guard_id === session.guard.id &&
-        q.shift_date === shift.shift_date &&
-        q.shift_type === shift.shift_type
-    );
+    const absenLabel = checkinType === "pulang" ? "Absen pulang" : "Absen masuk";
+    // The server takes one absen masuk and one pulang per guard per shift,
+    // so a second one still waiting on the phone would only be dropped
+    // later. Patrols have no limit.
+    const pending =
+      kind === "checkin" &&
+      loadQueue().find(
+        (q) =>
+          !q.error &&
+          q.kind === "checkin" &&
+          (q.checkin_type ?? "masuk") === checkinType &&
+          q.guard_id === session.guard.id &&
+          q.shift_date === shift.shift_date &&
+          q.shift_type === shift.shift_type
+      );
     if (pending) {
       Alert.alert(
         "Sudah tersimpan",
-        kind === "checkin"
-          ? "Absen Anda untuk shift ini sudah tersimpan di HP dan menunggu dikirim."
-          : "Laporan patroli Anda untuk shift ini sudah tersimpan di HP dan menunggu dikirim."
+        `${absenLabel} Anda untuk shift ini sudah tersimpan di HP dan menunggu dikirim.`
       );
       return false;
     }
@@ -199,6 +206,7 @@ export default function App() {
         pin: session.pin,
         ...shift,
         ...draft,
+        ...(kind === "checkin" ? { checkin_type: checkinType } : {}),
       });
     } catch (e) {
       // Couldn't even save it on the phone (e.g. storage full) — stay on
@@ -213,15 +221,15 @@ export default function App() {
     const queued = left.find((q) => q.id === item.id);
     if (duplicates.includes(item.id)) {
       Alert.alert(
-        "Sudah pernah dikirim",
+        kind === "checkin" ? "Sudah pernah dikirim" : "Terkirim",
         kind === "checkin"
-          ? "Sudah pernah absen untuk shift ini."
-          : "Sudah pernah lapor patroli untuk shift ini. Hubungi pengurus jika ada tambahan."
+          ? `${absenLabel} untuk shift ini sudah ada.`
+          : "Laporan patroli sudah terkirim."
       );
     } else if (!queued) {
       Alert.alert(
         "Terkirim",
-        kind === "checkin" ? "Absen Anda sudah terkirim." : "Laporan patroli sudah terkirim."
+        kind === "checkin" ? `${absenLabel} sudah terkirim.` : "Laporan patroli sudah terkirim."
       );
     } else if (queued.error) {
       Alert.alert("Ditolak", queued.error);
@@ -267,16 +275,20 @@ export default function App() {
           onTakeAlert={takeAlert}
           session={session}
           shift={shift}
-          checkin={shift && submissionStatus(cache, queue, "checkin", session.guard.id, shift)}
-          patroli={shift && submissionStatus(cache, queue, "patroli", session.guard.id, shift)}
+          masuk={shift && checkinStatus(cache, queue, "masuk", session.guard.id, shift)}
+          pulang={shift && checkinStatus(cache, queue, "pulang", session.guard.id, shift)}
+          patrols={shift ? shiftPatrols(cache, queue, session.guard.id, shift) : []}
           onOpen={setScreen}
           onLogout={logout}
         />
-      ) : screen === "absen" ? (
+      ) : screen === "absen-masuk" || screen === "absen-pulang" ? (
         <AbsenScreen
+          type={screen === "absen-masuk" ? "masuk" : "pulang"}
           shift={shift}
           onBack={() => setScreen("home")}
-          onSubmit={(draft) => submit("checkin", draft)}
+          onSubmit={(draft) =>
+            submit("checkin", draft, screen === "absen-masuk" ? "masuk" : "pulang")
+          }
         />
       ) : (
         <PatroliScreen
@@ -469,7 +481,13 @@ function QueuePanel({
       {rejected.map((item) => (
         <View key={item.id} style={{ marginTop: 12 }}>
           <Text style={styles.panelText}>
-            Ditolak: {item.kind === "checkin" ? "Absen" : "Patroli"} {item.guard_name},{" "}
+            Ditolak:{" "}
+            {item.kind === "patroli"
+              ? "Patroli"
+              : item.checkin_type === "pulang"
+                ? "Absen pulang"
+                : "Absen masuk"}{" "}
+            {item.guard_name},{" "}
             {SHIFT_LABELS[item.shift_type]} {formatDate(item.shift_date)} — {item.error}
           </Text>
           <Button
@@ -493,8 +511,9 @@ function HomeScreen({
   onTakeAlert,
   session,
   shift,
-  checkin,
-  patroli,
+  masuk,
+  pulang,
+  patrols,
   onOpen,
   onLogout,
 }: {
@@ -502,8 +521,9 @@ function HomeScreen({
   onTakeAlert: (alert: SecurityAlert) => Promise<void>;
   session: Session;
   shift: Shift | null;
-  checkin: Status;
-  patroli: Status;
+  masuk: Status;
+  pulang: Status;
+  patrols: PatrolEntry[];
   onOpen: (s: Screen) => void;
   onLogout: () => void;
 }) {
@@ -525,20 +545,29 @@ function HomeScreen({
             <Text style={styles.muted}>{formatDate(shift.shift_date)}</Text>
           </View>
           <ActionOrStatus
-            label="Absen Kehadiran"
-            status={checkin}
-            done="Sudah absen"
-            waiting="Absen tersimpan di HP"
-            rejected="Absen ditolak pengurus. Hubungi pengurus."
-            onPress={() => onOpen("absen")}
+            label="Absen Masuk"
+            status={masuk}
+            done="Sudah absen masuk"
+            waiting="Absen masuk tersimpan di HP"
+            rejected="Absen masuk ditolak pengurus. Hubungi pengurus."
+            onPress={() => onOpen("absen-masuk")}
           />
           <ActionOrStatus
-            label="Laporan Patroli"
-            status={patroli}
-            done="Laporan patroli sudah dikirim"
-            waiting="Laporan patroli tersimpan di HP"
-            onPress={() => onOpen("patroli")}
+            label="Absen Pulang"
+            status={pulang}
+            done="Sudah absen pulang"
+            waiting="Absen pulang tersimpan di HP"
+            rejected="Absen pulang ditolak pengurus. Hubungi pengurus."
+            onPress={() => onOpen("absen-pulang")}
           />
+          <Text style={styles.label}>Patroli shift ini ({patrols.length})</Text>
+          {patrols.map((p, i) => (
+            <Text key={p.id} style={styles.statusDetail}>
+              {i + 1}. Pukul {formatTime(p.at)}
+              {p.waiting ? " — tersimpan di HP, menunggu internet" : " ✓"}
+            </Text>
+          ))}
+          <Button label="Laporan Patroli" big onPress={() => onOpen("patroli")} />
         </>
       )}
 
@@ -547,8 +576,8 @@ function HomeScreen({
   );
 }
 
-// One absen and one patroli per shift, so once it's in, the button is
-// replaced by what happened to it.
+// One absen masuk and one pulang per shift, so once one is in, its button
+// is replaced by what happened to it.
 function ActionOrStatus({
   label,
   status,
@@ -733,10 +762,12 @@ function ShiftHeader({ title, shift, onBack }: { title: string; shift: Shift; on
 }
 
 function AbsenScreen({
+  type,
   shift,
   onBack,
   onSubmit,
 }: {
+  type: CheckinType;
   shift: Shift;
   onBack: () => void;
   onSubmit: (draft: Draft) => Promise<boolean>;
@@ -752,10 +783,23 @@ function AbsenScreen({
 
   return (
     <ScrollView contentContainerStyle={styles.page}>
-      <ShiftHeader title="Absen Kehadiran" shift={shift} onBack={onBack} />
+      <ShiftHeader
+        title={type === "masuk" ? "Absen Masuk" : "Absen Pulang"}
+        shift={shift}
+        onBack={onBack}
+      />
+      <Text style={styles.muted}>
+        {type === "masuk" ? "Di awal shift, foto diri di pos." : "Di akhir shift, foto diri di pos."}
+      </Text>
       <Text style={styles.label}>Foto</Text>
       <PhotoField photo={photo} onChange={setPhoto} />
-      <Button label="Kirim Absen" big onPress={submit} busy={busy} disabled={!photo} />
+      <Button
+        label={type === "masuk" ? "Kirim Absen Masuk" : "Kirim Absen Pulang"}
+        big
+        onPress={submit}
+        busy={busy}
+        disabled={!photo}
+      />
     </ScrollView>
   );
 }

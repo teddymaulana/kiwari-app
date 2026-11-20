@@ -9,8 +9,8 @@ function toDateStr(d: Date): string {
 
 // Offline data for the Android security app (mobile/): active guards with
 // their PINs, plus their shifts from yesterday through a week ahead and
-// the absen/patroli already on file for those shifts (so the app shows
-// "Sudah absen" instead of the button, even on a different phone). The
+// the absen (masuk/pulang) and patrols already on file for those shifts,
+// so the app shows what's done, even on a different phone. The
 // app caches this so a guard can log in and pick a shift with no signal;
 // submissions are still PIN-checked again server-side when they arrive.
 // Because this hands out PINs, it's gated on SECURITY_APP_KEY (baked into
@@ -44,12 +44,12 @@ export async function GET(request: NextRequest) {
       .in("shift_type", ["pagi", "malam"]),
     admin
       .from("security_checkins")
-      .select("guard_id, shift_date, shift_type, status, checked_in_at, captured_at")
+      .select("guard_id, shift_date, shift_type, status, checked_in_at, captured_at, checkin_type")
       .gte("shift_date", range.from)
       .lte("shift_date", range.to),
     admin
       .from("security_patrols")
-      .select("guard_id, shift_date, shift_type, submitted_at, captured_at")
+      .select("guard_id, shift_date, shift_type, submitted_at, captured_at, client_id")
       .gte("shift_date", range.from)
       .lte("shift_date", range.to),
   ]);
@@ -66,6 +66,8 @@ export async function GET(request: NextRequest) {
       shift_type: c.shift_type,
       at: c.captured_at ?? c.checked_in_at,
       rejected: c.status === "rejected",
+      // masuk/pulang — a shift has one of each. Null before the migration.
+      checkin_type: c.checkin_type ?? "masuk",
     })),
     ...(patrolsRes.data ?? []).map((p) => ({
       kind: "patroli",
@@ -74,6 +76,8 @@ export async function GET(request: NextRequest) {
       shift_type: p.shift_type,
       at: p.captured_at ?? p.submitted_at,
       rejected: false,
+      // Patrols repeat within a shift; this matches one to the app's queue.
+      client_id: p.client_id ?? null,
     })),
   ];
 

@@ -3,6 +3,7 @@ import { ImageManipulator, SaveFormat } from "expo-image-manipulator";
 import {
   fetchSyncData,
   OfflineError,
+  type CheckinType,
   send,
   ServerError,
   type Done,
@@ -84,7 +85,7 @@ export function currentShift(data: SyncData, guardId: string, now = new Date()):
   return within(0) ?? within(HOUR) ?? null;
 }
 
-// Is this guard's absen/patroli for the shift already done — on the
+// Is this guard's absen masuk/pulang for the shift already done — on the
 // server (per the last sync) or waiting in the queue?
 export type Status =
   | { state: "done"; at: string }
@@ -95,20 +96,49 @@ export type Status =
 const sameShift = (a: Shift & { guard_id: string }, b: Shift & { guard_id: string }) =>
   a.guard_id === b.guard_id && a.shift_date === b.shift_date && a.shift_type === b.shift_type;
 
-export function submissionStatus(
+const typeOf = (x: { checkin_type?: CheckinType }) => x.checkin_type ?? "masuk";
+
+export function checkinStatus(
   cache: SyncData | null,
   queue: QueueItem[],
-  kind: "checkin" | "patroli",
+  type: CheckinType,
   guardId: string,
   shift: Shift
 ): Status {
   const key = { ...shift, guard_id: guardId };
-  const done = cache?.done?.find((d) => d.kind === kind && sameShift(d, key));
+  const done = cache?.done?.find(
+    (d) => d.kind === "checkin" && typeOf(d) === type && sameShift(d, key)
+  );
   if (done) return done.rejected ? { state: "rejected" } : { state: "done", at: done.at };
-  if (queue.some((q) => !q.error && q.kind === kind && sameShift(q, key))) {
+  if (
+    queue.some(
+      (q) => !q.error && q.kind === "checkin" && typeOf(q) === type && sameShift(q, key)
+    )
+  ) {
     return { state: "waiting" };
   }
   return null;
+}
+
+// Patrols for this guard's shift, oldest first: sent ones (per the last
+// sync, or marked on delivery) and ones still waiting in the queue.
+export type PatrolEntry = { id: string; at: string; waiting: boolean };
+
+export function shiftPatrols(
+  cache: SyncData | null,
+  queue: QueueItem[],
+  guardId: string,
+  shift: Shift
+): PatrolEntry[] {
+  const key = { ...shift, guard_id: guardId };
+  const sent = (cache?.done ?? [])
+    .filter((d) => d.kind === "patroli" && sameShift(d, key))
+    .map((d, i) => ({ id: d.client_id ?? `sent-${i}`, at: d.at, waiting: false }));
+  const sentIds = new Set(sent.map((p) => p.id));
+  const waiting = queue
+    .filter((q) => !q.error && q.kind === "patroli" && sameShift(q, key) && !sentIds.has(q.id))
+    .map((q) => ({ id: q.id, at: q.captured_at, waiting: true }));
+  return [...sent, ...waiting].sort((a, b) => a.at.localeCompare(b.at));
 }
 
 // Records a delivered item in the cache straight away, so its status is
@@ -123,9 +153,16 @@ function markDone(item: QueueItem) {
     shift_type: item.shift_type,
     at: item.captured_at,
     rejected: false,
+    ...(item.kind === "checkin"
+      ? { checkin_type: typeOf(item) }
+      : { client_id: item.id }),
   };
   const done = cache.done ?? [];
-  if (done.some((d) => d.kind === entry.kind && sameShift(d, entry))) return;
+  const already =
+    item.kind === "checkin"
+      ? done.some((d) => d.kind === "checkin" && typeOf(d) === typeOf(item) && sameShift(d, entry))
+      : done.some((d) => d.kind === "patroli" && d.client_id === item.id);
+  if (already) return;
   writeJson(cacheFile, { ...cache, done: [...done, entry] });
 }
 
@@ -177,9 +214,9 @@ export async function enqueue(
 // first connection failure (no point trying the rest). Flushes run one
 // after another, each re-reading the queue — so a timer flush and a fresh
 // submission can't double-send, and an item added mid-flush still goes
-// out in the next one. Resolves to the ids the server already had (one
-// absen/patroli per guard per shift): dropped from the queue, since a
-// resend can't succeed, but reported so the guard isn't told "Terkirim".
+// out in the next one. Resolves to the ids the server already had (an
+// absen masuk/pulang already on file, or a patrol resend): dropped from
+// the queue, since a resend can't succeed, but reported to the caller.
 let chain: Promise<unknown> = Promise.resolve();
 
 export function flushQueue(): Promise<string[]> {

@@ -8,15 +8,41 @@ import RejectCheckinForm from "./RejectCheckinForm";
 import GuardPinForm from "./GuardPinForm";
 import SubmitButton from "@/components/SubmitButton";
 import type { SecurityGuard, SecurityCheckin, SecurityPatrol } from "@/lib/types";
-import { SHIFT_LABELS, CHECKIN_STATUS_LABELS } from "@/lib/types";
+import { SHIFT_LABELS, CHECKIN_STATUS_LABELS, CHECKIN_TYPE_LABELS } from "@/lib/types";
+
+// Always Jakarta time — the server (Vercel) runs in UTC.
+const TZ = "Asia/Jakarta";
+function dateTime(iso: string) {
+  return new Date(iso).toLocaleString("id-ID", { timeZone: TZ });
+}
+function clock(iso: string) {
+  return new Date(iso).toLocaleTimeString("id-ID", {
+    timeZone: TZ,
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
 
 // When a submission carries captured_at (sent from the Android app, which
 // may queue it offline — see schema.sql), show when the photo was taken
 // alongside when it actually arrived, so a late send is visible.
 function sentTimes(sentAt: string, capturedAt: string | null, label: string) {
-  const sent = new Date(sentAt).toLocaleString("id-ID");
+  const sent = dateTime(sentAt);
   if (!capturedAt) return `${label} ${sent}`;
-  return `Foto ${new Date(capturedAt).toLocaleString("id-ID")} · Dikirim ${sent}`;
+  return `Foto ${dateTime(capturedAt)} · Dikirim ${sent}`;
+}
+
+// When the guard actually did it: the phone's photo/report time, else
+// arrival at the server.
+const checkinAt = (c: SecurityCheckin) => c.captured_at ?? c.checked_in_at;
+const patrolAt = (p: SecurityPatrol) => p.captured_at ?? p.submitted_at;
+
+// How many days back the Rekap per Shift table goes.
+const RECAP_DAYS = 14;
+
+// YYYY-MM-DD of n days ago, to compare against shift_date.
+function daysAgo(n: number) {
+  return new Date(Date.now() - n * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
 }
 
 export default async function SecurityKehadiranPage({
@@ -63,6 +89,43 @@ export default async function SecurityKehadiranPage({
   const pending = (checkins ?? []).filter((c) => c.status === "pending");
   const resolved = (checkins ?? []).filter((c) => c.status !== "pending");
 
+  // Rekap per Shift: one row per guard per shift with any activity in the
+  // last RECAP_DAYS days — absen masuk, absen pulang and every patrol time.
+  const recapFrom = daysAgo(RECAP_DAYS);
+  type Recap = {
+    guard_id: string;
+    shift_date: string;
+    shift_type: "pagi" | "malam";
+    masuk?: SecurityCheckin;
+    pulang?: SecurityCheckin;
+    patrols: SecurityPatrol[];
+  };
+  const recapMap = new Map<string, Recap>();
+  const recapRow = (r: { guard_id: string; shift_date: string; shift_type: "pagi" | "malam" }) => {
+    const key = `${r.guard_id}|${r.shift_date}|${r.shift_type}`;
+    let row = recapMap.get(key);
+    if (!row) {
+      row = { guard_id: r.guard_id, shift_date: r.shift_date, shift_type: r.shift_type, patrols: [] };
+      recapMap.set(key, row);
+    }
+    return row;
+  };
+  (checkins ?? [])
+    .filter((c) => c.shift_date >= recapFrom)
+    .forEach((c) => {
+      recapRow(c)[c.checkin_type === "pulang" ? "pulang" : "masuk"] = c;
+    });
+  (patrols ?? [])
+    .filter((p) => p.shift_date >= recapFrom)
+    .forEach((p) => recapRow(p).patrols.push(p));
+  const recap = [...recapMap.values()].sort(
+    (a, b) =>
+      b.shift_date.localeCompare(a.shift_date) ||
+      (a.shift_type === b.shift_type ? 0 : a.shift_type === "malam" ? -1 : 1) ||
+      (guardMap.get(a.guard_id) ?? "").localeCompare(guardMap.get(b.guard_id) ?? "")
+  );
+  recap.forEach((r) => r.patrols.sort((a, b) => patrolAt(a).localeCompare(patrolAt(b))));
+
   return (
     <div className="max-w-4xl mx-auto px-4 py-8 space-y-8">
       <div>
@@ -70,16 +133,8 @@ export default async function SecurityKehadiranPage({
           Kehadiran &amp; Patroli Security
         </h1>
         <p className="text-sm text-gray-500">
-          Link untuk security:{" "}
-          <code className="bg-gray-100 rounded px-1.5 py-0.5">
-            /security/checkin
-          </code>{" "}
-          (absen) dan{" "}
-          <code className="bg-gray-100 rounded px-1.5 py-0.5">
-            /security/patroli
-          </code>{" "}
-          (laporan patroli). Setiap orang butuh PIN di bawah untuk bisa
-          mengirim.
+          Petugas absen dan lapor patroli lewat aplikasi Security Kiwari di
+          HP. Setiap orang butuh PIN di bawah untuk bisa masuk.
         </p>
       </div>
 
@@ -143,7 +198,8 @@ export default async function SecurityKehadiranPage({
                   {guardMap.get(c.guard_id) ?? c.guard_id}
                 </span>{" "}
                 <span className="text-gray-500">
-                  — {SHIFT_LABELS[c.shift_type]},{" "}
+                  — {CHECKIN_TYPE_LABELS[c.checkin_type ?? "masuk"]},{" "}
+                  {SHIFT_LABELS[c.shift_type]},{" "}
                   {new Date(c.shift_date).toLocaleDateString("id-ID")}
                 </span>
                 <div className="text-xs text-gray-400">
@@ -162,7 +218,7 @@ export default async function SecurityKehadiranPage({
                 <RejectCheckinForm
                   action={rejectCheckin.bind(null, c.id)}
                   guardName={guardMap.get(c.guard_id) ?? "security"}
-                  shiftLabel={`${SHIFT_LABELS[c.shift_type]}, ${new Date(c.shift_date).toLocaleDateString("id-ID")}`}
+                  shiftLabel={`${c.checkin_type === "pulang" ? "pulang" : "masuk"} ${SHIFT_LABELS[c.shift_type]}, ${new Date(c.shift_date).toLocaleDateString("id-ID")}`}
                 />
               </div>
             </div>
@@ -176,6 +232,81 @@ export default async function SecurityKehadiranPage({
       </div>
 
       <div>
+        <h2 className="text-sm font-medium text-gray-700 mb-1">
+          Rekap per Shift ({RECAP_DAYS} hari terakhir)
+        </h2>
+        <p className="text-xs text-gray-400 mb-2">
+          Jam = saat foto diambil / laporan ditulis di HP petugas.
+        </p>
+        <div className="bg-white border border-gray-200 rounded-lg overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead className="bg-gray-50 text-gray-500 text-left">
+              <tr>
+                <th className="px-3 py-2 font-medium">Tanggal</th>
+                <th className="px-3 py-2 font-medium">Shift</th>
+                <th className="px-3 py-2 font-medium">Nama</th>
+                <th className="px-3 py-2 font-medium">Masuk</th>
+                <th className="px-3 py-2 font-medium">Pulang</th>
+                <th className="px-3 py-2 font-medium">Patroli</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-100">
+              {recap.map((r) => (
+                <tr key={`${r.guard_id}-${r.shift_date}-${r.shift_type}`} className="align-top">
+                  <td className="px-3 py-2 whitespace-nowrap">
+                    {new Date(r.shift_date).toLocaleDateString("id-ID")}
+                  </td>
+                  <td className="px-3 py-2 text-gray-500">{SHIFT_LABELS[r.shift_type]}</td>
+                  <td className="px-3 py-2 whitespace-nowrap">
+                    {guardMap.get(r.guard_id) ?? r.guard_id}
+                  </td>
+                  {[r.masuk, r.pulang].map((c, i) => (
+                    <td key={i} className="px-3 py-2 whitespace-nowrap">
+                      {c ? (
+                        <>
+                          <span className="tabular-nums">{clock(checkinAt(c))}</span>
+                          {c.status !== "confirmed" && (
+                            <span
+                              className={`ml-1 text-xs ${
+                                c.status === "rejected" ? "text-red-600" : "text-amber-600"
+                              }`}
+                            >
+                              ({CHECKIN_STATUS_LABELS[c.status]})
+                            </span>
+                          )}
+                        </>
+                      ) : (
+                        <span className="text-gray-300">—</span>
+                      )}
+                    </td>
+                  ))}
+                  <td className="px-3 py-2">
+                    {r.patrols.length === 0 ? (
+                      <span className="text-gray-300">—</span>
+                    ) : (
+                      <>
+                        <span className="font-medium">{r.patrols.length}×</span>{" "}
+                        <span className="text-gray-500 tabular-nums">
+                          {r.patrols.map((p) => clock(patrolAt(p))).join(", ")}
+                        </span>
+                      </>
+                    )}
+                  </td>
+                </tr>
+              ))}
+              {recap.length === 0 && (
+                <tr>
+                  <td colSpan={6} className="px-3 py-6 text-center text-gray-400">
+                    Belum ada absen atau patroli.
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div>
         <h2 className="text-sm font-medium text-gray-700 mb-2">Riwayat Kehadiran</h2>
         <div className="bg-white border border-gray-200 rounded-lg overflow-x-auto">
           <table className="w-full text-sm">
@@ -184,6 +315,7 @@ export default async function SecurityKehadiranPage({
                 <th className="px-3 py-2 font-medium">Tanggal</th>
                 <th className="px-3 py-2 font-medium">Nama</th>
                 <th className="px-3 py-2 font-medium">Shift</th>
+                <th className="px-3 py-2 font-medium">Jenis</th>
                 <th className="px-3 py-2 font-medium">Absen</th>
                 <th className="px-3 py-2 font-medium">Status</th>
                 <th className="px-3 py-2 font-medium">Foto</th>
@@ -198,10 +330,13 @@ export default async function SecurityKehadiranPage({
                   <td className="px-3 py-2">{guardMap.get(c.guard_id) ?? c.guard_id}</td>
                   <td className="px-3 py-2 text-gray-500">{SHIFT_LABELS[c.shift_type]}</td>
                   <td className="px-3 py-2 text-gray-500 whitespace-nowrap">
-                    {new Date(c.checked_in_at).toLocaleString("id-ID")}
+                    {c.checkin_type === "pulang" ? "Pulang" : "Masuk"}
+                  </td>
+                  <td className="px-3 py-2 text-gray-500 whitespace-nowrap">
+                    {dateTime(c.checked_in_at)}
                     {c.captured_at && (
                       <div className="text-xs text-gray-400">
-                        Foto {new Date(c.captured_at).toLocaleString("id-ID")}
+                        Foto {dateTime(c.captured_at)}
                       </div>
                     )}
                   </td>
@@ -230,7 +365,7 @@ export default async function SecurityKehadiranPage({
               ))}
               {resolved.length === 0 && (
                 <tr>
-                  <td colSpan={6} className="px-3 py-6 text-center text-gray-400">
+                  <td colSpan={7} className="px-3 py-6 text-center text-gray-400">
                     Belum ada riwayat.
                   </td>
                 </tr>
