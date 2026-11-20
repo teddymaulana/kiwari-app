@@ -37,24 +37,52 @@ function sentTimes(sentAt: string, capturedAt: string | null, label: string) {
 const checkinAt = (c: SecurityCheckin) => c.captured_at ?? c.checked_in_at;
 const patrolAt = (p: SecurityPatrol) => p.captured_at ?? p.submitted_at;
 
-// How many days back the Rekap per Shift table goes.
-const RECAP_DAYS = 14;
+// Default date range of the filter (Rekap, Riwayat, Laporan Patroli).
+const DEFAULT_DAYS = 14;
 
-// YYYY-MM-DD of n days ago, to compare against shift_date.
-function daysAgo(n: number) {
-  return new Date(Date.now() - n * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+// YYYY-MM-DD in Jakarta, n days ago — compared against shift_date.
+function jakartaDate(daysBack = 0) {
+  return new Date(Date.now() - daysBack * 24 * 60 * 60 * 1000).toLocaleDateString("en-CA", {
+    timeZone: TZ,
+  });
 }
+const isDate = (v: string | undefined): v is string => !!v && /^\d{4}-\d{2}-\d{2}$/.test(v);
 
 export default async function SecurityKehadiranPage({
   searchParams,
 }: {
-  searchParams: Promise<{ error?: string }>;
+  searchParams: Promise<{ error?: string; guard?: string; from?: string; to?: string }>;
 }) {
   const user = await getCurrentUser();
   if (user?.role !== "pengurus") redirect("/report");
   if (!SECURITY_KEHADIRAN_ACCESS.includes(user.email)) redirect("/security");
 
-  const { error } = await searchParams;
+  const sp = await searchParams;
+  const { error } = sp;
+  // Filter: personel + tanggal (shift date), for Rekap per Shift, Riwayat
+  // Kehadiran and Laporan Patroli. Menunggu Konfirmasi always shows all.
+  const filterGuard = sp.guard || "";
+  const filterFrom = isDate(sp.from) ? sp.from : jakartaDate(DEFAULT_DAYS);
+  const filterTo = isDate(sp.to) ? sp.to : jakartaDate();
+  // Quick ranges (keep the chosen personel). Minggu ini = Senin–hari ini.
+  const today = jakartaDate();
+  const yesterday = jakartaDate(1);
+  const sinceMonday = (new Date(`${today}T00:00:00Z`).getUTCDay() + 6) % 7;
+  const quickRanges = [
+    { label: "Hari ini", from: today, to: today },
+    { label: "Kemarin", from: yesterday, to: yesterday },
+    { label: "Minggu ini", from: jakartaDate(sinceMonday), to: today },
+  ];
+  const rangeHref = (from: string, to: string) =>
+    `/security/kehadiran?${new URLSearchParams({
+      ...(filterGuard ? { guard: filterGuard } : {}),
+      from,
+      to,
+    })}`;
+  const inFilter = (r: { guard_id: string; shift_date: string }) =>
+    (!filterGuard || r.guard_id === filterGuard) &&
+    r.shift_date >= filterFrom &&
+    r.shift_date <= filterTo;
 
   const supabase = await createClient();
   const [{ data: guards }, { data: checkins }, { data: patrols }] = await Promise.all([
@@ -87,11 +115,11 @@ export default async function SecurityKehadiranPage({
     .forEach((p) => photoUrls.set(`patrol-${p.id}`, buktiHref("patrol", p.id)));
 
   const pending = (checkins ?? []).filter((c) => c.status === "pending");
-  const resolved = (checkins ?? []).filter((c) => c.status !== "pending");
+  const resolved = (checkins ?? []).filter((c) => c.status !== "pending" && inFilter(c));
+  const filteredPatrols = (patrols ?? []).filter(inFilter);
 
   // Rekap per Shift: one row per guard per shift with any activity in the
-  // last RECAP_DAYS days — absen masuk, absen pulang and every patrol time.
-  const recapFrom = daysAgo(RECAP_DAYS);
+  // filter — absen masuk, absen pulang and every patrol time.
   type Recap = {
     guard_id: string;
     shift_date: string;
@@ -111,12 +139,11 @@ export default async function SecurityKehadiranPage({
     return row;
   };
   (checkins ?? [])
-    .filter((c) => c.shift_date >= recapFrom)
+    .filter(inFilter)
     .forEach((c) => {
       recapRow(c)[c.checkin_type === "pulang" ? "pulang" : "masuk"] = c;
     });
-  (patrols ?? [])
-    .filter((p) => p.shift_date >= recapFrom)
+  filteredPatrols
     .forEach((p) => recapRow(p).patrols.push(p));
   const recap = [...recapMap.values()].sort(
     (a, b) =>
@@ -231,9 +258,78 @@ export default async function SecurityKehadiranPage({
         </div>
       </div>
 
+      <form
+        action="/security/kehadiran"
+        className="bg-white border border-gray-200 rounded-lg p-3 flex flex-wrap items-end gap-3 text-sm"
+      >
+        <label className="flex flex-col gap-1">
+          <span className="text-xs text-gray-500">Personel</span>
+          <select
+            name="guard"
+            defaultValue={filterGuard}
+            className="rounded border border-gray-300 px-2 py-1.5"
+          >
+            <option value="">Semua</option>
+            {(guards ?? []).map((g) => (
+              <option key={g.id} value={g.id}>
+                {g.name}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="flex flex-col gap-1">
+          <span className="text-xs text-gray-500">Dari tanggal</span>
+          <input
+            type="date"
+            name="from"
+            defaultValue={filterFrom}
+            className="rounded border border-gray-300 px-2 py-1"
+          />
+        </label>
+        <label className="flex flex-col gap-1">
+          <span className="text-xs text-gray-500">Sampai tanggal</span>
+          <input
+            type="date"
+            name="to"
+            defaultValue={filterTo}
+            className="rounded border border-gray-300 px-2 py-1"
+          />
+        </label>
+        <button
+          type="submit"
+          className="rounded bg-gray-900 text-white px-4 py-1.5 font-medium hover:bg-gray-700"
+        >
+          Tampilkan
+        </button>
+        <a href="/security/kehadiran" className="text-blue-600 hover:underline py-1.5">
+          Reset
+        </a>
+        <div className="w-full flex flex-wrap gap-2">
+          {quickRanges.map((r) => {
+            const active = r.from === filterFrom && r.to === filterTo;
+            return (
+              <a
+                key={r.label}
+                href={rangeHref(r.from, r.to)}
+                className={`rounded-full border px-3 py-1 text-xs font-medium ${
+                  active
+                    ? "border-gray-900 bg-gray-900 text-white"
+                    : "border-gray-300 text-gray-700 hover:bg-gray-50"
+                }`}
+              >
+                {r.label}
+              </a>
+            );
+          })}
+        </div>
+        <p className="w-full text-xs text-gray-400">
+          Berlaku untuk Rekap per Shift, Riwayat Kehadiran dan Laporan Patroli di bawah.
+        </p>
+      </form>
+
       <div>
         <h2 className="text-sm font-medium text-gray-700 mb-1">
-          Rekap per Shift ({RECAP_DAYS} hari terakhir)
+          Rekap per Shift
         </h2>
         <p className="text-xs text-gray-400 mb-2">
           Jam = saat foto diambil / laporan ditulis di HP petugas.
@@ -378,7 +474,7 @@ export default async function SecurityKehadiranPage({
       <div>
         <h2 className="text-sm font-medium text-gray-700 mb-2">Laporan Patroli</h2>
         <div className="bg-white border border-gray-200 rounded-lg divide-y divide-gray-100">
-          {(patrols ?? []).map((p) => (
+          {filteredPatrols.map((p) => (
             <div key={p.id} className="px-4 py-3">
               <div className="text-sm">
                 <span className="font-medium text-gray-900">
@@ -408,7 +504,7 @@ export default async function SecurityKehadiranPage({
               </div>
             </div>
           ))}
-          {(patrols ?? []).length === 0 && (
+          {filteredPatrols.length === 0 && (
             <div className="px-4 py-6 text-center text-gray-400 text-sm">
               Belum ada laporan patroli.
             </div>
