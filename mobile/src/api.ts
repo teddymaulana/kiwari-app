@@ -9,7 +9,11 @@ const API_URL = process.env.EXPO_PUBLIC_API_URL || "https://kiwari-app.vercel.ap
 // which hands out guard PINs for offline login.
 const APP_KEY = process.env.EXPO_PUBLIC_APP_KEY || "";
 
-export type Guard = { id: string; name: string; pin: string };
+// needs_patrol false = absen-only guard (no Laporan Patroli). Missing in
+// caches from before the field existed = patrols.
+export type Guard = { id: string; name: string; pin: string; needs_patrol?: boolean };
+// Laporan Patroli 1, 2, 3 per shift.
+export const MAX_PATROLS = 3;
 export type ShiftType = "pagi" | "malam";
 // Absen twice per shift: masuk at the start, pulang at the end.
 export type CheckinType = "masuk" | "pulang";
@@ -23,8 +27,9 @@ export type Done = Shift & {
   rejected: boolean;
   // Absen only; missing in caches/servers from before masuk/pulang = masuk.
   checkin_type?: CheckinType;
-  // Patroli only: the queue id it was sent with (several per shift).
+  // Patroli only: the queue id it was sent with, and its slot (1–3).
   client_id?: string | null;
+  patrol_no?: number;
 };
 export type SyncData = {
   guards: Guard[];
@@ -80,6 +85,7 @@ export type Submission = {
   photoUri?: string;
   captured_at: string;
   checkin_type?: CheckinType;
+  patrol_no?: number;
 };
 
 export async function send(item: Submission & { id: string }) {
@@ -95,6 +101,7 @@ export async function send(item: Submission & { id: string }) {
   if (item.checkin_type) fields.checkin_type = item.checkin_type;
   // Lets the server spot a resend of a patrol it already saved.
   if (item.kind === "patroli") fields.client_id = item.id;
+  if (item.patrol_no) fields.patrol_no = String(item.patrol_no);
 
   if (!item.photoUri) {
     const form = new FormData();

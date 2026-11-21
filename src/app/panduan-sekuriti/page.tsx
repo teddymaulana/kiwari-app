@@ -75,33 +75,36 @@ export default function PanduanSekuritiPage() {
             </li>
           </ol>
           <p className="mt-2">
-            Jam absen tercatat otomatis dari HP. Masing-masing hanya bisa sekali per shift.
-            Pengurus akan mengecek dan mengonfirmasi. Jika tertulis &quot;ditolak
-            pengurus&quot;, hubungi pengurus.
+            Jam absen tercatat otomatis dari HP dan langsung masuk. Masing-masing hanya bisa
+            sekali per shift. Jika tertulis &quot;ditolak pengurus&quot;, hubungi pengurus.
           </p>
           <p className="mt-2">
-            Jika muncul &quot;Anda tidak ada jadwal shift saat ini&quot;, hubungi pengurus.
+            Tukar shift dengan rekan? Tetap bisa absen dan patroli. Aplikasi memakai shift
+            sesuai jam saat itu dan menulis &quot;Di luar jadwal Anda&quot;.
           </p>
         </section>
 
         <section>
-          <h2 className="text-lg font-semibold mb-2">4. Laporan Patroli (boleh berkali-kali)</h2>
+          <h2 className="text-lg font-semibold mb-2">4. Laporan Patroli 1, 2, 3</h2>
           <ol className="list-decimal pl-5 space-y-1">
             <li>
-              Setiap selesai keliling, ketuk <b>Laporan Patroli</b>.
+              Setiap shift ada 3 laporan patroli. Setiap selesai keliling, ketuk{" "}
+              <b>Laporan Patroli 1</b>, lalu berikutnya <b>2</b> dan <b>3</b>.
             </li>
             <li>
               Tulis laporan, contoh: &quot;Keliling blok A–D, semua aman. Lampu jalan blok C
               mati.&quot;
             </li>
-            <li>Foto boleh ditambahkan (tidak wajib).</li>
             <li>
-              Ketuk <b>Kirim Laporan</b>.
+              <b>Ambil foto</b> (wajib).
+            </li>
+            <li>
+              Ketuk <b>Kirim Laporan Patroli</b>.
             </li>
           </ol>
           <p className="mt-2">
-            Tidak ada batas jumlah patroli. Jam setiap patroli tercatat dan terlihat di
-            layar awal (&quot;Patroli shift ini&quot;) dan oleh pengurus.
+            Jam setiap patroli tercatat dan terlihat oleh pengurus. Petugas yang tidak
+            bertugas patroli (misalnya Rahmat) hanya melihat tombol absen.
           </p>
         </section>
 

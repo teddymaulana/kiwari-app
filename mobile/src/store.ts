@@ -2,6 +2,7 @@ import { Directory, File, Paths } from "expo-file-system";
 import { ImageManipulator, SaveFormat } from "expo-image-manipulator";
 import {
   fetchSyncData,
+  MAX_PATROLS,
   OfflineError,
   type CheckinType,
   send,
@@ -71,8 +72,23 @@ function shiftWindow({ shift_date, shift_type }: Shift): [number, number] {
 
 // The guard's shift happening now, from the cached schedule. Falls back
 // to one starting or ending within the hour, so arriving at 06.45 or
-// filing a patrol report at 19.20 still lands on the right shift.
-export function currentShift(data: SyncData, guardId: string, now = new Date()): Shift | null {
+// filing a patrol report at 19.20 still lands on the right shift. With
+// nothing scheduled (e.g. swapped shifts with a colleague), it's whichever
+// shift the clock is in — Pagi 07–19, else Malam (started yesterday if
+// before 07.00) — marked offSchedule so the app can say so.
+export type CurrentShift = Shift & { offSchedule?: boolean };
+
+function shiftByClock(now: Date): CurrentShift {
+  const h = now.getHours();
+  const day = new Date(now);
+  if (h < 7) day.setDate(day.getDate() - 1);
+  const shift_date = `${day.getFullYear()}-${String(day.getMonth() + 1).padStart(2, "0")}-${String(
+    day.getDate()
+  ).padStart(2, "0")}`;
+  return { shift_date, shift_type: h >= 7 && h < 19 ? "pagi" : "malam", offSchedule: true };
+}
+
+export function currentShift(data: SyncData, guardId: string, now = new Date()): CurrentShift {
   const t = now.getTime();
   const mine: Shift[] = data.shifts
     .filter((s) => s.guard_id === guardId && (s.shift_type === "pagi" || s.shift_type === "malam"))
@@ -82,7 +98,7 @@ export function currentShift(data: SyncData, guardId: string, now = new Date()):
       const [start, end] = shiftWindow(s);
       return t >= start - grace && t < end + grace;
     });
-  return within(0) ?? within(HOUR) ?? null;
+  return within(0) ?? within(HOUR) ?? shiftByClock(now);
 }
 
 // Is this guard's absen masuk/pulang for the shift already done — on the
@@ -120,25 +136,31 @@ export function checkinStatus(
   return null;
 }
 
-// Patrols for this guard's shift, oldest first: sent ones (per the last
-// sync, or marked on delivery) and ones still waiting in the queue.
-export type PatrolEntry = { id: string; at: string; waiting: boolean };
-
-export function shiftPatrols(
+// Status of Laporan Patroli 1, 2, 3 for this guard's shift: sent (per the
+// last sync, or marked on delivery) or still waiting in the queue. Entries
+// from before patrol slots existed are numbered by time.
+export function patrolSlots(
   cache: SyncData | null,
   queue: QueueItem[],
   guardId: string,
   shift: Shift
-): PatrolEntry[] {
+): Status[] {
   const key = { ...shift, guard_id: guardId };
-  const sent = (cache?.done ?? [])
+  const slots: Status[] = Array.from({ length: MAX_PATROLS }, () => null);
+  (cache?.done ?? [])
     .filter((d) => d.kind === "patroli" && sameShift(d, key))
-    .map((d, i) => ({ id: d.client_id ?? `sent-${i}`, at: d.at, waiting: false }));
-  const sentIds = new Set(sent.map((p) => p.id));
-  const waiting = queue
-    .filter((q) => !q.error && q.kind === "patroli" && sameShift(q, key) && !sentIds.has(q.id))
-    .map((q) => ({ id: q.id, at: q.captured_at, waiting: true }));
-  return [...sent, ...waiting].sort((a, b) => a.at.localeCompare(b.at));
+    .sort((a, b) => a.at.localeCompare(b.at))
+    .forEach((d, i) => {
+      const n = d.patrol_no ?? i + 1;
+      if (n >= 1 && n <= MAX_PATROLS) slots[n - 1] = { state: "done", at: d.at };
+    });
+  queue
+    .filter((q) => !q.error && q.kind === "patroli" && sameShift(q, key) && q.patrol_no)
+    .forEach((q) => {
+      const n = q.patrol_no!;
+      if (n >= 1 && n <= MAX_PATROLS && !slots[n - 1]) slots[n - 1] = { state: "waiting" };
+    });
+  return slots;
 }
 
 // Records a delivered item in the cache straight away, so its status is
@@ -155,7 +177,7 @@ function markDone(item: QueueItem) {
     rejected: false,
     ...(item.kind === "checkin"
       ? { checkin_type: typeOf(item) }
-      : { client_id: item.id }),
+      : { client_id: item.id, patrol_no: item.patrol_no }),
   };
   const done = cache.done ?? [];
   const already =

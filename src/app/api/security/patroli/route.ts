@@ -2,8 +2,9 @@ import { NextRequest, NextResponse } from "next/server";
 import { savePatrol } from "@/lib/securitySubmit";
 
 // Public: Laporan Patroli from the Android security app — multipart form
-// with guard_id, pin, shift_date, shift_type, report, an optional photo,
-// captured_at and client_id (see schema.sql). Write in lib/securitySubmit.ts.
+// with guard_id, pin, shift_date, shift_type, report, photo (required),
+// captured_at, client_id and patrol_no (1–3; older builds omit it and get
+// the next free slot). Write in lib/securitySubmit.ts.
 export async function POST(request: NextRequest) {
   const formData = await request.formData().catch(() => null);
   if (!formData) return NextResponse.json({ error: "Data tidak valid" }, { status: 400 });
@@ -17,6 +18,7 @@ export async function POST(request: NextRequest) {
     photo: formData.get("photo") as File | null,
     captured_at: String(formData.get("captured_at") || ""),
     client_id: String(formData.get("client_id") || ""),
+    patrol_no: String(formData.get("patrol_no") || ""),
   });
   if (error) return NextResponse.json({ error, duplicate }, { status: 400 });
   return NextResponse.json({ ok: true });

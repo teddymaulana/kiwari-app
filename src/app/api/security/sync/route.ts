@@ -32,7 +32,7 @@ export async function GET(request: NextRequest) {
   const [guardsRes, shiftsRes, checkinsRes, patrolsRes] = await Promise.all([
     admin
       .from("security_guards")
-      .select("id, name, pin")
+      .select("id, name, pin, needs_patrol")
       .eq("is_active", true)
       .not("pin", "is", null)
       .order("name"),
@@ -49,7 +49,7 @@ export async function GET(request: NextRequest) {
       .lte("shift_date", range.to),
     admin
       .from("security_patrols")
-      .select("guard_id, shift_date, shift_type, submitted_at, captured_at, client_id")
+      .select("guard_id, shift_date, shift_type, submitted_at, captured_at, client_id, patrol_no")
       .gte("shift_date", range.from)
       .lte("shift_date", range.to),
   ]);
@@ -78,6 +78,7 @@ export async function GET(request: NextRequest) {
       rejected: false,
       // Patrols repeat within a shift; this matches one to the app's queue.
       client_id: p.client_id ?? null,
+      patrol_no: p.patrol_no,
     })),
   ];
 

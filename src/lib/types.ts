@@ -156,11 +156,13 @@ export type SecurityGuard = {
   id: string;
   name: string;
   phone: string | null;
-  // Shared-secret PIN for the public checkin/patroli pages — see the
-  // security_guards.pin comment in schema.sql. Null until a pengurus sets
-  // one, which blocks that guard from checking in until then.
+  // Shared-secret PIN for the security app — see the security_guards.pin
+  // comment in schema.sql. Null until a pengurus sets one, which blocks
+  // that guard from logging in until then.
   pin: string | null;
   is_active: boolean;
+  // False for absen-only guards (no Laporan Patroli in the app).
+  needs_patrol: boolean;
   created_at: string;
 };
 
@@ -232,6 +234,8 @@ export type SecurityPatrol = {
   captured_at: string | null;
   // The app's queue id, so a resend after a lost reply isn't saved twice.
   client_id: string | null;
+  // Patroli 1, 2 or 3 of the guard's shift.
+  patrol_no: number;
   created_at: string;
 };
 

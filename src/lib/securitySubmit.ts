@@ -27,6 +27,9 @@ function parseCheckinType(value: string | undefined): CheckinType | null {
   return value === "masuk" || value === "pulang" ? value : null;
 }
 
+// Laporan Patroli 1, 2, 3 per guard per shift.
+export const MAX_PATROLS = 3;
+
 export function isShiftType(value: string): value is ShiftType {
   return value === "pagi" || value === "malam";
 }
@@ -36,16 +39,22 @@ export function isShiftType(value: string): value is ShiftType {
 export async function verifyGuard(
   guard_id: string,
   pin: string
-): Promise<{ id: string; name: string } | null> {
+): Promise<{ id: string; name: string; needs_patrol: boolean } | null> {
   if (!guard_id || !pin) return null;
   const admin = createAdminClient();
   const { data: guard } = await admin
     .from("security_guards")
-    .select("id, name, pin, is_active")
+    .select("id, name, pin, is_active, needs_patrol")
     .eq("id", guard_id)
-    .maybeSingle<{ id: string; name: string; pin: string | null; is_active: boolean }>();
+    .maybeSingle<{
+      id: string;
+      name: string;
+      pin: string | null;
+      is_active: boolean;
+      needs_patrol: boolean | null;
+    }>();
   if (!guard || !guard.is_active || !guard.pin || guard.pin !== pin) return null;
-  return { id: guard.id, name: guard.name };
+  return { id: guard.id, name: guard.name, needs_patrol: guard.needs_patrol !== false };
 }
 
 export async function saveCheckin(input: {
@@ -81,6 +90,8 @@ export async function saveCheckin(input: {
     photo_path: path,
     captured_at: parseCapturedAt(input.captured_at),
     checkin_type,
+    // Counts straight away — pengurus only step in to Tolak a wrong one.
+    status: "confirmed",
   });
   if (error) {
     await admin.storage.from("bukti-kehadiran").remove([path]);
@@ -104,28 +115,62 @@ export async function savePatrol(input: {
   photo: File | null;
   captured_at?: string;
   client_id?: string;
+  patrol_no?: string;
 }): Promise<Result> {
   const { guard_id, pin, shift_date, shift_type, report, photo } = input;
-  // Any number of patrols per shift. client_id is the app's queue id: the
-  // same id arriving twice is a resend whose first reply was lost.
+  // Up to MAX_PATROLS per guard per shift, each in its own numbered slot
+  // (Patroli 1, 2, 3). client_id is the app's queue id: the same id
+  // arriving twice is a resend whose first reply was lost.
   const client_id = input.client_id?.slice(0, 100) || null;
   if (!guard_id || !pin) return { error: "Pilih nama dan isi PIN" };
   if (!shift_date || !isShiftType(shift_type)) return { error: "Shift tidak valid" };
 
-  if (!(await verifyGuard(guard_id, pin))) return { error: "Nama atau PIN salah" };
+  if (!photo || photo.size === 0) return { error: "Foto patroli wajib diisi" };
+
+  const guard = await verifyGuard(guard_id, pin);
+  if (!guard) return { error: "Nama atau PIN salah" };
+  if (!guard.needs_patrol) return { error: "Petugas ini tidak perlu lapor patroli" };
 
   const admin = createAdminClient();
-  // Photo is optional for a patrol report, so a failed upload just drops
-  // it rather than failing the whole submission.
-  let photo_path: string | null = null;
-  if (photo && photo.size > 0) {
-    const ext = photo.name.split(".").pop() || "jpg";
-    const path = `patrol/${guard_id}/${Date.now()}-${crypto.randomUUID()}.${ext}`;
-    const { error: uploadError } = await admin.storage
-      .from("bukti-kehadiran")
-      .upload(path, photo, { contentType: photo.type });
-    if (!uploadError) photo_path = path;
+
+  // A resend of a patrol we already have: report it as delivered.
+  if (client_id) {
+    const { data: same } = await admin
+      .from("security_patrols")
+      .select("id")
+      .eq("client_id", client_id)
+      .maybeSingle();
+    if (same) return { error: "Laporan patroli ini sudah terkirim", duplicate: true };
   }
+
+  // Which slot: the one the app asked for, else (older app builds) the
+  // first free one.
+  const { data: existing } = await admin
+    .from("security_patrols")
+    .select("patrol_no")
+    .eq("guard_id", guard_id)
+    .eq("shift_date", shift_date)
+    .eq("shift_type", shift_type)
+    .returns<{ patrol_no: number }[]>();
+  const taken = new Set((existing ?? []).map((p) => p.patrol_no));
+  const asked = Number(input.patrol_no);
+  const patrol_no =
+    asked >= 1 && asked <= MAX_PATROLS
+      ? asked
+      : [1, 2, 3].find((n) => !taken.has(n)) ?? null;
+  if (!patrol_no) {
+    return { error: `Sudah ${MAX_PATROLS} kali lapor patroli untuk shift ini` };
+  }
+  if (taken.has(patrol_no)) {
+    return { error: `Patroli ${patrol_no} untuk shift ini sudah dikirim`, duplicate: true };
+  }
+
+  const ext = photo.name.split(".").pop() || "jpg";
+  const photo_path = `patrol/${guard_id}/${Date.now()}-${crypto.randomUUID()}.${ext}`;
+  const { error: uploadError } = await admin.storage
+    .from("bukti-kehadiran")
+    .upload(photo_path, photo, { contentType: photo.type });
+  if (uploadError) return { error: "Gagal mengunggah foto: " + uploadError.message };
 
   const { error } = await admin.from("security_patrols").insert({
     guard_id,
@@ -135,11 +180,12 @@ export async function savePatrol(input: {
     photo_path,
     captured_at: parseCapturedAt(input.captured_at),
     client_id,
+    patrol_no,
   });
   if (error) {
-    if (photo_path) await admin.storage.from("bukti-kehadiran").remove([photo_path]);
+    await admin.storage.from("bukti-kehadiran").remove([photo_path]);
     if (error.code === "23505") {
-      return { error: "Laporan patroli ini sudah terkirim", duplicate: true };
+      return { error: `Patroli ${patrol_no} untuk shift ini sudah dikirim`, duplicate: true };
     }
     return { error: error.message };
   }

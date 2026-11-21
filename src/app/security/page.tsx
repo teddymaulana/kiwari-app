@@ -9,6 +9,7 @@ import AlertForm from "./AlertForm";
 import { buktiHref } from "@/lib/bukti";
 import type { SecurityGuard, SecurityShift, ShiftType } from "@/lib/types";
 import { MONTH_NAMES, SHIFT_LABELS, SHIFT_HOURS } from "@/lib/types";
+import { ABSEN_TRACKING_START, guardRank } from "@/lib/securityApp";
 import { buildWaMeUrl } from "@/lib/waMe";
 
 // Only 2026 has a schedule so far — swap this back to a free year input
@@ -20,24 +21,9 @@ const YEAR = 2026;
 // so earlier months aren't offered in the filter.
 const FIRST_MONTH = 10;
 
-// Display order of guards (schedule + Kontak Security), matching the
-// Jadwal Security PDF. Anyone not listed — e.g. a newly added guard —
-// comes after, in the order they were added.
-const GUARD_ORDER = ["Dedi", "Didin", "Nova", "Ayi", "Septi"];
-
-function guardRank(name: string): number {
-  const i = GUARD_ORDER.findIndex(
-    (n) => n.toLowerCase() === name.trim().toLowerCase()
-  );
-  return i === -1 ? GUARD_ORDER.length : i;
-}
-
 // Attendance color for a scheduled Pagi/Malam cell (Pengurus Keamanan):
 // cell background + a small marker so it reads without color too.
 type AbsenState = "both" | "masuk" | "pulang" | "none" | null;
-// The security app went live on this date — earlier shifts had no app
-// absen, so they're never marked "Tidak absen".
-const ABSEN_TRACKING_START = "2026-11-19";
 const ABSEN_STYLE: Record<Exclude<AbsenState, null>, { cell: string; mark: string; text: string; title: string }> = {
   both: { cell: "bg-emerald-100", mark: "✓✓", text: "text-emerald-700", title: "Absen masuk & pulang" },
   masuk: { cell: "bg-amber-100", mark: "M", text: "text-amber-700", title: "Hanya absen masuk" },
@@ -146,16 +132,6 @@ export default async function SecurityPage({
         .returns<AlertRow[]>()
     : { data: null };
 
-  // Check-ins waiting for Konfirmasi/Tolak — same (undated) set as the
-  // "Menunggu Konfirmasi" list on /security/kehadiran — for the badge on
-  // the Kehadiran & Patroli button.
-  const { count: pendingCheckins } = canKehadiran
-    ? await supabase
-        .from("security_checkins")
-        .select("id", { count: "exact", head: true })
-        .eq("status", "pending")
-    : { count: null };
-
   // Stable sort, so unlisted guards keep their created_at order.
   guards?.sort((a, b) => guardRank(a.name) - guardRank(b.name));
 
@@ -202,7 +178,17 @@ export default async function SecurityPage({
     type: ShiftType | null,
     isPast: boolean
   ): AbsenState => {
-    if (!canKehadiran || (type !== "pagi" && type !== "malam")) return null;
+    if (!canKehadiran) return null;
+    if (type !== "pagi" && type !== "malam") {
+      // Not scheduled that day (OFF), but absen anyway — e.g. swapped
+      // shifts with a colleague. Never "Tidak absen" here.
+      const p = absenMap.get(`${guardId}-${date}-pagi`);
+      const m = absenMap.get(`${guardId}-${date}-malam`);
+      if (!p && !m) return null;
+      const masuk = !!(p?.masuk || m?.masuk);
+      const pulang = !!(p?.pulang || m?.pulang);
+      return masuk && pulang ? "both" : masuk ? "masuk" : "pulang";
+    }
     const a = absenMap.get(`${guardId}-${date}-${type}`);
     if (a?.masuk && a.pulang) return "both";
     if (a?.masuk) return "masuk";
@@ -323,14 +309,6 @@ export default async function SecurityPage({
               className="inline-flex items-center gap-2 rounded bg-amber-400 px-3 py-1.5 text-sm font-semibold text-amber-950 shadow-sm hover:bg-amber-300 transition"
             >
               Kehadiran &amp; Patroli Security
-              {!!pendingCheckins && (
-                <span
-                  title="Absen menunggu konfirmasi"
-                  className="rounded-full bg-red-600 px-1.5 py-0.5 text-[11px] font-bold leading-none text-white"
-                >
-                  {pendingCheckins}
-                </span>
-              )}
               <span aria-hidden="true">→</span>
             </a>
           )}
@@ -662,9 +640,8 @@ export default async function SecurityPage({
                   Shift Terjadwal
                 </th>
                 <th className="px-3 py-2 font-medium text-center">
-                  Absen Masuk Dikonfirmasi
+                  Absen Masuk
                 </th>
-                <th className="px-3 py-2 font-medium text-center">Menunggu</th>
                 <th className="px-3 py-2 font-medium text-center">Ditolak</th>
                 <th className="px-3 py-2 font-medium text-center">
                   Tingkat Kehadiran
@@ -688,9 +665,6 @@ export default async function SecurityPage({
                   </td>
                   <td className="px-3 py-2 text-center text-emerald-700">
                     {s.confirmed}
-                  </td>
-                  <td className="px-3 py-2 text-center text-gray-500">
-                    {s.pending}
                   </td>
                   <td className="px-3 py-2 text-center text-red-600">
                     {s.rejected}
@@ -722,7 +696,7 @@ export default async function SecurityPage({
               ))}
               {summaryRows.length === 0 && (
                 <tr>
-                  <td colSpan={8} className="px-3 py-6 text-center text-gray-400">
+                  <td colSpan={7} className="px-3 py-6 text-center text-gray-400">
                     Belum ada data.
                   </td>
                 </tr>

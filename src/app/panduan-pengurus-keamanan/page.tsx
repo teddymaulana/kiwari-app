@@ -87,28 +87,19 @@ export default function PanduanPengurusKeamananPage() {
           <h2 className="text-lg font-semibold mb-2">3. Absen dan patroli</h2>
           <p>
             Petugas absen 2 kali per shift (<b>Absen Masuk</b> di awal, <b>Absen
-            Pulang</b> di akhir) dan boleh lapor patroli berkali-kali. Semua jam tercatat
-            dari HP petugas.
+            Pulang</b> di akhir) dan lapor <b>Patroli 1, 2, 3</b> (dengan foto). Rahmat
+            hanya absen, tidak patroli. Semua jam tercatat dari HP petugas. Petugas yang
+            tukar shift tetap bisa absen; di Rekap ditandai <b>di luar jadwal</b>.
           </p>
-          <ol className="list-decimal pl-5 space-y-1 mt-2">
-            <li>
-              Angka merah di tombol <b>Kehadiran &amp; Patroli Security</b> = jumlah absen
-              yang menunggu.
-            </li>
-            <li>
-              Di <b>Menunggu Konfirmasi</b>, ketuk foto untuk memperbesar. Cek orang, lokasi
-              dan jam.
-            </li>
-            <li>
-              Ketuk <b>Konfirmasi</b> jika benar, atau <b>Tolak</b> jika tidak (misalnya
-              foto bukan di pos).
-            </li>
-          </ol>
           <p className="mt-2">
-            Absen yang ditolak tidak bisa diulang untuk shift itu. Petugas melihat
-            &quot;Absen ditolak pengurus&quot; di aplikasi.
+            Absen dan patroli <b>langsung tercatat</b>, tidak perlu dikonfirmasi pengurus.
           </p>
-          <Shot src="/panduan/pengurus-konfirmasi.png" alt="Absen menunggu konfirmasi dengan tombol Konfirmasi dan Tolak" width={375} height={146} />
+          <p className="mt-2">
+            Jika ada absen yang jelas salah (misalnya foto bukan di pos), buka{" "}
+            <b>Riwayat Kehadiran</b>, ketuk <b>Lihat</b> untuk cek fotonya, lalu ketuk{" "}
+            <b>Tolak</b>. Absen yang ditolak tidak dihitung dan tidak bisa diulang untuk
+            shift itu; petugas melihat &quot;ditolak pengurus&quot; di aplikasi.
+          </p>
           <p className="mt-2">
             Ringkasan per bulan (bahan bonus/insentif) ada di bawah halaman Keamanan.
           </p>
@@ -133,7 +124,7 @@ export default function PanduanPengurusKeamananPage() {
           <p className="mt-2">Yang ikut tersaring:</p>
           <ul className="list-disc pl-5 space-y-1">
             <li>
-              <b>Rekap per Shift</b>: jam masuk, jam pulang, dan jumlah + jam setiap patroli
+              <b>Rekap per Shift</b>: jam masuk, jam pulang, dan jam Patroli 1–3 (P1, P2, P3)
               per petugas per shift.
             </li>
             <li>
@@ -145,7 +136,7 @@ export default function PanduanPengurusKeamananPage() {
           </ul>
           <p className="mt-2">
             Tanggal = tanggal mulai shift. Shift Malam 19/11 (19.00–07.00) masuk ke tanggal
-            19/11. Menunggu Konfirmasi selalu menampilkan semua.
+            19/11.
           </p>
           <Shot src="/panduan/pengurus-filter-rekap.png" alt="Filter Personel dan tanggal dengan tombol Hari ini, Kemarin, Minggu ini, dan tabel Rekap per Shift" width={688} height={388} />
         </section>

@@ -1,14 +1,12 @@
-import Image from "next/image";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { buktiHref } from "@/lib/bukti";
 import { getCurrentUser, SECURITY_KEHADIRAN_ACCESS } from "@/lib/auth";
-import { setGuardPin, confirmCheckin, rejectCheckin } from "./actions";
+import { setGuardPin, rejectCheckin } from "./actions";
 import RejectCheckinForm from "./RejectCheckinForm";
 import GuardPinForm from "./GuardPinForm";
-import SubmitButton from "@/components/SubmitButton";
 import type { SecurityGuard, SecurityCheckin, SecurityPatrol } from "@/lib/types";
-import { SHIFT_LABELS, CHECKIN_STATUS_LABELS, CHECKIN_TYPE_LABELS } from "@/lib/types";
+import { SHIFT_LABELS, CHECKIN_STATUS_LABELS } from "@/lib/types";
 
 // Always Jakarta time — the server (Vercel) runs in UTC.
 const TZ = "Asia/Jakarta";
@@ -60,7 +58,7 @@ export default async function SecurityKehadiranPage({
   const sp = await searchParams;
   const { error } = sp;
   // Filter: personel + tanggal (shift date), for Rekap per Shift, Riwayat
-  // Kehadiran and Laporan Patroli. Menunggu Konfirmasi always shows all.
+  // Kehadiran and Laporan Patroli.
   const filterGuard = sp.guard || "";
   const filterFrom = isDate(sp.from) ? sp.from : jakartaDate(DEFAULT_DAYS);
   const filterTo = isDate(sp.to) ? sp.to : jakartaDate();
@@ -85,11 +83,13 @@ export default async function SecurityKehadiranPage({
     r.shift_date <= filterTo;
 
   const supabase = await createClient();
-  const [{ data: guards }, { data: checkins }, { data: patrols }] = await Promise.all([
+  const [{ data: guards }, { data: checkins }, { data: patrols }, { data: shifts }] =
+    await Promise.all([
+    // All guards, so former guards' old records still show a name; only
+    // active ones get PINs and appear in the filter.
     supabase
       .from("security_guards")
       .select("*")
-      .eq("is_active", true)
       .order("name")
       .returns<SecurityGuard[]>(),
     supabase
@@ -102,9 +102,23 @@ export default async function SecurityKehadiranPage({
       .select("*")
       .order("submitted_at", { ascending: false })
       .returns<SecurityPatrol[]>(),
+    // Schedule for the filter range, to flag absen/patroli done outside a
+    // guard's scheduled shift (e.g. swapped with a colleague).
+    supabase
+      .from("security_shifts")
+      .select("guard_id, shift_date, shift_type")
+      .gte("shift_date", filterFrom)
+      .lte("shift_date", filterTo)
+      .in("shift_type", ["pagi", "malam"])
+      .returns<{ guard_id: string; shift_date: string; shift_type: string }[]>(),
   ]);
 
   const guardMap = new Map((guards ?? []).map((g) => [g.id, g.name]));
+  const activeGuards = (guards ?? []).filter((g) => g.is_active);
+  const noPatrol = new Set((guards ?? []).filter((g) => g.needs_patrol === false).map((g) => g.id));
+  const scheduled = new Set(
+    (shifts ?? []).map((sh) => `${sh.guard_id}|${sh.shift_date}|${sh.shift_type}`)
+  );
 
   const photoUrls = new Map<string, string>();
   (checkins ?? [])
@@ -114,8 +128,9 @@ export default async function SecurityKehadiranPage({
     .filter((p) => p.photo_path)
     .forEach((p) => photoUrls.set(`patrol-${p.id}`, buktiHref("patrol", p.id)));
 
-  const pending = (checkins ?? []).filter((c) => c.status === "pending");
-  const resolved = (checkins ?? []).filter((c) => c.status !== "pending" && inFilter(c));
+  // Absen count as soon as they arrive (no confirmation step); pengurus can
+  // still Tolak a wrong one from Riwayat Kehadiran.
+  const history = (checkins ?? []).filter(inFilter);
   const filteredPatrols = (patrols ?? []).filter(inFilter);
 
   // Rekap per Shift: one row per guard per shift with any activity in the
@@ -174,7 +189,7 @@ export default async function SecurityKehadiranPage({
       <div>
         <h2 className="text-sm font-medium text-gray-700 mb-2">PIN Security</h2>
         <div className="bg-white border border-gray-200 rounded-lg divide-y divide-gray-100">
-          {(guards ?? []).map((g) => (
+          {activeGuards.map((g) => (
             <div
               key={g.id}
               className="px-4 py-2.5 flex items-center justify-between gap-3"
@@ -186,7 +201,7 @@ export default async function SecurityKehadiranPage({
               />
             </div>
           ))}
-          {(guards ?? []).length === 0 && (
+          {activeGuards.length === 0 && (
             <div className="px-4 py-6 text-center text-gray-400 text-sm">
               Belum ada data security.
             </div>
@@ -194,69 +209,30 @@ export default async function SecurityKehadiranPage({
         </div>
       </div>
 
-      <div>
-        <h2 className="text-sm font-medium text-gray-700 mb-2">
-          Menunggu Konfirmasi ({pending.length})
-        </h2>
-        <div className="bg-white border border-gray-200 rounded-lg divide-y divide-gray-100">
-          {pending.map((c) => (
-            <div key={c.id} className="px-4 py-3 flex items-center justify-between gap-3">
-              {/* Thumbnail so the photo can be checked at a glance; click
-                  for the full size. Signed URL, so not optimized. */}
-              {photoUrls.get(`checkin-${c.id}`) && (
-                <a
-                  href={photoUrls.get(`checkin-${c.id}`)}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="shrink-0"
-                >
-                  <Image
-                    src={photoUrls.get(`checkin-${c.id}`)!}
-                    alt={`Foto absen ${guardMap.get(c.guard_id) ?? ""}`}
-                    width={48}
-                    height={48}
-                    unoptimized
-                    className="w-12 h-12 rounded object-cover border border-gray-200"
-                  />
-                </a>
-              )}
-              <div className="text-sm flex-1 min-w-0">
-                <span className="font-medium text-gray-900">
-                  {guardMap.get(c.guard_id) ?? c.guard_id}
-                </span>{" "}
-                <span className="text-gray-500">
-                  — {CHECKIN_TYPE_LABELS[c.checkin_type ?? "masuk"]},{" "}
-                  {SHIFT_LABELS[c.shift_type]},{" "}
-                  {new Date(c.shift_date).toLocaleDateString("id-ID")}
-                </span>
-                <div className="text-xs text-gray-400">
-                  {sentTimes(c.checked_in_at, c.captured_at, "Absen")}
-                </div>
-              </div>
-              <div className="flex items-center gap-2 shrink-0">
-                <form action={confirmCheckin.bind(null, c.id)}>
-                  <SubmitButton
-                    pendingText="..."
-                    className="text-xs bg-emerald-600 text-white rounded px-2.5 py-1.5 hover:bg-emerald-700 transition"
-                  >
-                    Konfirmasi
-                  </SubmitButton>
-                </form>
-                <RejectCheckinForm
-                  action={rejectCheckin.bind(null, c.id)}
-                  guardName={guardMap.get(c.guard_id) ?? "security"}
-                  shiftLabel={`${c.checkin_type === "pulang" ? "pulang" : "masuk"} ${SHIFT_LABELS[c.shift_type]}, ${new Date(c.shift_date).toLocaleDateString("id-ID")}`}
-                />
-              </div>
-            </div>
-          ))}
-          {pending.length === 0 && (
-            <div className="px-4 py-6 text-center text-gray-400 text-sm">
-              Tidak ada absen menunggu konfirmasi.
-            </div>
-          )}
-        </div>
-      </div>
+      <form
+        action="/api/security/export"
+        className="bg-white border border-gray-200 rounded-lg p-3 flex flex-wrap items-end gap-3 text-sm"
+      >
+        <label className="flex flex-col gap-1">
+          <span className="text-xs text-gray-500">Rekap Absensi &amp; Patroli per bulan</span>
+          <input
+            type="month"
+            name="month"
+            defaultValue={jakartaDate().slice(0, 7)}
+            className="rounded border border-gray-300 px-2 py-1"
+          />
+        </label>
+        <button
+          type="submit"
+          className="rounded bg-emerald-600 text-white px-4 py-1.5 font-medium hover:bg-emerald-700"
+        >
+          Download Excel
+        </button>
+        <p className="w-full text-xs text-gray-400">
+          File .xlsx berwarna (bisa dibuka di Excel / Google Sheets): rekap per hari, detail
+          per shift, dan laporan patroli.
+        </p>
+      </form>
 
       <form
         action="/security/kehadiran"
@@ -270,7 +246,7 @@ export default async function SecurityKehadiranPage({
             className="rounded border border-gray-300 px-2 py-1.5"
           >
             <option value="">Semua</option>
-            {(guards ?? []).map((g) => (
+            {activeGuards.map((g) => (
               <option key={g.id} value={g.id}>
                 {g.name}
               </option>
@@ -352,7 +328,17 @@ export default async function SecurityKehadiranPage({
                   <td className="px-3 py-2 whitespace-nowrap">
                     {new Date(r.shift_date).toLocaleDateString("id-ID")}
                   </td>
-                  <td className="px-3 py-2 text-gray-500">{SHIFT_LABELS[r.shift_type]}</td>
+                  <td className="px-3 py-2 text-gray-500 whitespace-nowrap">
+                    {SHIFT_LABELS[r.shift_type]}
+                    {!scheduled.has(`${r.guard_id}|${r.shift_date}|${r.shift_type}`) && (
+                      <div
+                        title="Tidak ada di jadwal petugas ini (misalnya tukar shift)"
+                        className="text-[11px] text-orange-600"
+                      >
+                        di luar jadwal
+                      </div>
+                    )}
+                  </td>
                   <td className="px-3 py-2 whitespace-nowrap">
                     {guardMap.get(r.guard_id) ?? r.guard_id}
                   </td>
@@ -376,16 +362,19 @@ export default async function SecurityKehadiranPage({
                       )}
                     </td>
                   ))}
-                  <td className="px-3 py-2">
+                  <td className="px-3 py-2 whitespace-nowrap">
                     {r.patrols.length === 0 ? (
-                      <span className="text-gray-300">—</span>
+                      <span className="text-gray-300">
+                        {noPatrol.has(r.guard_id) ? "tidak perlu" : "—"}
+                      </span>
                     ) : (
-                      <>
-                        <span className="font-medium">{r.patrols.length}×</span>{" "}
-                        <span className="text-gray-500 tabular-nums">
-                          {r.patrols.map((p) => clock(patrolAt(p))).join(", ")}
-                        </span>
-                      </>
+                      <span className="text-gray-700 tabular-nums">
+                        {r.patrols.map((p) => (
+                          <span key={p.id} className="mr-2">
+                            <span className="text-gray-400">P{p.patrol_no}</span> {clock(patrolAt(p))}
+                          </span>
+                        ))}
+                      </span>
                     )}
                   </td>
                 </tr>
@@ -418,7 +407,7 @@ export default async function SecurityKehadiranPage({
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
-              {resolved.map((c) => (
+              {history.map((c) => (
                 <tr key={c.id}>
                   <td className="px-3 py-2 whitespace-nowrap">
                     {new Date(c.shift_date).toLocaleDateString("id-ID")}
@@ -437,15 +426,17 @@ export default async function SecurityKehadiranPage({
                     )}
                   </td>
                   <td className="px-3 py-2">
-                    <span
-                      className={`text-xs rounded-full px-2 py-0.5 ${
-                        c.status === "confirmed"
-                          ? "bg-emerald-50 text-emerald-700"
-                          : "bg-red-50 text-red-700"
-                      }`}
-                    >
-                      {CHECKIN_STATUS_LABELS[c.status]}
-                    </span>
+                    {c.status === "rejected" ? (
+                      <span className="text-xs rounded-full px-2 py-0.5 bg-red-50 text-red-700">
+                        {CHECKIN_STATUS_LABELS[c.status]}
+                      </span>
+                    ) : (
+                      <RejectCheckinForm
+                        action={rejectCheckin.bind(null, c.id)}
+                        guardName={guardMap.get(c.guard_id) ?? "security"}
+                        shiftLabel={`${c.checkin_type === "pulang" ? "pulang" : "masuk"} ${SHIFT_LABELS[c.shift_type]}, ${new Date(c.shift_date).toLocaleDateString("id-ID")}`}
+                      />
+                    )}
                   </td>
                   <td className="px-3 py-2">
                     <a
@@ -459,7 +450,7 @@ export default async function SecurityKehadiranPage({
                   </td>
                 </tr>
               ))}
-              {resolved.length === 0 && (
+              {history.length === 0 && (
                 <tr>
                   <td colSpan={7} className="px-3 py-6 text-center text-gray-400">
                     Belum ada riwayat.
@@ -481,7 +472,7 @@ export default async function SecurityKehadiranPage({
                   {guardMap.get(p.guard_id) ?? p.guard_id}
                 </span>{" "}
                 <span className="text-gray-500">
-                  — {SHIFT_LABELS[p.shift_type]},{" "}
+                  — Patroli {p.patrol_no}, {SHIFT_LABELS[p.shift_type]},{" "}
                   {new Date(p.shift_date).toLocaleDateString("id-ID")}
                 </span>
               </div>
