@@ -16,6 +16,7 @@ import {
 import { StatusBar } from "expo-status-bar";
 import * as ImagePicker from "expo-image-picker";
 import * as Network from "expo-network";
+import * as Updates from "expo-updates";
 import type { CheckinType, Guard, SecurityAlert, Shift, SyncData } from "./src/api";
 import { ackAlert, fetchAlerts, OfflineError } from "./src/api";
 import { onAlertPush, setUpPush } from "./src/push";
@@ -58,6 +59,20 @@ const ALERT_POLL_MS = 15_000;
 const ALERT_VIBRATION = [0, 1000, 600];
 
 const LOGO = require("./assets/kiwari-logo.png");
+
+// Shown under the logo on the login screen. The version only changes with
+// a new APK (it's also the update runtime), so the date of the installed
+// over-the-air update is shown too — that's what tells pengurus whether a
+// phone has the latest changes.
+const APP_VERSION = Updates.runtimeVersion ? `v${Updates.runtimeVersion}` : "";
+const UPDATE_LABEL =
+  Updates.createdAt && !Updates.isEmbeddedLaunch
+    ? `Update ${formatDate(
+        `${Updates.createdAt.getFullYear()}-${String(Updates.createdAt.getMonth() + 1).padStart(2, "0")}-${String(
+          Updates.createdAt.getDate()
+        ).padStart(2, "0")}`
+      )} ${formatTime(Updates.createdAt.toISOString())}`
+    : null;
 
 const SHIFT_LABELS = { pagi: "Pagi (07.00–19.00)", malam: "Malam (19.00–07.00)" };
 
@@ -334,7 +349,8 @@ function LoginScreen({
   return (
     <ScrollView contentContainerStyle={styles.page}>
       <Image source={LOGO} style={styles.logo} resizeMode="contain" />
-      <Text style={styles.appName}>SECURITY</Text>
+      <Text style={styles.appName}>SECURITY {APP_VERSION}</Text>
+      {UPDATE_LABEL && <Text style={styles.updateLabel}>{UPDATE_LABEL}</Text>}
       <AlertList alerts={alerts} hint="Masuk dulu untuk menangani alert." />
       <Text style={styles.muted}>Pilih nama Anda.</Text>
 
@@ -946,6 +962,7 @@ const styles = StyleSheet.create({
   page: { padding: 20, paddingTop: 56, paddingBottom: 40 },
   logo: { width: 200, height: 137, alignSelf: "center", marginBottom: 4 },
   logoSmall: { width: 96, height: 66, marginBottom: 8 },
+  updateLabel: { fontSize: 11, color: "#a8a29e", textAlign: "center", marginTop: -8, marginBottom: 12 },
   appName: {
     fontSize: 13,
     fontWeight: "700",
