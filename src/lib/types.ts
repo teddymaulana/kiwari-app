@@ -220,6 +220,8 @@ export type SecurityCheckin = {
   checkin_type: CheckinType;
   // Tukar shift: the colleague whose scheduled shift this covers.
   replaces_guard_id: string | null;
+  // End-of-shift report, written with Absen Pulang.
+  report: string | null;
   confirmed_by: string | null;
   confirmed_at: string | null;
   created_at: string;

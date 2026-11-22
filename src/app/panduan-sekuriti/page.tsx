@@ -70,7 +70,8 @@ export default function PanduanSekuritiPage() {
               pos) → <b>Kirim Absen Masuk</b>.
             </li>
             <li>
-              <b>Akhir shift:</b> ketuk <b>Absen Pulang</b> → <b>Ambil foto</b> →{" "}
+              <b>Akhir shift:</b> ketuk <b>Absen Pulang</b> → tulis <b>Laporan</b> singkat
+              (kejadian selama shift, hal yang perlu diteruskan) → <b>Ambil foto</b> →{" "}
               <b>Kirim Absen Pulang</b>.
             </li>
           </ol>

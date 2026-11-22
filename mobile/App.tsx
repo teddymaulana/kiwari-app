@@ -1015,16 +1015,25 @@ function AbsenScreen({
   onSubmit: (draft: Draft) => Promise<boolean>;
 }) {
   const [photo, setPhoto] = useState<Photo | null>(null);
+  const [report, setReport] = useState("");
   const [busy, setBusy] = useState(false);
+  // Absen Pulang also needs the guard's end-of-shift report.
+  const needsReport = type === "pulang";
+  const ready = !!photo && (!needsReport || !!report.trim());
 
   const submit = async () => {
-    if (!photo) return;
+    if (!photo || !ready) return;
     setBusy(true);
-    if (!(await onSubmit({ photoUri: photo.uri, captured_at: photo.captured_at }))) setBusy(false);
+    const ok = await onSubmit({
+      photoUri: photo.uri,
+      captured_at: photo.captured_at,
+      ...(needsReport ? { report: report.trim() } : {}),
+    });
+    if (!ok) setBusy(false);
   };
 
   return (
-    <ScrollView contentContainerStyle={styles.page}>
+    <ScrollView contentContainerStyle={styles.page} keyboardShouldPersistTaps="handled">
       <ShiftHeader
         title={type === "masuk" ? "Absen Masuk" : "Absen Pulang"}
         shift={shift}
@@ -1033,6 +1042,18 @@ function AbsenScreen({
       <Text style={styles.muted}>
         {type === "masuk" ? "Di awal shift, foto diri di pos." : "Di akhir shift, foto diri di pos."}
       </Text>
+      {needsReport && (
+        <>
+          <Text style={styles.label}>Laporan</Text>
+          <TextInput
+            style={[styles.input, styles.textarea]}
+            value={report}
+            onChangeText={setReport}
+            multiline
+            placeholder="Contoh: Shift aman, tidak ada kejadian. Gerbang belakang sudah dikunci. Lampu pos perlu diganti."
+          />
+        </>
+      )}
       <Text style={styles.label}>Foto</Text>
       <PhotoField photo={photo} onChange={setPhoto} />
       <Button
@@ -1040,7 +1061,7 @@ function AbsenScreen({
         big
         onPress={submit}
         busy={busy}
-        disabled={!photo}
+        disabled={!ready}
       />
     </ScrollView>
   );

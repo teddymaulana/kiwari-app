@@ -116,7 +116,7 @@ export async function GET(request: NextRequest) {
       .returns<{ guard_id: string; shift_date: string; shift_type: string }[]>(),
     supabase
       .from("security_checkins")
-      .select("guard_id, shift_date, shift_type, checkin_type, status, checked_in_at, captured_at, replaces_guard_id")
+      .select("guard_id, shift_date, shift_type, checkin_type, status, checked_in_at, captured_at, replaces_guard_id, report")
       .gte("shift_date", from)
       .lte("shift_date", to)
       .neq("status", "rejected")
@@ -129,6 +129,7 @@ export async function GET(request: NextRequest) {
           checked_in_at: string;
           captured_at: string | null;
           replaces_guard_id: string | null;
+          report: string | null;
         }[]
       >(),
     supabase
@@ -190,6 +191,8 @@ export async function GET(request: NextRequest) {
     replaces?: string;
     replacedBy?: string;
     masuk?: string;
+    // Absen Pulang's end-of-shift report.
+    pulangReport?: string;
     pulang?: string;
     patrols: (typeof patrols)[number][];
   };
@@ -219,6 +222,7 @@ export async function GET(request: NextRequest) {
   checkins.forEach((c) => {
     const s = slotOf(c.guard_id, c.shift_date, c.shift_type);
     s[c.checkin_type === "pulang" ? "pulang" : "masuk"] = c.captured_at ?? c.checked_in_at;
+    if (c.checkin_type === "pulang" && c.report) s.pulangReport = c.report;
   });
   patrols.forEach((p) => slotOf(p.guard_id, p.shift_date, p.shift_type).patrols.push(p));
   [...checkins, ...patrols].forEach(noteSwap);
@@ -370,12 +374,13 @@ export async function GET(request: NextRequest) {
     "Patroli 1",
     "Patroli 2",
     "Patroli 3",
+    "Laporan Pulang",
   ];
   addTitle(ws2, `Detail Absensi & Patroli per Shift — ${periodLabel}`, "Satu baris per petugas per shift (WIB).", detailHeaders.length);
   styleHeader(ws2.getRow(4));
   ws2.getRow(4).values = detailHeaders;
   styleHeader(ws2.getRow(4));
-  [12, 7, 14, 9, 22, 11, 11, 16, 10, 10, 10].forEach((w, i) => (ws2.getColumn(i + 1).width = w));
+  [12, 7, 14, 9, 22, 11, 11, 16, 10, 10, 10, 50].forEach((w, i) => (ws2.getColumn(i + 1).width = w));
 
   const detail = [...slots.values()]
     .filter((s) => nameOf.has(s.guard_id) && (s.masuk || s.pulang || s.patrols.length || statusOf(s)))
@@ -406,12 +411,16 @@ export async function GET(request: NextRequest) {
       clock(s.pulang),
       status ? STATUS[status].label : "",
       ...(guard?.needs_patrol === false ? ["—", "—", "—"] : [p(1), p(2), p(3)]),
+      s.pulangReport ?? "",
     ];
     row.eachCell({ includeEmpty: true }, (cell, col) => {
       if (col > detailHeaders.length) return;
       cell.border = box;
       cell.font = { size: 10 };
-      cell.alignment = { vertical: "middle", horizontal: col === 3 || col === 5 || col === 8 ? "left" : "center" };
+      cell.alignment =
+        col === 12
+          ? { vertical: "top", horizontal: "left", wrapText: true }
+          : { vertical: "middle", horizontal: col === 3 || col === 5 || col === 8 ? "left" : "center" };
     });
     if (s.replaces || s.replacedBy) row.getCell(5).font = { size: 10, color: { argb: STATUS.swap.text } };
     else if (!s.scheduled) row.getCell(5).font = { size: 10, color: { argb: "FFC2410C" } };

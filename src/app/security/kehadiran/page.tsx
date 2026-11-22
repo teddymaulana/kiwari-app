@@ -387,6 +387,14 @@ export default async function SecurityKehadiranPage({
                       {c ? (
                         <>
                           <span className="tabular-nums">{clock(checkinAt(c))}</span>
+                          {i === 1 && c.report && (
+                            <div
+                              title={c.report}
+                              className="mt-0.5 max-w-56 whitespace-normal text-xs text-gray-500 line-clamp-2"
+                            >
+                              {c.report}
+                            </div>
+                          )}
                           {c.status !== "confirmed" && (
                             <span
                               className={`ml-1 text-xs ${
@@ -462,6 +470,12 @@ export default async function SecurityKehadiranPage({
                     {c.captured_at && (
                       <div className="text-xs text-gray-400">
                         Foto {dateTime(c.captured_at)}
+                      </div>
+                    )}
+                    {c.report && (
+                      <div className="mt-1 max-w-xs whitespace-pre-wrap text-xs text-gray-700">
+                        <span className="text-gray-400">Laporan: </span>
+                        {c.report}
                       </div>
                     )}
                   </td>

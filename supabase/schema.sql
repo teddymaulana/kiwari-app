@@ -895,3 +895,9 @@ alter table security_patrol_photos enable row level security;
 drop policy if exists "pengurus read security_patrol_photos" on security_patrol_photos;
 create policy "pengurus read security_patrol_photos" on security_patrol_photos
   for select to authenticated using (is_pengurus());
+
+-- Laporan on Absen Pulang (migration 2026-11-23_security_checkin_report).
+-- Absen Pulang now carries a short end-of-shift report (Laporan) written
+-- by the guard in the app. Null for absen masuk and older absen.
+
+alter table security_checkins add column if not exists report text;

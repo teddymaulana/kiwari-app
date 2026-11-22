@@ -83,10 +83,14 @@ export async function saveCheckin(input: {
   captured_at?: string;
   checkin_type?: string;
   replaces_guard_id?: string;
+  report?: string;
 }): Promise<Result> {
   const { guard_id, pin, shift_date, shift_type, photo } = input;
   const checkin_type = parseCheckinType(input.checkin_type);
   if (!checkin_type) return { error: "Jenis absen tidak valid" };
+  // Absen Pulang comes with the guard's end-of-shift report. Older app
+  // builds don't send one, so it isn't enforced here (the app requires it).
+  const report = checkin_type === "pulang" ? input.report?.trim().slice(0, 2000) || null : null;
   if (!guard_id || !pin) return { error: "Pilih nama dan isi PIN" };
   if (!shift_date || !isShiftType(shift_type)) return { error: "Shift tidak valid" };
   if (!photo || photo.size === 0) return { error: "Foto wajib diisi" };
@@ -111,6 +115,7 @@ export async function saveCheckin(input: {
     // Counts straight away — pengurus only step in to Tolak a wrong one.
     status: "confirmed",
     replaces_guard_id: await parseReplaces(input.replaces_guard_id, guard_id),
+    report,
   });
   if (error) {
     await admin.storage.from("bukti-kehadiran").remove([path]);

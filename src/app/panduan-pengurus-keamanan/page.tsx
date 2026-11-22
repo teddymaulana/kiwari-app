@@ -128,7 +128,8 @@ export default function PanduanPengurusKeamananPage() {
           <p className="mt-2">Yang ikut tersaring:</p>
           <ul className="list-disc pl-5 space-y-1">
             <li>
-              <b>Rekap per Shift</b>: jam masuk, jam pulang, dan jam Patroli 1–3 (P1, P2, P3)
+              <b>Rekap per Shift</b>: jam masuk, jam pulang (dengan laporan akhir shift), dan jam
+              Patroli 1–3 (P1, P2, P3)
               per petugas per shift.
             </li>
             <li>
