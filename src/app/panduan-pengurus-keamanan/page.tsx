@@ -88,8 +88,12 @@ export default function PanduanPengurusKeamananPage() {
           <p>
             Petugas absen 2 kali per shift (<b>Absen Masuk</b> di awal, <b>Absen
             Pulang</b> di akhir) dan lapor <b>Patroli 1, 2, 3</b> (dengan foto). Rahmat
-            hanya absen, tidak patroli. Semua jam tercatat dari HP petugas. Petugas yang
-            tukar shift tetap bisa absen; di Rekap ditandai <b>di luar jadwal</b>.
+            hanya absen, tidak patroli. Semua jam tercatat dari HP petugas.
+          </p>
+          <p className="mt-2">
+            <b>Tukar shift:</b> petugas yang tidak ada jadwal memilih <b>Ganti Shift</b> dan
+            rekan yang digantikan. Di Rekap tertulis <b>menggantikan (nama)</b>; di Jadwal
+            dan Excel, rekan yang digantikan bertanda <b>⇄</b> (bukan &quot;Tidak absen&quot;).
           </p>
           <p className="mt-2">
             Absen dan patroli <b>langsung tercatat</b>, tidak perlu dikonfirmasi pengurus.

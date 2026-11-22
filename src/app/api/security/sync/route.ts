@@ -44,12 +44,12 @@ export async function GET(request: NextRequest) {
       .in("shift_type", ["pagi", "malam"]),
     admin
       .from("security_checkins")
-      .select("guard_id, shift_date, shift_type, status, checked_in_at, captured_at, checkin_type")
+      .select("guard_id, shift_date, shift_type, status, checked_in_at, captured_at, checkin_type, replaces_guard_id")
       .gte("shift_date", range.from)
       .lte("shift_date", range.to),
     admin
       .from("security_patrols")
-      .select("guard_id, shift_date, shift_type, submitted_at, captured_at, client_id, patrol_no")
+      .select("guard_id, shift_date, shift_type, submitted_at, captured_at, client_id, patrol_no, replaces_guard_id")
       .gte("shift_date", range.from)
       .lte("shift_date", range.to),
   ]);
@@ -68,6 +68,7 @@ export async function GET(request: NextRequest) {
       rejected: c.status === "rejected",
       // masuk/pulang — a shift has one of each. Null before the migration.
       checkin_type: c.checkin_type ?? "masuk",
+      replaces_guard_id: c.replaces_guard_id ?? null,
     })),
     ...(patrolsRes.data ?? []).map((p) => ({
       kind: "patroli",
@@ -79,6 +80,7 @@ export async function GET(request: NextRequest) {
       // Patrols repeat within a shift; this matches one to the app's queue.
       client_id: p.client_id ?? null,
       patrol_no: p.patrol_no,
+      replaces_guard_id: p.replaces_guard_id ?? null,
     })),
   ];
 

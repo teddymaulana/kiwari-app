@@ -5,6 +5,7 @@ import { getCurrentUser, SECURITY_KEHADIRAN_ACCESS } from "@/lib/auth";
 import { setGuardPin, rejectCheckin } from "./actions";
 import RejectCheckinForm from "./RejectCheckinForm";
 import GuardPinForm from "./GuardPinForm";
+import PhotoArchive from "./PhotoArchive";
 import type { SecurityGuard, SecurityCheckin, SecurityPatrol } from "@/lib/types";
 import { SHIFT_LABELS, CHECKIN_STATUS_LABELS } from "@/lib/types";
 
@@ -65,6 +66,9 @@ export default async function SecurityKehadiranPage({
   // Quick ranges (keep the chosen personel). Minggu ini = Senin–hari ini.
   const today = jakartaDate();
   const yesterday = jakartaDate(1);
+  // Arsip Foto defaults to last month (the one usually ready to archive).
+  const [ty, tm] = today.split("-").map(Number);
+  const lastMonth = tm === 1 ? `${ty - 1}-12` : `${ty}-${String(tm - 1).padStart(2, "0")}`;
   const sinceMonday = (new Date(`${today}T00:00:00Z`).getUTCDay() + 6) % 7;
   const quickRanges = [
     { label: "Hari ini", from: today, to: today },
@@ -160,6 +164,12 @@ export default async function SecurityKehadiranPage({
     });
   filteredPatrols
     .forEach((p) => recapRow(p).patrols.push(p));
+  // Tukar shift: the colleague this shift was covering, if the guard said so.
+  const replacedOf = (r: Recap) =>
+    r.masuk?.replaces_guard_id ??
+    r.pulang?.replaces_guard_id ??
+    r.patrols.find((p) => p.replaces_guard_id)?.replaces_guard_id ??
+    null;
   const recap = [...recapMap.values()].sort(
     (a, b) =>
       b.shift_date.localeCompare(a.shift_date) ||
@@ -233,6 +243,8 @@ export default async function SecurityKehadiranPage({
           per shift, dan laporan patroli.
         </p>
       </form>
+
+      <PhotoArchive currentMonth={today.slice(0, 7)} lastMonth={lastMonth} />
 
       <form
         action="/security/kehadiran"
@@ -330,7 +342,11 @@ export default async function SecurityKehadiranPage({
                   </td>
                   <td className="px-3 py-2 text-gray-500 whitespace-nowrap">
                     {SHIFT_LABELS[r.shift_type]}
-                    {!scheduled.has(`${r.guard_id}|${r.shift_date}|${r.shift_type}`) && (
+                    {replacedOf(r) ? (
+                      <div className="text-[11px] text-violet-700">
+                        menggantikan {guardMap.get(replacedOf(r)!) ?? "rekan"}
+                      </div>
+                    ) : !scheduled.has(`${r.guard_id}|${r.shift_date}|${r.shift_type}`) && (
                       <div
                         title="Tidak ada di jadwal petugas ini (misalnya tukar shift)"
                         className="text-[11px] text-orange-600"

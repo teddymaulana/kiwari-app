@@ -18,6 +18,7 @@ export async function POST(request: NextRequest) {
     photo: formData.get("photo") as File | null,
     captured_at: String(formData.get("captured_at") || ""),
     checkin_type: String(formData.get("checkin_type") || ""),
+    replaces_guard_id: String(formData.get("replaces_guard_id") || ""),
   });
   if (error) return NextResponse.json({ error, duplicate }, { status: 400 });
   return NextResponse.json({ ok: true });

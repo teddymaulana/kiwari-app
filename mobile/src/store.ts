@@ -136,6 +136,21 @@ export function checkinStatus(
   return null;
 }
 
+// Tukar shift: which colleague this guard already said they're covering
+// this shift (any absen/patrol sent or queued with it), so the choice
+// survives logging out between absen and patrols.
+export function shiftReplacement(
+  cache: SyncData | null,
+  queue: QueueItem[],
+  guardId: string,
+  shift: Shift
+): string | null {
+  const key = { ...shift, guard_id: guardId };
+  const done = (cache?.done ?? []).find((d) => sameShift(d, key) && d.replaces_guard_id);
+  if (done?.replaces_guard_id) return done.replaces_guard_id;
+  return queue.find((q) => sameShift(q, key) && q.replaces_guard_id)?.replaces_guard_id ?? null;
+}
+
 // Status of Laporan Patroli 1, 2, 3 for this guard's shift: sent (per the
 // last sync, or marked on delivery) or still waiting in the queue. Entries
 // from before patrol slots existed are numbered by time.

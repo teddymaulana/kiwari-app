@@ -23,11 +23,12 @@ const FIRST_MONTH = 10;
 
 // Attendance color for a scheduled Pagi/Malam cell (Pengurus Keamanan):
 // cell background + a small marker so it reads without color too.
-type AbsenState = "both" | "masuk" | "pulang" | "none" | null;
+type AbsenState = "both" | "masuk" | "pulang" | "swap" | "none" | null;
 const ABSEN_STYLE: Record<Exclude<AbsenState, null>, { cell: string; mark: string; text: string; title: string }> = {
   both: { cell: "bg-emerald-100", mark: "✓✓", text: "text-emerald-700", title: "Absen masuk & pulang" },
   masuk: { cell: "bg-amber-100", mark: "M", text: "text-amber-700", title: "Hanya absen masuk" },
   pulang: { cell: "bg-sky-100", mark: "P", text: "text-sky-700", title: "Hanya absen pulang" },
+  swap: { cell: "bg-violet-50", mark: "⇄", text: "text-violet-700", title: "Digantikan rekan (tukar shift)" },
   none: { cell: "bg-red-50", mark: "✕", text: "text-red-600", title: "Tidak absen" },
 };
 
@@ -87,7 +88,7 @@ export default async function SecurityPage({
       isPengurus
         ? supabase
             .from("security_checkins")
-            .select("guard_id, status, checkin_type, shift_date, shift_type")
+            .select("guard_id, status, checkin_type, shift_date, shift_type, replaces_guard_id")
             .gte("shift_date", rangeStart)
             .lte("shift_date", rangeEnd)
             .returns<
@@ -97,6 +98,7 @@ export default async function SecurityPage({
                 checkin_type: "masuk" | "pulang" | null;
                 shift_date: string;
                 shift_type: "pagi" | "malam";
+                replaces_guard_id: string | null;
               }[]
             >()
         : { data: null },
@@ -163,6 +165,8 @@ export default async function SecurityPage({
   // Pengurus Keamanan only (attendance is restricted). Rejected absen
   // don't count; ones waiting for confirmation do.
   const absenMap = new Map<string, { masuk: boolean; pulang: boolean }>();
+  // `${replacedGuard}-${date}-${type}` → the guard who covered that shift.
+  const replacedBy = new Map<string, string>();
   if (canKehadiran) {
     (checkins ?? []).forEach((c) => {
       if (c.status === "rejected") return;
@@ -170,8 +174,13 @@ export default async function SecurityPage({
       const entry = absenMap.get(key) ?? { masuk: false, pulang: false };
       entry[c.checkin_type === "pulang" ? "pulang" : "masuk"] = true;
       absenMap.set(key, entry);
+      // Tukar shift: remember who covered the colleague's shift.
+      if (c.replaces_guard_id) {
+        replacedBy.set(`${c.replaces_guard_id}-${c.shift_date}-${c.shift_type}`, c.guard_id);
+      }
     });
   }
+  const guardName = new Map((guards ?? []).map((g) => [g.id, g.name]));
   const absenState = (
     guardId: string,
     date: string,
@@ -193,6 +202,7 @@ export default async function SecurityPage({
     if (a?.masuk && a.pulang) return "both";
     if (a?.masuk) return "masuk";
     if (a?.pulang) return "pulang";
+    if (replacedBy.has(`${guardId}-${date}-${type}`)) return "swap";
     return isPast && date >= ABSEN_TRACKING_START ? "none" : null;
   };
 
@@ -206,6 +216,10 @@ export default async function SecurityPage({
         isPast: d.isPast,
         isToday: d.isToday,
         absen: absenState(g.id, d.dateStr, type, d.isPast),
+        replacedBy:
+          type === "pagi" || type === "malam"
+            ? guardName.get(replacedBy.get(`${g.id}-${d.dateStr}-${type}`) ?? "") ?? null
+            : null,
       };
     });
     const totals = cells.reduce(
@@ -488,7 +502,13 @@ export default async function SecurityPage({
                 {cells.map((c, i) => (
                   <td
                     key={i}
-                    title={c.absen ? ABSEN_STYLE[c.absen].title : undefined}
+                    title={
+                      c.absen === "swap" && c.replacedBy
+                        ? `Digantikan ${c.replacedBy} (tukar shift)`
+                        : c.absen
+                          ? ABSEN_STYLE[c.absen].title
+                          : undefined
+                    }
                     className={`px-1.5 py-1.5 text-center whitespace-nowrap ${
                       c.absen
                         ? ABSEN_STYLE[c.absen].cell
@@ -549,7 +569,7 @@ export default async function SecurityPage({
       </ScrollRight>
       {canKehadiran && (
         <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-gray-500 mt-2">
-          {(["both", "masuk", "pulang", "none"] as const).map((k) => (
+          {(["both", "masuk", "pulang", "swap", "none"] as const).map((k) => (
             <span key={k} className="inline-flex items-center gap-1.5">
               <span
                 className={`inline-flex h-4 min-w-6 items-center justify-center rounded px-1 text-[10px] font-bold ${ABSEN_STYLE[k].cell} ${ABSEN_STYLE[k].text}`}

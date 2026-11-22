@@ -79,8 +79,10 @@ export default function PanduanSekuritiPage() {
             sekali per shift. Jika tertulis &quot;ditolak pengurus&quot;, hubungi pengurus.
           </p>
           <p className="mt-2">
-            Tukar shift dengan rekan? Tetap bisa absen dan patroli. Aplikasi memakai shift
-            sesuai jam saat itu dan menulis &quot;Di luar jadwal Anda&quot;.
+            <b>Tukar shift dengan rekan?</b> Jika muncul &quot;Anda tidak ada jadwal shift
+            saat ini&quot;, ketuk <b>Ganti Shift</b>, lalu pilih rekan yang Anda gantikan.
+            Setelah itu tombol absen dan patroli muncul seperti biasa, dan tertulis
+            &quot;Menggantikan (nama)&quot;. Salah pilih? Ketuk <b>Ubah</b>.
           </p>
         </section>
 

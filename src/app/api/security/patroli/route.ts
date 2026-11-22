@@ -19,6 +19,7 @@ export async function POST(request: NextRequest) {
     captured_at: String(formData.get("captured_at") || ""),
     client_id: String(formData.get("client_id") || ""),
     patrol_no: String(formData.get("patrol_no") || ""),
+    replaces_guard_id: String(formData.get("replaces_guard_id") || ""),
   });
   if (error) return NextResponse.json({ error, duplicate }, { status: 400 });
   return NextResponse.json({ ok: true });

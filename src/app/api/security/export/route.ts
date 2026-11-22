@@ -18,7 +18,7 @@ const TZ = "Asia/Jakarta";
 const DAY_NAMES = ["Min", "Sen", "Sel", "Rab", "Kam", "Jum", "Sab"];
 
 type ShiftType = "pagi" | "malam";
-type Status = "both" | "masuk" | "pulang" | "none";
+type Status = "both" | "masuk" | "pulang" | "swap" | "none";
 
 // Fills (ARGB) — same meaning as the colors on /security.
 const COLOR = {
@@ -35,6 +35,7 @@ const STATUS: Record<Status, { fill: string; text: string; mark: string; label: 
   both: { fill: "FFD1FAE5", text: "FF047857", mark: "✓✓", label: "Masuk & pulang" },
   masuk: { fill: "FFFEF3C7", text: "FFB45309", mark: "M", label: "Hanya masuk" },
   pulang: { fill: "FFE0F2FE", text: "FF0369A1", mark: "P", label: "Hanya pulang" },
+  swap: { fill: "FFEDE9FE", text: "FF6D28D9", mark: "⇄", label: "Digantikan rekan (tukar shift)" },
   none: { fill: "FFFEE2E2", text: "FFB91C1C", mark: "✕", label: "Tidak absen" },
 };
 
@@ -115,7 +116,7 @@ export async function GET(request: NextRequest) {
       .returns<{ guard_id: string; shift_date: string; shift_type: string }[]>(),
     supabase
       .from("security_checkins")
-      .select("guard_id, shift_date, shift_type, checkin_type, status, checked_in_at, captured_at")
+      .select("guard_id, shift_date, shift_type, checkin_type, status, checked_in_at, captured_at, replaces_guard_id")
       .gte("shift_date", from)
       .lte("shift_date", to)
       .neq("status", "rejected")
@@ -127,11 +128,12 @@ export async function GET(request: NextRequest) {
           checkin_type: "masuk" | "pulang" | null;
           checked_in_at: string;
           captured_at: string | null;
+          replaces_guard_id: string | null;
         }[]
       >(),
     supabase
       .from("security_patrols")
-      .select("id, guard_id, shift_date, shift_type, report, patrol_no, submitted_at, captured_at, photo_path")
+      .select("id, guard_id, shift_date, shift_type, report, patrol_no, submitted_at, captured_at, photo_path, replaces_guard_id")
       .gte("shift_date", from)
       .lte("shift_date", to)
       .returns<
@@ -145,6 +147,7 @@ export async function GET(request: NextRequest) {
           submitted_at: string;
           captured_at: string | null;
           photo_path: string | null;
+          replaces_guard_id: string | null;
         }[]
       >(),
   ]);
@@ -168,6 +171,9 @@ export async function GET(request: NextRequest) {
     shift_date: string;
     shift_type: ShiftType;
     scheduled: boolean;
+    // Tukar shift: whose shift this covers / who covered this one.
+    replaces?: string;
+    replacedBy?: string;
     masuk?: string;
     pulang?: string;
     patrols: (typeof patrols)[number][];
@@ -189,17 +195,25 @@ export async function GET(request: NextRequest) {
       slotOf(sh.guard_id, sh.shift_date, sh.shift_type).scheduled = true;
     }
   });
+  const noteSwap = (r: { guard_id: string; shift_date: string; shift_type: ShiftType; replaces_guard_id: string | null }) => {
+    if (!r.replaces_guard_id) return;
+    slotOf(r.guard_id, r.shift_date, r.shift_type).replaces = r.replaces_guard_id;
+    const covered = slots.get(`${r.replaces_guard_id}|${r.shift_date}|${r.shift_type}`);
+    if (covered) covered.replacedBy = r.guard_id;
+  };
   checkins.forEach((c) => {
     const s = slotOf(c.guard_id, c.shift_date, c.shift_type);
     s[c.checkin_type === "pulang" ? "pulang" : "masuk"] = c.captured_at ?? c.checked_in_at;
   });
   patrols.forEach((p) => slotOf(p.guard_id, p.shift_date, p.shift_type).patrols.push(p));
+  [...checkins, ...patrols].forEach(noteSwap);
   slots.forEach((s) => s.patrols.sort((a, b) => a.patrol_no - b.patrol_no));
 
   const statusOf = (s: Slot): Status | null => {
     if (s.masuk && s.pulang) return "both";
     if (s.masuk) return "masuk";
     if (s.pulang) return "pulang";
+    if (s.replacedBy) return "swap";
     // Missed only counts for past shifts since the app went live.
     return s.scheduled && s.shift_date < today && s.shift_date >= ABSEN_TRACKING_START
       ? "none"
@@ -244,7 +258,7 @@ export async function GET(request: NextRequest) {
 
   guards.forEach((g, gi) => {
     const row = ws1.getRow(5 + gi);
-    const totals = { scheduled: 0, both: 0, masuk: 0, pulang: 0, none: 0, patrols: 0 };
+    const totals = { scheduled: 0, both: 0, masuk: 0, pulang: 0, swap: 0, none: 0, patrols: 0 };
     row.getCell(1).value = g.name;
     row.getCell(1).font = { bold: true, size: 10 };
     row.getCell(1).border = box;
@@ -271,8 +285,12 @@ export async function GET(request: NextRequest) {
         cell.fill = fill(COLOR.off);
         cell.font = { size: 9, color: { argb: COLOR.offText } };
       }
-      if (worked && !worked.scheduled) {
-        cell.note = "Di luar jadwal (tukar shift)";
+      if (worked?.replaces) {
+        cell.note = `Menggantikan ${nameOf.get(worked.replaces) ?? "rekan"} (tukar shift)`;
+      } else if (worked?.replacedBy) {
+        cell.note = `Digantikan ${nameOf.get(worked.replacedBy) ?? "rekan"} (tukar shift)`;
+      } else if (worked && !worked.scheduled) {
+        cell.note = "Di luar jadwal";
       }
     });
     const base = 2 + days.length;
@@ -318,7 +336,7 @@ export async function GET(request: NextRequest) {
   lr++;
   ws1.mergeCells(lr, 1, lr, gridWidth);
   ws1.getCell(lr, 1).value =
-    `"Tidak absen" dihitung sejak ${dateLabel(ABSEN_TRACKING_START)} (aplikasi mulai dipakai). Sel dengan catatan (segitiga kecil di pojok) = di luar jadwal (tukar shift). Absen yang ditolak pengurus tidak dihitung.`;
+    `"Tidak absen" dihitung sejak ${dateLabel(ABSEN_TRACKING_START)} (aplikasi mulai dipakai). Sel dengan catatan (segitiga kecil di pojok) = tukar shift / di luar jadwal; arahkan kursor untuk melihat siapa. Absen yang ditolak pengurus tidak dihitung.`;
   ws1.getCell(lr, 1).font = { size: 9, italic: true, color: { argb: COLOR.muted } };
 
   // ── Sheet 2: Detail per Shift ──────────────────────────────────────
@@ -342,7 +360,7 @@ export async function GET(request: NextRequest) {
   styleHeader(ws2.getRow(4));
   ws2.getRow(4).values = detailHeaders;
   styleHeader(ws2.getRow(4));
-  [12, 7, 14, 9, 15, 11, 11, 16, 10, 10, 10].forEach((w, i) => (ws2.getColumn(i + 1).width = w));
+  [12, 7, 14, 9, 22, 11, 11, 16, 10, 10, 10].forEach((w, i) => (ws2.getColumn(i + 1).width = w));
 
   const detail = [...slots.values()]
     .filter((s) => nameOf.has(s.guard_id) && (s.masuk || s.pulang || s.patrols.length || statusOf(s)))
@@ -362,7 +380,13 @@ export async function GET(request: NextRequest) {
       DAY_NAMES[new Date(`${s.shift_date}T00:00:00Z`).getUTCDay()],
       nameOf.get(s.guard_id),
       s.shift_type === "pagi" ? "Pagi" : "Malam",
-      s.scheduled ? "Sesuai jadwal" : "Di luar jadwal",
+      s.replaces
+        ? `Menggantikan ${nameOf.get(s.replaces) ?? "rekan"}`
+        : s.replacedBy
+          ? `Digantikan ${nameOf.get(s.replacedBy) ?? "rekan"}`
+          : s.scheduled
+            ? "Sesuai jadwal"
+            : "Di luar jadwal",
       clock(s.masuk),
       clock(s.pulang),
       status ? STATUS[status].label : "",
@@ -374,7 +398,8 @@ export async function GET(request: NextRequest) {
       cell.font = { size: 10 };
       cell.alignment = { vertical: "middle", horizontal: col === 3 || col === 5 || col === 8 ? "left" : "center" };
     });
-    if (!s.scheduled) row.getCell(5).font = { size: 10, color: { argb: "FFC2410C" } };
+    if (s.replaces || s.replacedBy) row.getCell(5).font = { size: 10, color: { argb: STATUS.swap.text } };
+    else if (!s.scheduled) row.getCell(5).font = { size: 10, color: { argb: "FFC2410C" } };
     if (status) {
       const st = row.getCell(8);
       st.fill = fill(STATUS[status].fill);

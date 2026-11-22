@@ -30,6 +30,8 @@ export type Done = Shift & {
   // Patroli only: the queue id it was sent with, and its slot (1–3).
   client_id?: string | null;
   patrol_no?: number;
+  // Tukar shift: the colleague this shift covers.
+  replaces_guard_id?: string | null;
 };
 export type SyncData = {
   guards: Guard[];
@@ -86,6 +88,7 @@ export type Submission = {
   captured_at: string;
   checkin_type?: CheckinType;
   patrol_no?: number;
+  replaces_guard_id?: string;
 };
 
 export async function send(item: Submission & { id: string }) {
@@ -102,6 +105,7 @@ export async function send(item: Submission & { id: string }) {
   // Lets the server spot a resend of a patrol it already saved.
   if (item.kind === "patroli") fields.client_id = item.id;
   if (item.patrol_no) fields.patrol_no = String(item.patrol_no);
+  if (item.replaces_guard_id) fields.replaces_guard_id = item.replaces_guard_id;
 
   if (!item.photoUri) {
     const form = new FormData();

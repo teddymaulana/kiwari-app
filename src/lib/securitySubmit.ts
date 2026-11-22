@@ -30,6 +30,19 @@ function parseCheckinType(value: string | undefined): CheckinType | null {
 // Laporan Patroli 1, 2, 3 per guard per shift.
 export const MAX_PATROLS = 3;
 
+// Tukar shift: the colleague being covered, if any. Must be another
+// active guard; anything else is ignored rather than failing the absen.
+async function parseReplaces(value: string | undefined, guard_id: string): Promise<string | null> {
+  if (!value || value === guard_id || !/^[0-9a-f-]{36}$/i.test(value)) return null;
+  const { data } = await createAdminClient()
+    .from("security_guards")
+    .select("id")
+    .eq("id", value)
+    .eq("is_active", true)
+    .maybeSingle();
+  return data ? value : null;
+}
+
 export function isShiftType(value: string): value is ShiftType {
   return value === "pagi" || value === "malam";
 }
@@ -65,6 +78,7 @@ export async function saveCheckin(input: {
   photo: File | null;
   captured_at?: string;
   checkin_type?: string;
+  replaces_guard_id?: string;
 }): Promise<Result> {
   const { guard_id, pin, shift_date, shift_type, photo } = input;
   const checkin_type = parseCheckinType(input.checkin_type);
@@ -92,6 +106,7 @@ export async function saveCheckin(input: {
     checkin_type,
     // Counts straight away — pengurus only step in to Tolak a wrong one.
     status: "confirmed",
+    replaces_guard_id: await parseReplaces(input.replaces_guard_id, guard_id),
   });
   if (error) {
     await admin.storage.from("bukti-kehadiran").remove([path]);
@@ -116,6 +131,7 @@ export async function savePatrol(input: {
   captured_at?: string;
   client_id?: string;
   patrol_no?: string;
+  replaces_guard_id?: string;
 }): Promise<Result> {
   const { guard_id, pin, shift_date, shift_type, report, photo } = input;
   // Up to MAX_PATROLS per guard per shift, each in its own numbered slot
@@ -181,6 +197,7 @@ export async function savePatrol(input: {
     captured_at: parseCapturedAt(input.captured_at),
     client_id,
     patrol_no,
+    replaces_guard_id: await parseReplaces(input.replaces_guard_id, guard_id),
   });
   if (error) {
     await admin.storage.from("bukti-kehadiran").remove([photo_path]);

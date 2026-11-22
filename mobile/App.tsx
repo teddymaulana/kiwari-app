@@ -29,6 +29,7 @@ import {
   refreshCache,
   checkinStatus,
   patrolSlots,
+  shiftReplacement,
   type CurrentShift,
   type Status,
   currentShift,
@@ -43,10 +44,19 @@ import {
 // a connection.
 // Absen twice per shift (masuk at the start, pulang at the end) and
 // Laporan Patroli 1, 2, 3 (not for absen-only guards).
-type Screen = "home" | "absen-masuk" | "absen-pulang" | "patroli-1" | "patroli-2" | "patroli-3";
+type Screen =
+  | "home"
+  | "ganti-shift"
+  | "absen-masuk"
+  | "absen-pulang"
+  | "patroli-1"
+  | "patroli-2"
+  | "patroli-3";
 const patrolNoOf = (screen: Screen) =>
   screen.startsWith("patroli-") ? Number(screen.slice("patroli-".length)) : 0;
-type Session = { guard: Guard; pin: string; shift: CurrentShift | null };
+// replaces: tukar shift — the colleague whose shift this guard is covering
+// when they have no shift of their own on the schedule right now.
+type Session = { guard: Guard; pin: string; shift: CurrentShift | null; replaces: string | null };
 type Draft = { photoUri?: string; report?: string; captured_at: string };
 
 // How often to retry the queue while the app is open.
@@ -234,6 +244,7 @@ export default function App() {
         ...shift,
         ...draft,
         ...(kind === "checkin" ? { checkin_type: checkinType } : { patrol_no: patrolNo }),
+        ...(shift.offSchedule && session.replaces ? { replaces_guard_id: session.replaces } : {}),
       });
     } catch (e) {
       // Couldn't even save it on the phone (e.g. storage full) — stay on
@@ -284,12 +295,48 @@ export default function App() {
             discardItem(item);
             setQueue(loadQueue());
           }}
-          onLogin={(guard, pin) =>
-            setSession({ guard, pin, shift: cache ? currentShift(cache, guard.id) : null })
+          onLogin={(guard, pin) => {
+            const shift = cache ? currentShift(cache, guard.id) : null;
+            setSession({
+              guard,
+              pin,
+              shift,
+              replaces:
+                shift?.offSchedule ? shiftReplacement(cache, queue, guard.id, shift) : null,
+            });
+          }}
+          onRefreshGuards={async () => {
+            const fresh = await refreshCache();
+            if (fresh) setCache(fresh);
+            return fresh;
+          }}
+        />
+      ) : screen === "ganti-shift" && shift ? (
+        <GantiShiftScreen
+          shift={shift}
+          guards={(cache?.guards ?? []).filter((g) => g.id !== session.guard.id)}
+          scheduledIds={
+            new Set(
+              (cache?.shifts ?? [])
+                .filter(
+                  (s) => s.shift_date === shift.shift_date && s.shift_type === shift.shift_type
+                )
+                .map((s) => s.guard_id)
+            )
           }
+          onBack={() => setScreen("home")}
+          onPick={(id) => {
+            setSession({ ...session, replaces: id });
+            setScreen("home");
+          }}
         />
       ) : screen === "home" || !shift ? (
         <HomeScreen
+          replacesName={
+            session.replaces
+              ? cache?.guards.find((g) => g.id === session.replaces)?.name ?? "rekan"
+              : null
+          }
           alerts={alerts}
           onTakeAlert={takeAlert}
           session={session}
@@ -331,6 +378,7 @@ function LoginScreen({
   onSync,
   onDiscard,
   onLogin,
+  onRefreshGuards,
 }: {
   alerts: SecurityAlert[];
   cache: SyncData | null;
@@ -339,11 +387,19 @@ function LoginScreen({
   onSync: () => void;
   onDiscard: (item: QueueItem) => void;
   onLogin: (guard: Guard, pin: string) => void;
+  onRefreshGuards: () => Promise<SyncData | null>;
 }) {
   const [guard, setGuard] = useState<Guard | null>(null);
 
   if (guard) {
-    return <PinScreen guard={guard} onBack={() => setGuard(null)} onLogin={onLogin} />;
+    return (
+      <PinScreen
+        guard={guard}
+        onBack={() => setGuard(null)}
+        onLogin={onLogin}
+        onRefreshGuards={onRefreshGuards}
+      />
+    );
   }
 
   return (
@@ -397,29 +453,46 @@ function PinScreen({
   guard,
   onBack,
   onLogin,
+  onRefreshGuards,
 }: {
   guard: Guard;
   onBack: () => void;
   onLogin: (guard: Guard, pin: string) => void;
+  onRefreshGuards: () => Promise<SyncData | null>;
 }) {
   const [pin, setPin] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // A PIN that doesn't match the phone's copy may simply be newer than it
+  // (pengurus changed it on the website since the last sync), so before
+  // saying "PIN salah" fetch the latest guard list once and check again.
+  // Offline, the phone's copy is all there is.
   const tryLogin = (value: string) => {
     if (busy) return;
+    const entered = value.trim();
     setBusy(true);
     setError(null);
-    // Let the spinner paint before the (synchronous) login work runs.
-    setTimeout(() => {
+    // Let the spinner paint before the login work runs.
+    setTimeout(async () => {
       try {
-        if (guard.pin !== value.trim()) {
-          setError("PIN salah. Coba lagi.");
-          setPin("");
-          setBusy(false);
+        if (guard.pin === entered) {
+          onLogin(guard, guard.pin);
           return;
         }
-        onLogin(guard, guard.pin);
+        const fresh = await onRefreshGuards();
+        const latest = fresh?.guards.find((g) => g.id === guard.id);
+        if (latest && latest.pin === entered) {
+          onLogin(latest, latest.pin);
+          return;
+        }
+        setError(
+          fresh
+            ? "PIN salah. Coba lagi."
+            : "PIN salah. Jika PIN baru diganti pengurus, sambungkan HP ke internet lalu coba lagi."
+        );
+        setPin("");
+        setBusy(false);
       } catch (e) {
         setError(`Gagal masuk: ${(e as Error).message}`);
         setBusy(false);
@@ -532,12 +605,14 @@ function HomeScreen({
   onTakeAlert,
   session,
   shift,
+  replacesName,
   masuk,
   pulang,
   patrols,
   onOpen,
   onLogout,
 }: {
+  replacesName: string | null;
   alerts: SecurityAlert[];
   onTakeAlert: (alert: SecurityAlert) => Promise<void>;
   session: Session;
@@ -564,12 +639,25 @@ function HomeScreen({
             <Text style={styles.shiftLabel}>Shift sekarang</Text>
             <Text style={styles.shiftName}>{SHIFT_LABELS[shift.shift_type]}</Text>
             <Text style={styles.muted}>{formatDate(shift.shift_date)}</Text>
-            {shift.offSchedule && (
-              <Text style={styles.offSchedule}>
-                Di luar jadwal Anda (misalnya tukar shift). Absen tetap bisa dikirim.
-              </Text>
+            {shift.offSchedule && replacesName && (
+              <View style={styles.swapRow}>
+                <Text style={styles.swapText}>Menggantikan {replacesName}</Text>
+                <Pressable onPress={() => onOpen("ganti-shift")} hitSlop={12}>
+                  <Text style={styles.swapChange}>Ubah</Text>
+                </Pressable>
+              </View>
             )}
           </View>
+          {shift.offSchedule && !replacesName ? (
+            <>
+              <Text style={styles.error}>Anda tidak ada jadwal shift saat ini.</Text>
+              <Text style={styles.muted}>
+                Tukar shift dengan rekan? Pilih rekan yang Anda gantikan.
+              </Text>
+              <Button label="Ganti Shift" big onPress={() => onOpen("ganti-shift")} />
+            </>
+          ) : (
+          <>
           <ActionOrStatus
             label="Absen Masuk"
             status={masuk}
@@ -597,6 +685,8 @@ function HomeScreen({
                 onPress={() => onOpen(`patroli-${i + 1}` as Screen)}
               />
             ))}
+          </>
+          )}
         </>
       )}
 
@@ -773,6 +863,61 @@ function PhotoField({ photo, onChange }: { photo: Photo | null; onChange: (p: Ph
         }}
       />
     </>
+  );
+}
+
+// Tukar shift: pick the colleague whose shift this guard is covering.
+// Colleagues scheduled for this shift come first.
+function GantiShiftScreen({
+  shift,
+  guards,
+  scheduledIds,
+  onBack,
+  onPick,
+}: {
+  shift: Shift;
+  guards: Guard[];
+  scheduledIds: Set<string>;
+  onBack: () => void;
+  onPick: (guardId: string) => void;
+}) {
+  const scheduled = guards.filter((g) => scheduledIds.has(g.id));
+  const others = guards.filter((g) => !scheduledIds.has(g.id));
+  const tiles = (list: Guard[]) => (
+    <View style={styles.grid}>
+      {list.map((g) => (
+        <Pressable
+          key={g.id}
+          onPress={() => onPick(g.id)}
+          style={({ pressed }) => [styles.tile, pressed && styles.tilePressed]}
+        >
+          <View style={styles.avatar}>
+            <Text style={styles.avatarText}>{g.name.charAt(0).toUpperCase()}</Text>
+          </View>
+          <Text style={styles.tileName} numberOfLines={2}>
+            {g.name}
+          </Text>
+        </Pressable>
+      ))}
+    </View>
+  );
+  return (
+    <ScrollView contentContainerStyle={styles.page}>
+      <ShiftHeader title="Ganti Shift" shift={shift} onBack={onBack} />
+      <Text style={styles.label}>Menggantikan siapa?</Text>
+      {scheduled.length > 0 && (
+        <>
+          <Text style={styles.muted}>Jadwal shift ini</Text>
+          {tiles(scheduled)}
+        </>
+      )}
+      {others.length > 0 && (
+        <>
+          <Text style={styles.muted}>Petugas lain</Text>
+          {tiles(others)}
+        </>
+      )}
+    </ScrollView>
   );
 }
 
@@ -1038,6 +1183,9 @@ const styles = StyleSheet.create({
   shiftLabel: { fontSize: 13, color: "#a16207", fontWeight: "500" },
   shiftName: { fontSize: 20, fontWeight: "700", color: "#111827", marginTop: 2 },
   offSchedule: { fontSize: 13, color: "#9a3412", marginTop: 6 },
+  swapRow: { flexDirection: "row", alignItems: "center", marginTop: 6, gap: 12 },
+  swapText: { fontSize: 14, fontWeight: "600", color: "#9a3412" },
+  swapChange: { fontSize: 14, color: "#a16207", textDecorationLine: "underline" },
   status: {
     backgroundColor: "#ecfdf5",
     borderWidth: 1,

@@ -218,6 +218,8 @@ export type SecurityCheckin = {
   status: CheckinStatus;
   // Absen at the start (masuk) or end (pulang) of the shift.
   checkin_type: CheckinType;
+  // Tukar shift: the colleague whose scheduled shift this covers.
+  replaces_guard_id: string | null;
   confirmed_by: string | null;
   confirmed_at: string | null;
   created_at: string;
@@ -236,6 +238,8 @@ export type SecurityPatrol = {
   client_id: string | null;
   // Patroli 1, 2 or 3 of the guard's shift.
   patrol_no: number;
+  // Tukar shift: the colleague whose scheduled shift this covers.
+  replaces_guard_id: string | null;
   created_at: string;
 };
 
