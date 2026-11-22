@@ -60,6 +60,14 @@ export async function GET(
     .from(bucket)
     .createSignedUrl(path, SIGNED_URL_TTL_SECONDS);
   if (error || !data?.signedUrl) {
+    // Absen/patroli photos are deleted from storage after a month is
+    // downloaded as ZIP (Arsip Foto on /security/kehadiran).
+    if (kind === "checkin" || kind === "patrol") {
+      return new NextResponse(
+        "Foto ini sudah diarsipkan: diunduh lewat Arsip Foto (ZIP per bulan) lalu dihapus dari server. Buka file ZIP bulan tersebut untuk melihatnya.",
+        { status: 410, headers: { "Content-Type": "text/plain; charset=utf-8" } }
+      );
+    }
     return NextResponse.json({ error: "Gagal membuka bukti" }, { status: 500 });
   }
 
