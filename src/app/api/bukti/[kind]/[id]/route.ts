@@ -18,6 +18,8 @@ const KINDS: Record<BuktiKind, { table: string; column: string; bucket: string }
   checkin: { table: "security_checkins", column: "photo_path", bucket: "bukti-kehadiran" },
   patrol: { table: "security_patrols", column: "photo_path", bucket: "bukti-kehadiran" },
   alert: { table: "security_alerts", column: "photo_path", bucket: "bukti-kehadiran" },
+  // Laporan Patroli photos 2–5 (photo 1 is "patrol").
+  "patrol-photo": { table: "security_patrol_photos", column: "photo_path", bucket: "bukti-kehadiran" },
 };
 
 // Short: the link is used immediately by the redirect.
@@ -39,7 +41,7 @@ export async function GET(
     return NextResponse.json({ error: "Tidak diizinkan" }, { status: 403 });
   }
   if (
-    (kind === "checkin" || kind === "patrol") &&
+    (kind === "checkin" || kind === "patrol" || kind === "patrol-photo") &&
     !SECURITY_KEHADIRAN_ACCESS.includes(user.email)
   ) {
     return NextResponse.json({ error: "Tidak diizinkan" }, { status: 403 });
@@ -62,7 +64,7 @@ export async function GET(
   if (error || !data?.signedUrl) {
     // Absen/patroli photos are deleted from storage after a month is
     // downloaded as ZIP (Arsip Foto on /security/kehadiran).
-    if (kind === "checkin" || kind === "patrol") {
+    if (kind === "checkin" || kind === "patrol" || kind === "patrol-photo") {
       return new NextResponse(
         "Foto ini sudah diarsipkan: diunduh lewat Arsip Foto (ZIP per bulan) lalu dihapus dari server. Buka file ZIP bulan tersebut untuk melihatnya.",
         { status: 410, headers: { "Content-Type": "text/plain; charset=utf-8" } }

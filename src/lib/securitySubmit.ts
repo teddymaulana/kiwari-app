@@ -8,7 +8,11 @@ type ShiftType = "pagi" | "malam";
 // duplicate: the unique (guard, shift) row already exists — for the app's
 // offline queue that usually means an earlier send got through but its
 // response was lost, so it can treat the item as delivered.
-type Result = { error: string; duplicate?: boolean } | { error?: undefined; duplicate?: undefined };
+// resend: the duplicate is this same report arriving again (same client_id),
+// as opposed to a different report for a slot that's already taken.
+type Result =
+  | { error: string; duplicate?: boolean; resend?: boolean }
+  | { error?: undefined; duplicate?: undefined; resend?: undefined };
 
 // Phone-clock time the photo was taken / report written (see the
 // captured_at comment in schema.sql). Optional and best-effort: anything
@@ -156,7 +160,7 @@ export async function savePatrol(input: {
       .select("id")
       .eq("client_id", client_id)
       .maybeSingle();
-    if (same) return { error: "Laporan patroli ini sudah terkirim", duplicate: true };
+    if (same) return { error: "Laporan patroli ini sudah terkirim", duplicate: true, resend: true };
   }
 
   // Which slot: the one the app asked for, else (older app builds) the
@@ -203,6 +207,67 @@ export async function savePatrol(input: {
     await admin.storage.from("bukti-kehadiran").remove([photo_path]);
     if (error.code === "23505") {
       return { error: `Patroli ${patrol_no} untuk shift ini sudah dikirim`, duplicate: true };
+    }
+    return { error: error.message };
+  }
+  return {};
+}
+
+// Laporan Patroli needs PATROL_PHOTOS photos. Photo 1 comes with the report
+// itself (savePatrol); the app then sends photos 2–5 here one at a time,
+// identified by the report's client_id. Same PIN check as the report.
+export const PATROL_PHOTOS = 5;
+
+export async function savePatrolPhoto(input: {
+  guard_id: string;
+  pin: string;
+  client_id: string;
+  position: string;
+  photo: File | null;
+  captured_at?: string;
+}): Promise<Result> {
+  const position = Number(input.position);
+  if (!Number.isInteger(position) || position < 2 || position > PATROL_PHOTOS) {
+    return { error: "Nomor foto tidak valid" };
+  }
+  if (!input.client_id) return { error: "Laporan patroli tidak dikenal" };
+  if (!input.photo || input.photo.size === 0) return { error: "Foto wajib diisi" };
+  if (!(await verifyGuard(input.guard_id, input.pin))) return { error: "Nama atau PIN salah" };
+
+  const admin = createAdminClient();
+  const { data: patrol } = await admin
+    .from("security_patrols")
+    .select("id")
+    .eq("client_id", input.client_id.slice(0, 100))
+    .eq("guard_id", input.guard_id)
+    .maybeSingle<{ id: string }>();
+  if (!patrol) return { error: "Laporan patroli belum terkirim" };
+
+  const { data: existing } = await admin
+    .from("security_patrol_photos")
+    .select("id")
+    .eq("patrol_id", patrol.id)
+    .eq("position", position)
+    .maybeSingle();
+  if (existing) return { error: `Foto ${position} sudah terkirim`, duplicate: true, resend: true };
+
+  const ext = input.photo.name.split(".").pop() || "jpg";
+  const path = `patrol/${input.guard_id}/${Date.now()}-${position}-${crypto.randomUUID()}.${ext}`;
+  const { error: uploadError } = await admin.storage
+    .from("bukti-kehadiran")
+    .upload(path, input.photo, { contentType: input.photo.type });
+  if (uploadError) return { error: "Gagal mengunggah foto: " + uploadError.message };
+
+  const { error } = await admin.from("security_patrol_photos").insert({
+    patrol_id: patrol.id,
+    position,
+    photo_path: path,
+    captured_at: parseCapturedAt(input.captured_at),
+  });
+  if (error) {
+    await admin.storage.from("bukti-kehadiran").remove([path]);
+    if (error.code === "23505") {
+      return { error: `Foto ${position} sudah terkirim`, duplicate: true, resend: true };
     }
     return { error: error.message };
   }

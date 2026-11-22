@@ -87,8 +87,13 @@ export default async function SecurityKehadiranPage({
     r.shift_date <= filterTo;
 
   const supabase = await createClient();
-  const [{ data: guards }, { data: checkins }, { data: patrols }, { data: shifts }] =
-    await Promise.all([
+  const [
+    { data: guards },
+    { data: checkins },
+    { data: patrols },
+    { data: shifts },
+    { data: patrolPhotos },
+  ] = await Promise.all([
     // All guards, so former guards' old records still show a name; only
     // active ones get PINs and appear in the filter.
     supabase
@@ -115,7 +120,26 @@ export default async function SecurityKehadiranPage({
       .lte("shift_date", filterTo)
       .in("shift_type", ["pagi", "malam"])
       .returns<{ guard_id: string; shift_date: string; shift_type: string }[]>(),
+    // Laporan Patroli photos 2–5 (photo 1 is security_patrols.photo_path).
+    supabase
+      .from("security_patrol_photos")
+      .select("id, patrol_id, position")
+      .returns<{ id: string; patrol_id: string; position: number }[]>(),
   ]);
+
+  // Patrol id → its photo links in order (photo 1, then 2–5).
+  const patrolPhotoLinks = new Map<string, string[]>();
+  (patrols ?? []).forEach((p) => {
+    if (p.photo_path) patrolPhotoLinks.set(p.id, [buktiHref("patrol", p.id)]);
+  });
+  (patrolPhotos ?? [])
+    .slice()
+    .sort((a, b) => a.position - b.position)
+    .forEach((ph) => {
+      const list = patrolPhotoLinks.get(ph.patrol_id) ?? [];
+      list.push(buktiHref("patrol-photo", ph.id));
+      patrolPhotoLinks.set(ph.patrol_id, list);
+    });
 
   const guardMap = new Map((guards ?? []).map((g) => [g.id, g.name]));
   const activeGuards = (guards ?? []).filter((g) => g.is_active);
@@ -495,17 +519,20 @@ export default async function SecurityKehadiranPage({
               <p className="text-sm text-gray-700 mt-1 whitespace-pre-wrap">{p.report}</p>
               <div className="text-xs text-gray-400 mt-1">
                 {sentTimes(p.submitted_at, p.captured_at, "Dikirim")}
-                {photoUrls.get(`patrol-${p.id}`) && (
+                {(patrolPhotoLinks.get(p.id) ?? []).length > 0 && (
                   <>
-                    {" · "}
-                    <a
-                      href={photoUrls.get(`patrol-${p.id}`)}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-blue-600 hover:text-blue-700"
-                    >
-                      Lihat foto
-                    </a>
+                    {" · Foto: "}
+                    {(patrolPhotoLinks.get(p.id) ?? []).map((href, i) => (
+                      <a
+                        key={href}
+                        href={href}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-blue-600 hover:text-blue-700 mr-1.5"
+                      >
+                        {i + 1}
+                      </a>
+                    ))}
                   </>
                 )}
               </div>

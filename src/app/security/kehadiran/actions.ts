@@ -80,7 +80,7 @@ export async function rejectCheckin(id: string) {
 // their photo_path; /api/bukti then says the photo was archived.
 export async function deleteArchivedPhotos(
   month: string,
-  ids: { checkin: string[]; patrol: string[] }
+  ids: { checkin: string[]; patrol: string[]; patrolPhoto?: string[] }
 ): Promise<{ deleted?: number; error?: string }> {
   const user = await getCurrentUser();
   if (user?.role !== "pengurus") return { error: "Tidak diizinkan" };
@@ -109,6 +109,20 @@ export async function deleteArchivedPhotos(
       if (error) return { error: error.message };
       data.forEach((r) => r.photo_path && paths.push(r.photo_path));
     }
+  }
+
+  // Patroli photos 2–5: only those belonging to patrols in that month.
+  const extraIds = ids.patrolPhoto ?? [];
+  for (let i = 0; i < extraIds.length; i += 200) {
+    const { data, error } = await admin
+      .from("security_patrol_photos")
+      .select("photo_path, security_patrols!inner(shift_date)")
+      .in("id", extraIds.slice(i, i + 200))
+      .gte("security_patrols.shift_date", range.from)
+      .lte("security_patrols.shift_date", range.to)
+      .returns<{ photo_path: string | null }[]>();
+    if (error) return { error: error.message };
+    data.forEach((r) => r.photo_path && paths.push(r.photo_path));
   }
 
   let deleted = 0;

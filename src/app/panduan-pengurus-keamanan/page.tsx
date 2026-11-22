@@ -87,7 +87,7 @@ export default function PanduanPengurusKeamananPage() {
           <h2 className="text-lg font-semibold mb-2">3. Absen dan patroli</h2>
           <p>
             Petugas absen 2 kali per shift (<b>Absen Masuk</b> di awal, <b>Absen
-            Pulang</b> di akhir) dan lapor <b>Patroli 1, 2, 3</b> (dengan foto). Rahmat
+            Pulang</b> di akhir) dan lapor <b>Patroli 1, 2, 3</b> (masing-masing 5 foto). Rahmat
             hanya absen, tidak patroli. Semua jam tercatat dari HP petugas.
           </p>
           <p className="mt-2">
@@ -146,7 +146,29 @@ export default function PanduanPengurusKeamananPage() {
         </section>
 
         <section>
-          <h2 className="text-lg font-semibold mb-2">5. Kirim Alert ke Sekuriti 🚨</h2>
+          <h2 className="text-lg font-semibold mb-2">5. Arsip Foto (per bulan)</h2>
+          <p>
+            Foto absen dan patroli memenuhi penyimpanan server (sekitar 150–200 MB per bulan).
+            Simpan dan kosongkan setiap awal bulan:
+          </p>
+          <ol className="list-decimal pl-5 space-y-1 mt-2">
+            <li>
+              Di halaman <b>Kehadiran &amp; Patroli Security</b>, bagian <b>Arsip foto absen
+              &amp; patroli per bulan</b>, pilih bulan lalu ketuk <b>Download Foto (ZIP)</b>.
+            </li>
+            <li>
+              Simpan file <b>foto-security-(bulan).zip</b> (berisi semua foto + rekap Excel),
+              pastikan bisa dibuka.
+            </li>
+            <li>
+              Ketuk <b>Hapus … foto dari server</b> → <b>Ya, hapus</b>. Data absen dan laporan
+              tetap ada; hanya fotonya yang dihapus. Bulan berjalan belum bisa dihapus.
+            </li>
+          </ol>
+        </section>
+
+        <section>
+          <h2 className="text-lg font-semibold mb-2">6. Kirim Alert ke Sekuriti 🚨</h2>
           <ol className="list-decimal pl-5 space-y-1">
             <li>
               Di halaman Keamanan, kotak merah <b>Kirim Alert ke Sekuriti</b>.
@@ -180,7 +202,7 @@ export default function PanduanPengurusKeamananPage() {
         </section>
 
         <section>
-          <h2 className="text-lg font-semibold mb-2">6. Aplikasi di HP petugas</h2>
+          <h2 className="text-lg font-semibold mb-2">7. Aplikasi di HP petugas</h2>
           <ul className="list-disc pl-5 space-y-1">
             <li>
               Link pasang aplikasi:{" "}

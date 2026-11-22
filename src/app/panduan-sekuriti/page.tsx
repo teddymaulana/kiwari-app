@@ -98,7 +98,8 @@ export default function PanduanSekuritiPage() {
               mati.&quot;
             </li>
             <li>
-              <b>Ambil foto</b> (wajib).
+              Ambil <b>5 foto</b> (wajib): ketuk <b>Ambil foto 1 dari 5</b>, lalu foto berikutnya
+              sampai bar penuh <b>100%</b>. Foto salah? Ketuk <b>✕</b> lalu ambil ulang.
             </li>
             <li>
               Ketuk <b>Kirim Laporan Patroli</b>.

@@ -18,6 +18,7 @@ import * as ImagePicker from "expo-image-picker";
 import * as Network from "expo-network";
 import * as Updates from "expo-updates";
 import type { CheckinType, Guard, SecurityAlert, Shift, SyncData } from "./src/api";
+import { PATROL_PHOTOS } from "./src/api";
 import { ackAlert, fetchAlerts, OfflineError } from "./src/api";
 import { onAlertPush, setUpPush } from "./src/push";
 import {
@@ -57,7 +58,13 @@ const patrolNoOf = (screen: Screen) =>
 // replaces: tukar shift — the colleague whose shift this guard is covering
 // when they have no shift of their own on the schedule right now.
 type Session = { guard: Guard; pin: string; shift: CurrentShift | null; replaces: string | null };
-type Draft = { photoUri?: string; report?: string; captured_at: string };
+type Draft = {
+  photoUri?: string;
+  report?: string;
+  captured_at: string;
+  // Patroli photos 2–5.
+  extraPhotos?: { uri: string; captured_at: string }[];
+};
 
 // How often to retry the queue while the app is open.
 const FLUSH_INTERVAL_MS = 60_000;
@@ -921,6 +928,67 @@ function GantiShiftScreen({
   );
 }
 
+// Patroli photos: up to `max`, with a progress bar (100% = all taken).
+// Tap ✕ on a thumbnail to remove and retake it.
+function MultiPhotoField({
+  photos,
+  onChange,
+  max,
+}: {
+  photos: Photo[];
+  onChange: (photos: Photo[]) => void;
+  max: number;
+}) {
+  const pct = Math.round((Math.min(photos.length, max) / max) * 100);
+  const done = photos.length >= max;
+  return (
+    <View>
+      <View style={styles.progressRow}>
+        <Text style={[styles.progressText, done && styles.progressTextDone]}>
+          {done ? "✓ " : ""}Foto {photos.length}/{max}
+        </Text>
+        <Text style={[styles.progressText, done && styles.progressTextDone]}>{pct}%</Text>
+      </View>
+      <View style={styles.progressTrack}>
+        <View
+          style={[styles.progressFill, { width: `${pct}%` }, done && styles.progressFillDone]}
+        />
+      </View>
+      <View style={styles.thumbGrid}>
+        {Array.from({ length: max }, (_, i) => {
+          const p = photos[i];
+          return p ? (
+            <View key={p.uri} style={styles.thumb}>
+              <Image source={{ uri: p.uri }} style={styles.thumbImage} />
+              <Pressable
+                onPress={() => onChange(photos.filter((x) => x !== p))}
+                hitSlop={8}
+                style={styles.thumbRemove}
+              >
+                <Text style={styles.thumbRemoveText}>✕</Text>
+              </Pressable>
+            </View>
+          ) : (
+            <View key={`empty-${i}`} style={[styles.thumb, styles.thumbEmpty]}>
+              <Text style={styles.thumbEmptyText}>{i + 1}</Text>
+            </View>
+          );
+        })}
+      </View>
+      {!done && (
+        <Button
+          label={`Ambil foto ${photos.length + 1} dari ${max}`}
+          variant="secondary"
+          onPress={async () => {
+            const taken = await takePhoto();
+            if (taken) onChange([...photos, taken]);
+          }}
+        />
+      )}
+    </View>
+  );
+}
+
 function ShiftHeader({ title, shift, onBack }: { title: string; shift: Shift; onBack: () => void }) {
   return (
     <>
@@ -990,16 +1058,19 @@ function PatroliScreen({
   onSubmit: (draft: Draft) => Promise<boolean>;
 }) {
   const [report, setReport] = useState("");
-  const [photo, setPhoto] = useState<Photo | null>(null);
+  const [photos, setPhotos] = useState<Photo[]>([]);
   const [busy, setBusy] = useState(false);
+  const complete = photos.length >= PATROL_PHOTOS;
 
   const submit = async () => {
-    if (!photo) return;
+    if (!complete) return;
     setBusy(true);
+    const [first, ...rest] = photos;
     const ok = await onSubmit({
       report: report.trim(),
-      photoUri: photo.uri,
-      captured_at: photo.captured_at,
+      photoUri: first.uri,
+      captured_at: first.captured_at,
+      extraPhotos: rest.map((p) => ({ uri: p.uri, captured_at: p.captured_at })),
     });
     if (!ok) setBusy(false);
   };
@@ -1015,14 +1086,14 @@ function PatroliScreen({
         multiline
         placeholder="Contoh: Keliling blok A–D, semua aman. Lampu jalan blok C mati."
       />
-      <Text style={styles.label}>Foto</Text>
-      <PhotoField photo={photo} onChange={setPhoto} />
+      <Text style={styles.label}>Foto ({PATROL_PHOTOS} foto wajib)</Text>
+      <MultiPhotoField photos={photos} onChange={setPhotos} max={PATROL_PHOTOS} />
       <Button
         label={`Kirim Laporan Patroli ${patrolNo}`}
         big
         onPress={submit}
         busy={busy}
-        disabled={!report.trim() || !photo}
+        disabled={!report.trim() || !complete}
       />
     </ScrollView>
   );
@@ -1201,6 +1272,36 @@ const styles = StyleSheet.create({
   statusTitleRejected: { color: "#b91c1c" },
   statusDetail: { fontSize: 14, color: "#4b5563", marginTop: 2 },
   photo: { width: "100%", aspectRatio: 3 / 4, borderRadius: 8, marginBottom: 8 },
+  progressRow: { flexDirection: "row", justifyContent: "space-between", marginBottom: 6 },
+  progressText: { fontSize: 14, fontWeight: "600", color: "#a16207" },
+  progressTextDone: { color: "#047857" },
+  progressTrack: { height: 10, borderRadius: 5, backgroundColor: "#f5f5f4", overflow: "hidden" },
+  progressFill: { height: "100%", borderRadius: 5, backgroundColor: "#facc15" },
+  progressFillDone: { backgroundColor: "#10b981" },
+  thumbGrid: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 12 },
+  thumb: { width: "31%", aspectRatio: 3 / 4, borderRadius: 8, overflow: "hidden" },
+  thumbImage: { width: "100%", height: "100%" },
+  thumbEmpty: {
+    borderWidth: 1,
+    borderStyle: "dashed",
+    borderColor: "#d6d3d1",
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#fafaf9",
+  },
+  thumbEmptyText: { fontSize: 18, color: "#d6d3d1", fontWeight: "600" },
+  thumbRemove: {
+    position: "absolute",
+    top: 4,
+    right: 4,
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+    backgroundColor: "rgba(0,0,0,0.6)",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  thumbRemoveText: { color: "#fff", fontSize: 13, fontWeight: "700" },
   button: {
     backgroundColor: "#facc15",
     borderRadius: 8,

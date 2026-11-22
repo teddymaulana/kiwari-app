@@ -11,7 +11,13 @@ import type { ArchivePhoto } from "@/lib/securityPhotos";
 // after that month's ZIP has finished downloading on this page, and never
 // for the current month.
 
-type Done = { month: string; checkin: string[]; patrol: string[]; count: number };
+type Done = {
+  month: string;
+  checkin: string[];
+  patrol: string[];
+  patrolPhoto: string[];
+  count: number;
+};
 
 export default function PhotoArchive({ currentMonth, lastMonth }: { currentMonth: string; lastMonth: string }) {
   const [month, setMonth] = useState(lastMonth);
@@ -76,6 +82,7 @@ export default function PhotoArchive({ currentMonth, lastMonth }: { currentMonth
         month,
         checkin: photos.filter((p) => p.kind === "checkin").map((p) => p.id),
         patrol: photos.filter((p) => p.kind === "patrol").map((p) => p.id),
+        patrolPhoto: photos.filter((p) => p.kind === "patrol-photo").map((p) => p.id),
         count: photos.length,
       });
       setProgress(
@@ -93,7 +100,11 @@ export default function PhotoArchive({ currentMonth, lastMonth }: { currentMonth
   async function remove() {
     if (!done) return;
     setDeleting(true);
-    const res = await deleteArchivedPhotos(done.month, { checkin: done.checkin, patrol: done.patrol });
+    const res = await deleteArchivedPhotos(done.month, {
+      checkin: done.checkin,
+      patrol: done.patrol,
+      patrolPhoto: done.patrolPhoto,
+    });
     setDeleting(false);
     setConfirming(false);
     if (res.error) {

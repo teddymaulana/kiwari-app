@@ -211,9 +211,10 @@ export function loadQueue(): QueueItem[] {
 // pengurus deletes a rejected one from the list.
 export function discardItem(item: QueueItem) {
   writeJson(queueFile, loadQueue().filter((q) => q.id !== item.id));
-  if (item.photoUri) {
+  for (const uri of [item.photoUri, ...(item.extraPhotos ?? []).map((p) => p.uri)]) {
+    if (!uri) continue;
     try {
-      new File(item.photoUri).delete();
+      new File(uri).delete();
     } catch {
       // already gone
     }
@@ -242,6 +243,14 @@ export async function enqueue(
     ...submission,
     id,
     photoUri: submission.photoUri ? await storePhoto(submission.photoUri, id) : undefined,
+    extraPhotos: submission.extraPhotos
+      ? await Promise.all(
+          submission.extraPhotos.map(async (p, i) => ({
+            uri: await storePhoto(p.uri, `${id}-${i + 2}`),
+            captured_at: p.captured_at,
+          }))
+        )
+      : undefined,
   };
   writeJson(queueFile, [...loadQueue(), item]);
   return item;

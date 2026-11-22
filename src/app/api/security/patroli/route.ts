@@ -9,7 +9,7 @@ export async function POST(request: NextRequest) {
   const formData = await request.formData().catch(() => null);
   if (!formData) return NextResponse.json({ error: "Data tidak valid" }, { status: 400 });
 
-  const { error, duplicate } = await savePatrol({
+  const { error, duplicate, resend } = await savePatrol({
     guard_id: String(formData.get("guard_id") || ""),
     pin: String(formData.get("pin") || "").trim(),
     shift_date: String(formData.get("shift_date") || ""),
@@ -21,6 +21,6 @@ export async function POST(request: NextRequest) {
     patrol_no: String(formData.get("patrol_no") || ""),
     replaces_guard_id: String(formData.get("replaces_guard_id") || ""),
   });
-  if (error) return NextResponse.json({ error, duplicate }, { status: 400 });
+  if (error) return NextResponse.json({ error, duplicate, resend }, { status: 400 });
   return NextResponse.json({ ok: true });
 }

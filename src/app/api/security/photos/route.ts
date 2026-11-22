@@ -63,6 +63,20 @@ export async function GET(request: NextRequest) {
   if (failed) return NextResponse.json({ error: failed.message }, { status: 500 });
 
   const nameOf = new Map((guardsRes.data ?? []).map((g) => [g.id, g.name]));
+
+  // Laporan Patroli photos 2–5 of this month's patrols.
+  const patrolById = new Map((patrolsRes.data ?? []).map((p) => [p.id, p]));
+  const extra: { id: string; patrol_id: string; position: number; photo_path: string; captured_at: string | null }[] = [];
+  const patrolIds = [...patrolById.keys()];
+  for (let i = 0; i < patrolIds.length; i += 200) {
+    const { data, error } = await supabase
+      .from("security_patrol_photos")
+      .select("id, patrol_id, position, photo_path, captured_at")
+      .in("patrol_id", patrolIds.slice(i, i + 200))
+      .returns<typeof extra>();
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+    extra.push(...(data ?? []));
+  }
   const items = [
     ...(checkinsRes.data ?? [])
       .filter((c) => c.photo_path)
@@ -90,10 +104,26 @@ export async function GET(request: NextRequest) {
           at: p.captured_at ?? p.submitted_at,
           shift_type: p.shift_type,
           guard: nameOf.get(p.guard_id) ?? "petugas",
-          label: `Patroli-${p.patrol_no}`,
+          label: `Patroli-${p.patrol_no}-Foto-1`,
           path: p.photo_path!,
         }),
       })),
+    ...extra.map((ph) => {
+      const p = patrolById.get(ph.patrol_id)!;
+      return {
+        kind: "patrol-photo" as const,
+        id: ph.id,
+        path: ph.photo_path,
+        name: photoArchiveName({
+          shift_date: p.shift_date,
+          at: ph.captured_at ?? p.captured_at ?? p.submitted_at,
+          shift_type: p.shift_type,
+          guard: nameOf.get(p.guard_id) ?? "petugas",
+          label: `Patroli-${p.patrol_no}-Foto-${ph.position}`,
+          path: ph.photo_path,
+        }),
+      };
+    }),
   ];
 
   const photos: ArchivePhoto[] = [];

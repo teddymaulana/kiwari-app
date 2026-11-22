@@ -158,6 +158,21 @@ export async function GET(request: NextRequest) {
   const checkins = checkinsRes.data ?? [];
   const patrols = patrolsRes.data ?? [];
 
+  // Laporan Patroli photos 2–5 for this month's patrols.
+  const extraPhotos = new Map<string, { id: string; position: number }[]>();
+  for (let i = 0; i < patrols.length; i += 200) {
+    const { data } = await supabase
+      .from("security_patrol_photos")
+      .select("id, patrol_id, position")
+      .in("patrol_id", patrols.slice(i, i + 200).map((p) => p.id))
+      .returns<{ id: string; patrol_id: string; position: number }[]>();
+    (data ?? []).forEach((ph) => {
+      const list = extraPhotos.get(ph.patrol_id) ?? [];
+      list.push({ id: ph.id, position: ph.position });
+      extraPhotos.set(ph.patrol_id, list);
+    });
+  }
+
   // Active guards, plus any former guard with records this month.
   const withData = new Set([...checkins, ...patrols].map((r) => r.guard_id));
   const guards = (guardsRes.data ?? [])
@@ -415,11 +430,23 @@ export async function GET(request: NextRequest) {
 
   // ── Sheet 3: Laporan Patroli ───────────────────────────────────────
   const ws3 = wb.addWorksheet("Laporan Patroli", { views: [{ state: "frozen", ySplit: 4 }] });
-  const patrolHeaders = ["Tanggal", "Nama", "Shift", "Patroli ke-", "Jam", "Laporan", "Foto"];
+  const patrolHeaders = [
+    "Tanggal",
+    "Nama",
+    "Shift",
+    "Patroli ke-",
+    "Jam",
+    "Laporan",
+    "Foto 1",
+    "Foto 2",
+    "Foto 3",
+    "Foto 4",
+    "Foto 5",
+  ];
   addTitle(ws3, `Laporan Patroli — ${periodLabel}`, "Foto dibuka lewat website Kiwari (perlu login pengurus).", patrolHeaders.length);
   ws3.getRow(4).values = patrolHeaders;
   styleHeader(ws3.getRow(4));
-  [12, 14, 9, 10, 8, 60, 12].forEach((w, i) => (ws3.getColumn(i + 1).width = w));
+  [12, 14, 9, 10, 8, 50, 8, 8, 8, 8, 8].forEach((w, i) => (ws3.getColumn(i + 1).width = w));
   const origin = request.nextUrl.origin;
   const patrolRows = patrols
     .filter((p) => nameOf.has(p.guard_id))
@@ -437,7 +464,13 @@ export async function GET(request: NextRequest) {
       p.patrol_no,
       clock(p.captured_at ?? p.submitted_at),
       p.report,
-      p.photo_path ? { text: "Lihat foto", hyperlink: `${origin}/api/bukti/patrol/${p.id}` } : "",
+      ...[1, 2, 3, 4, 5].map((n) => {
+        if (n === 1) {
+          return p.photo_path ? { text: "Lihat", hyperlink: `${origin}/api/bukti/patrol/${p.id}` } : "";
+        }
+        const ph = extraPhotos.get(p.id)?.find((x) => x.position === n);
+        return ph ? { text: "Lihat", hyperlink: `${origin}/api/bukti/patrol-photo/${ph.id}` } : "";
+      }),
     ];
     row.eachCell({ includeEmpty: true }, (cell, col) => {
       if (col > patrolHeaders.length) return;
@@ -446,7 +479,9 @@ export async function GET(request: NextRequest) {
       cell.alignment = { vertical: "top", horizontal: col === 6 || col === 2 ? "left" : "center", wrapText: col === 6 };
       if (i % 2 === 1) cell.fill = fill(COLOR.weekend);
     });
-    if (p.photo_path) row.getCell(7).font = { size: 10, color: { argb: "FF2563EB" }, underline: true };
+    for (let c = 7; c <= 11; c++) {
+      if (row.getCell(c).value) row.getCell(c).font = { size: 10, color: { argb: "FF2563EB" }, underline: true };
+    }
   });
   if (patrolRows.length > 0) {
     ws3.autoFilter = { from: { row: 4, column: 1 }, to: { row: 4 + patrolRows.length, column: patrolHeaders.length } };

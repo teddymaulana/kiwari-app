@@ -40,7 +40,7 @@ export function photoArchiveName(p: {
 }
 
 export type ArchivePhoto = {
-  kind: "checkin" | "patrol";
+  kind: "checkin" | "patrol" | "patrol-photo";
   id: string;
   name: string;
   url: string;

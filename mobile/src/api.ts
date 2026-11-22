@@ -44,21 +44,23 @@ export type SyncData = {
 export class OfflineError extends Error {}
 // The server answered with an error. duplicate: the row already exists
 // (usually an earlier send that got through but whose reply was lost).
+// resend: the duplicate is this same item arriving again (its earlier send
+// got through), not a different one for a slot already taken.
 export class ServerError extends Error {
-  constructor(message: string, public duplicate = false) {
+  constructor(message: string, public duplicate = false, public resend = false) {
     super(message);
   }
 }
 
 function parseResponse<T>(status: number, text: string): T {
-  let body: { error?: string; duplicate?: boolean } | null = null;
+  let body: { error?: string; duplicate?: boolean; resend?: boolean } | null = null;
   try {
     body = JSON.parse(text);
   } catch {
     // non-JSON error page
   }
   if (status < 200 || status >= 300) {
-    throw new ServerError(body?.error || `Gagal (${status})`, !!body?.duplicate);
+    throw new ServerError(body?.error || `Gagal (${status})`, !!body?.duplicate, !!body?.resend);
   }
   return body as T;
 }
@@ -89,7 +91,12 @@ export type Submission = {
   checkin_type?: CheckinType;
   patrol_no?: number;
   replaces_guard_id?: string;
+  // Patroli photos 2–5 (photo 1 is photoUri), sent after the report.
+  extraPhotos?: { uri: string; captured_at: string }[];
 };
+
+// Laporan Patroli needs this many photos.
+export const PATROL_PHOTOS = 5;
 
 export async function send(item: Submission & { id: string }) {
   const path = item.kind === "checkin" ? "/api/security/checkin" : "/api/security/patroli";
@@ -114,10 +121,35 @@ export async function send(item: Submission & { id: string }) {
     return;
   }
 
-  // The photo goes through expo-file-system's native multipart upload:
-  // the global fetch here is expo/fetch, which rejects React Native's
-  // { uri, name, type } FormData parts.
-  const photo = new File(item.photoUri);
+  try {
+    await uploadPhoto(item.photoUri, path, fields);
+  } catch (e) {
+    // The report already arrived on an earlier try whose photos 2–5 didn't
+    // all make it — carry on with those.
+    if (!(e instanceof ServerError && e.resend && item.extraPhotos?.length)) throw e;
+  }
+
+  // Patroli photos 2–5, one request each; ones already there are skipped.
+  for (const [i, extra] of (item.extraPhotos ?? []).entries()) {
+    try {
+      await uploadPhoto(extra.uri, "/api/security/patroli/photo", {
+        guard_id: item.guard_id,
+        pin: item.pin,
+        client_id: item.id,
+        position: String(i + 2),
+        captured_at: extra.captured_at,
+      });
+    } catch (e) {
+      if (!(e instanceof ServerError && e.resend)) throw e;
+    }
+  }
+}
+
+// The photo goes through expo-file-system's native multipart upload: the
+// global fetch here is expo/fetch, which rejects React Native's
+// { uri, name, type } FormData parts.
+async function uploadPhoto(uri: string, path: string, fields: Record<string, string>) {
+  const photo = new File(uri);
   // Can't ever succeed, so reject it rather than retrying forever.
   if (!photo.exists) throw new ServerError("Foto tidak ditemukan di HP");
   let result;
